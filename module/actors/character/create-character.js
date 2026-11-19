@@ -231,7 +231,9 @@ function _askAboutExisting(user, existing, { canReplace = true, isSelf = false }
 			// A dismissed dialog is a "no". Harmless after a button already answered: a
 			// settled promise ignores a second resolve.
 			close: () => resolve(null),
-		}).render(true);
+		// Tagged like every other Stonetop confirm. Left bare, this one window came up in core's
+		// own chrome: no slate title bar, no parchment, cream buttons with the orange glow.
+		}, { classes: ["dialog", "stonetop"] }).render(true);
 	});
 }
 

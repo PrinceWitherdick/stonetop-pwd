@@ -1275,7 +1275,7 @@ img.stonetop-journal-art {
 	max-width: min(100%, 800px);
 	height: auto;
 	border: 2px solid var(--st-art-frame);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
@@ -1312,7 +1312,7 @@ figure.stonetop-map img {
 	height: auto;
 	margin: 0 auto;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.3);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	/* The reader's Map Brightness setting (hooks/map-brightness.js), the same dimming the
 	   poster-map Scenes get on the canvas. */
 	filter: brightness(var(--stonetop-map-brightness, 1));
@@ -1805,7 +1805,7 @@ body :is(.app, .window-app).stonetop-height-resized {
 	width: 1.25em;
 	height: 1.25em;
 	margin: 0;
-	accent-color: slategrey;
+	accent-color: var(--st-accent-fill);
 }
 .application.dialog.stonetop-ask .stonetop-bath-member-name {
 	flex: 1 1 auto;
@@ -2343,7 +2343,7 @@ input.stonetop-name-field {
 }
 
 .pbta.sheet .sheet-attributes .cell--stats .stat:hover {
-	background: rgba(0, 0, 0, 0.05) !important;
+	background: rgb(var(--st-ink-rgb) / 0.05) !important;
 }
 
 .pbta.sheet .sheet-attributes .cell--stats .stat-value {
@@ -2511,7 +2511,7 @@ input.stonetop-name-field {
 	height: 8px;
 	border: 1.5px solid var(--st-on-dark-rule, #888);
 	border-top: none;
-	border-radius: 0 0 6px 6px;
+	border-radius: 0 0 var(--st-radius-lg) var(--st-radius-lg);
 	margin: 0 6px 4px;
 }
 
@@ -2747,7 +2747,7 @@ input.stonetop-name-field {
 
 .stonetop-homestead-subhead {
 	margin: 4px 0 4px;
-	font-size: 0.9rem;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	font-weight: 600;
 }
 
@@ -2906,8 +2906,8 @@ input.stonetop-name-field {
 	gap: 0.5rem;
 	padding: 0.5rem 0.65rem;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
-	border-radius: 6px;
-	background: rgba(0, 0, 0, 0.035);
+	border-radius: var(--st-radius-lg);
+	background: rgb(var(--st-ink-rgb) / 0.035);
 	font-size: var(--st-fs-floor);
 	line-height: 1.35;
 }
@@ -2930,7 +2930,7 @@ input.stonetop-name-field {
 	gap: 0.1rem 0.45rem;
 	padding: 0.35rem 0.55rem;
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	cursor: pointer;
 	transition: border-color 0.15s ease, background 0.15s ease;
 }
@@ -2943,7 +2943,7 @@ input.stonetop-name-field {
 	box-shadow: inset 0 0 0 1px var(--st-btn-primary-border, #4f5b66);
 }
 
-.stonetop .wound-dialog .wd-tile-name { flex: 0 0 auto; font-weight: 700; font-size: 0.85rem; line-height: 1.25; }
+.stonetop .wound-dialog .wd-tile-name { flex: 0 0 auto; font-weight: 700; font-size: calc(0.85rem * var(--stonetop-font-scale, 1)); line-height: 1.25; }
 .stonetop .wound-dialog .wd-tile-hint { flex: 1 1 12rem; font-size: var(--st-fs-floor-sm); line-height: 1.25; opacity: 0.72; }
 
 /* Make-a-Plan tick-box requirements (Book I p.530: write the requirements down with
@@ -2962,7 +2962,7 @@ input.stonetop-name-field {
 	display: block;
 	padding: 0.6rem 0.7rem;
 	border: 1px dashed var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	font-size: var(--st-fs-floor);
 	font-style: italic;
 	opacity: 0.62;
@@ -3995,7 +3995,7 @@ input.stonetop-name-field {
 }
 
 .stonetop-sidebar-toggle:hover {
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 /* Kill Foundry's default button focus/active glow (an orange box-shadow that
@@ -4241,7 +4241,7 @@ input.stonetop-name-field {
 
 .stonetop-roll-mode-option:hover,
 .stonetop-roll-mode-option.is-checked {
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .stonetop-roll-mode-option input {
@@ -4267,7 +4267,7 @@ input.stonetop-name-field {
 }
 
 .stonetop-roll-mode-option input:checked {
-	background: radial-gradient(circle, slategrey 0 44%, transparent 48%);
+	background: radial-gradient(circle, var(--st-accent-fill) 0 44%, transparent 48%);
 }
 
 /* Each row is a left-aligned, vertically-centered flex row. No left padding so
@@ -4290,7 +4290,7 @@ input.stonetop-name-field {
 }
 
 .stonetop-moves-sidebar li:hover {
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .stonetop-move-name {
@@ -5665,13 +5665,13 @@ select[name="sheetFont"]:has(option[value="signika"]:checked) {
 	padding: 0;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
 	border-radius: 50%;
-	background: rgba(0,0,0,0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 	color: var(--st-text-secondary);
 	font-size: var(--st-fs-floor-sm);
 	cursor: pointer;
 	line-height: 1;
 }
-.stonetop-roll-card-desc-toggle:hover { background: rgba(0,0,0,0.12); color: var(--st-text); }
+.stonetop-roll-card-desc-toggle:hover { background: rgb(var(--st-ink-rgb) / 0.12); color: var(--st-text); }
 /* Beside a badge: a monster move rolled as damage carries its description, so a damage card can
    show both. Once the title grows, both auto margins come to nothing and the two would touch. */
 .stonetop-roll-card-badge + .stonetop-roll-card-desc-toggle { margin-left: 6px; }
@@ -5970,7 +5970,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin: 0;
 	border-radius: var(--st-radius-lg);
 	border-left: 5px solid var(--st-green-border, #6b8e23);
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 }
 .stonetop-weather-number {
 	font-family: var(--font-stonetop);
@@ -6095,7 +6095,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	padding: 5px 10px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	color: inherit;
 	font-family: var(--font-stonetop);
 	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
@@ -6441,7 +6441,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	font-size: var(--font-size-16);
 	font-weight: bold;
 	text-align: center;
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	border: 1px solid rgba(159, 146, 117, 0.4);
 	border-radius: var(--st-radius-sm);
 	opacity: 0.85;
@@ -6465,7 +6465,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin: 0;
 	border-radius: var(--st-radius-lg);
 	border-left: 5px solid rgba(159, 146, 117, 0.7);
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 }
 .stonetop-roll-result-number {
 	font-family: var(--font-stonetop);
@@ -6641,7 +6641,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 }
 
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-content .row {
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	border-radius: var(--st-radius-sm);
 	padding: 3px 6px;
 	margin: 0;
@@ -8864,7 +8864,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	padding: 8px 12px;
 	border: 1px solid var(--color-border-light-2, rgba(0, 0, 0, 0.15));
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	color: var(--st-text-body);
 }
 
@@ -9266,7 +9266,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	padding: 8px 12px;
 	border: 1px solid var(--color-border-light-2, rgba(0, 0, 0, 0.15));
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	color: var(--st-text-body);
 }
 
@@ -9594,7 +9594,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	line-height: 1.25;
 	cursor: pointer;
 }
-.stonetop-special-pick:hover { background: rgba(0, 0, 0, 0.06); border-color: var(--color-border-light, #ccc); }
+.stonetop-special-pick:hover { background: rgb(var(--st-ink-rgb) / 0.06); border-color: var(--color-border-light, #ccc); }
 .stonetop-special-pick.is-added { opacity: 0.45; cursor: default; }
 .stonetop-special-pick-text { flex: 1; }
 .stonetop-special-pick-name { font-weight: bold; }
@@ -9660,7 +9660,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-requisition-picker { padding: 4px 2px; font-size: var(--st-fs-base); }
 .stonetop-requisition-trigger { font-style: italic; color: var(--color-text-dark-secondary); margin: 0 0 10px; }
 .stonetop-requisition-roll {
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
@@ -9829,7 +9829,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 .stonetop-custom-move-results.is-hidden { display: none; }
 .stonetop-custom-move-results-title { font-family: var(--font-stonetop); margin: 0; font-size: var(--st-fs-base); }
@@ -9860,7 +9860,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.25);
 	color: var(--color-text-dark-primary);
 }
-.stonetop-custom-move-cancel:hover { background: rgba(0, 0, 0, 0.06); }
+.stonetop-custom-move-cancel:hover { background: rgb(var(--st-ink-rgb) / 0.06); }
 /* The Love Letter window's saved drafts, one outline button each, stacked. */
 .stonetop-love-letter-drafts-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .stonetop-love-letter-drafts-list > li { margin: 0; }
@@ -9922,7 +9922,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-pb-builder-move {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
 	border-radius: var(--st-radius-lg);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 .stonetop-pb-builder-card {
 	display: flex;
@@ -10362,7 +10362,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	padding: 8px 10px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.18);
 	border-radius: var(--st-radius-sm, 4px);
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 .stonetop-improvement-builder-group-head {
 	display: flex;
@@ -10539,7 +10539,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	padding: 10px;
 	border: 1px dashed rgb(var(--st-ink-rgb) / 0.22);
 	border-radius: var(--st-radius-sm, 4px);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 .stonetop-improvement-preview-card { cursor: default; }
 .stonetop-improvement-preview-card .steading-improvement-header { cursor: default; }
@@ -10575,11 +10575,11 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	cursor: pointer;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
 	border-radius: var(--st-radius-pill, 999px);
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	color: var(--color-text-dark-primary);
 	transition: background 0.12s, border-color 0.12s;
 }
-.stonetop-add-item-chip:hover { background: rgba(0, 0, 0, 0.1); border-color: rgb(var(--st-ink-rgb) / 0.35); }
+.stonetop-add-item-chip:hover { background: rgb(var(--st-ink-rgb) / 0.1); border-color: rgb(var(--st-ink-rgb) / 0.35); }
 /* Selected chip = its term is in the note field; reads as a pressed toggle so the
    player can see (and click to remove) what's already been added. */
 .stonetop-add-item-chip.is-selected {
@@ -10680,7 +10680,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	color: var(--tc-ink);
 	background: linear-gradient(180deg, var(--tc-paper-hi), var(--tc-paper) 22%, var(--tc-paper) 78%, var(--tc-paper-lo));
 	border: 1px solid var(--tc-rule-hard);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	box-shadow: 0 6px 16px rgba(20, 14, 6, 0.18), 0 1px 3px rgba(20, 14, 6, 0.14);
 	font-family: var(--font-stonetop);
 }
@@ -10728,7 +10728,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	cursor: pointer;
 	font-weight: bold;
 	font-family: var(--font-stonetop);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	background: var(--ll-accent);
 	border: 1px solid rgba(20, 14, 6, 0.35);
 	color: var(--ll-seal-text);
@@ -10746,7 +10746,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	margin-left: 8px;
 	padding: 0 6px;
 	border: 1px solid currentColor;
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	font-size: var(--st-fs-xs);
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
@@ -10933,7 +10933,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 .stonetop-segmented-picker-option input { position: absolute; opacity: 0; pointer-events: none; }
 .stonetop-segmented-picker-option:has(input:checked) {
 	background: var(--st-btn-primary-bg, slategrey);
-	color: #fff;
+	color: var(--st-btn-primary-text);
 }
 
 /* ── Roll modifier pill (Advantage / Normal / Disadvantage) ─────────────────────────────
@@ -10988,7 +10988,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 
 .stonetop-roll-mode-picker .stonetop-roll-mode-btn.is-active {
 	background: var(--st-btn-primary-bg, slategrey);
-	color: #fff;
+	color: var(--st-btn-primary-text);
 }
 
 .stonetop-roll-mode-picker .stonetop-roll-mode-btn:hover:not(.is-active) {
@@ -11940,7 +11940,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	align-self: stretch;
 	background: var(--stonetop-bg);
 	border-right: 1px solid var(--color-border-dark);
-	border-radius: 3px 0 0 3px;
+	border-radius: var(--st-radius-sm) 0 0 var(--st-radius-sm);
 }
 
 .stonetop-arcanum-sheet-main {
@@ -11954,7 +11954,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	background: var(--stonetop-bg);
 	padding: 5px 8px;
 	border-bottom: 1px solid var(--color-border-dark);
-	border-radius: 3px 3px 0 0;
+	border-radius: var(--st-radius-sm) var(--st-radius-sm) 0 0;
 	display: flex;
 	justify-content: flex-start;
 	align-items: flex-start;
@@ -12154,10 +12154,10 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 /* In a spread the header corners that meet the divider shouldn't round, so each side
    keeps only its outer top corner rounded. */
 .stonetop-arcanum-card--spread .stonetop-arcanum-side--front .stonetop-arcanum-header {
-	border-radius: 3px 0 0 0;
+	border-radius: var(--st-radius-sm) 0 0 0;
 }
 .stonetop-arcanum-card--spread .stonetop-arcanum-side--back .stonetop-arcanum-header {
-	border-radius: 0 3px 0 0;
+	border-radius: 0 var(--st-radius-sm) 0 0;
 }
 
 /* Centered "Front" / "Back" marker at the top of each panel's body, naming the face you're
@@ -14711,7 +14711,7 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 	height: 34px;
 	flex: none;
 	border-radius: 50%;
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .stonetop-condemned-portrait-img,
@@ -15906,7 +15906,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .asm-cancel:hover {
-	background: rgba(0,0,0,0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 }
 
 /* ── Outfit move dialog ─────────────────────────────────────────── */
@@ -15940,7 +15940,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 6px 8px;
 	border: 1px solid var(--color-border-light-2);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	font-size: var(--st-fs-sm);
 	line-height: 1.35;
 	color: var(--color-text-dark-secondary);
@@ -15987,7 +15987,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 6px 8px;
 	border: 1px solid var(--color-border-light-2);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	font-size: var(--st-fs-xs);
 	line-height: 1.3;
 	opacity: 0.5;
@@ -16147,7 +16147,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 1px 2px;
 }
 
-.stonetop-outfit-item:hover { background: rgba(0,0,0,0.04); }
+.stonetop-outfit-item:hover { background: rgb(var(--st-ink-rgb) / 0.04); }
 
 /* A ◇0 arcanum has no checkbox (it costs nothing, so there is nothing to mark). No indent
    needed: every row's checkbox is hidden here, and its empty diamond column keeps the
@@ -16310,7 +16310,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	display: flex;
 	flex-direction: column;
 	gap: 3px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius);
 	padding: 8px 12px;
@@ -16456,13 +16456,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius);
 	cursor: pointer;
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	transition: background 0.1s, border-color 0.1s;
 }
 
 .stonetop-levelup-move-option:hover,
 .stonetop-levelup-invocation-option:hover {
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .stonetop-levelup-move-option.is-selected,
@@ -16529,12 +16529,12 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius);
 	cursor: pointer;
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	transition: background 0.1s, border-color 0.1s;
 }
 
 .stonetop-levelup-stat-option:hover {
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .stonetop-levelup-stat-option.is-selected {
@@ -16545,7 +16545,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-levelup-stat-option.is-at-cap {
 	cursor: not-allowed;
 	opacity: 0.45;
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 
 .stonetop-levelup-stat-name {
@@ -16602,7 +16602,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .stonetop-levelup-back-btn:hover {
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 }
 
 .stonetop-levelup-next-btn {
@@ -18880,14 +18880,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	/* Literal, not the dialogs' --dd-inset: that token is scoped to the Death's Door and
 	   Undeath windows so their moods can repaint it, and doesn't resolve out here on the sheet. */
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	cursor: pointer;
 }
 
 /* Explicit, because v14 hands an unstyled button an orange hover. */
 .stonetop-pdi-activate:hover {
 	border-color: var(--color-border-light, #ccc);
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 	box-shadow: none;
 }
 
@@ -19500,14 +19500,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius);
 	cursor: pointer;
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	transition: background 0.1s, border-color 0.1s;
 	font-size: var(--st-fs-base);
 	line-height: 1.4;
 }
 
 .stonetop-eos-question:hover {
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 }
 
 .stonetop-eos-question.is-checked {
@@ -19546,7 +19546,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .stonetop-eos-body--mirror .stonetop-eos-question:not(.is-checked):hover {
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 
 .stonetop-eos-xp-tally {
@@ -19743,7 +19743,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	gap: 12px;
 	padding: 6px 12px 10px;
 	border-bottom: 2px solid slategrey;
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	flex-shrink: 0;
 }
 
@@ -20196,7 +20196,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	margin: 0;
 	padding: 0.35em 0.8em;
 	border: 1px solid var(--stonetop-banner-rule);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	background: var(--stonetop-banner-top);
 	box-shadow: none;
 	color: var(--stonetop-banner-ink);
@@ -20621,7 +20621,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item,
 .stonetop-bestiary-sheet .sheet-tabs:not(.stonetop-tab-rail) .item,
 .stonetop-npc-sheet .sheet-tabs:not(.stonetop-tab-rail) .item {
-	border-radius: 4px 4px 0 0;
+	border-radius: var(--st-radius) var(--st-radius) 0 0;
 	background: var(--st-tabstrip-bg);
 	color: var(--st-tabstrip-ink);
 	margin: 0 4px;
@@ -21344,7 +21344,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .steading-moves-sidebar .steading-move-row:hover {
-	background: rgba(0, 0, 0, 0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .steading-moves-sidebar .steading-move-row::marker {
@@ -21429,7 +21429,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .steading-statsbar-pair {
 	display: flex;
 	flex-direction: column;
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
@@ -21522,12 +21522,17 @@ button.stonetop-mark-sign-btn.is-active:hover {
    what it is drawn on. Reading `--stonetop-bg` there was the bug: that is the PANEL tone, not
    this card, and the two only looked alike while the page happened to sit between them.
    `color-mix` rather than a second hand-picked hex so the wash and its resolved colour cannot
-   drift; the alpha is written once and read by both. */
+   drift; the alpha is written once and read by both.
+
+   BOTH READ THE INK CHANNEL, not a literal black. On paper that is the same black wash it always
+   was. On the dark pages a black wash over a near-black page is nothing at all, and these cards
+   were left reading by their border alone while the character sheet's cards (`--st-card-fill`)
+   lifted; a wash of the ink is a faint light there, which is what every other raised surface is. */
 .steading-card,
 .stonetop-character-relationships {
 	--st-card-wash: 0.035;
-	--st-surface: color-mix(in srgb, #000 calc(var(--st-card-wash) * 100%), var(--st-page));
-	background: rgb(0 0 0 / var(--st-card-wash));
+	--st-surface: color-mix(in srgb, rgb(var(--st-ink-rgb)) calc(var(--st-card-wash) * 100%), var(--st-page));
+	background: rgb(var(--st-ink-rgb) / var(--st-card-wash));
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius-lg);
 	padding: 10px 14px 12px;
@@ -21563,7 +21568,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .steading-stat-block {
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
@@ -21670,7 +21675,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* Surplus */
 
 .steading-surplus-block {
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 12px;
@@ -21746,7 +21751,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .steading-size-option input[type="radio"]:checked {
-	background: radial-gradient(circle, slategrey 0 44%, transparent 48%);
+	background: radial-gradient(circle, var(--st-accent-fill) 0 44%, transparent 48%);
 }
 
 /* Debilities — a vertical stack while it's a narrow column in the full bar. But
@@ -22239,7 +22244,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .steading-list-section {
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
@@ -22525,14 +22530,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	overflow: hidden;
-	background: rgba(0,0,0,0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 
 .steading-residents-header {
 	display: grid;
 	grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) 32px;
 	gap: 0;
-	background: rgba(0,0,0,0.08);
+	background: rgb(var(--st-ink-rgb) / 0.08);
 	border-bottom: 2px solid rgb(var(--st-ink-rgb) / 0.12);
 	padding: 0;
 	font-weight: 700;
@@ -22567,7 +22572,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .steading-residents-col-sortable:hover {
-	background: rgba(0,0,0,0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .steading-residents-col-sortable .steading-residents-header-label {
@@ -22612,7 +22617,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	left: 50%;
 	width: 2px;
 	transform: translateX(-50%);
-	background: rgba(0,0,0,0.18);
+	background: rgb(var(--st-ink-rgb) / 0.18);
 	border-radius: var(--st-radius-sm);
 }
 
@@ -23559,7 +23564,7 @@ a.steading-player-open:hover {
 .steading-improvement-filter.is-active {
 	background: var(--st-btn-primary-bg, slategrey);
 	border-color: var(--st-btn-primary-bg, slategrey);
-	color: #fff;
+	color: var(--st-btn-primary-text);
 }
 .steading-improvement-filter.is-active > i { opacity: 1; }
 
@@ -23639,7 +23644,7 @@ a.steading-player-open:hover {
 }
 
 .steading-improvement {
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.14);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
@@ -24131,7 +24136,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	padding: 0;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
 	border-radius: var(--st-radius-sm);
-	background: rgba(0,0,0,0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	color: var(--st-text-body);
 	cursor: pointer;
 	flex: 0 0 auto;
@@ -24225,7 +24230,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 /* The GM card caret: see `.stonetop-gm-encounter-toggle > i`, beside its fixed box. */
 
 .steading-herd-step:hover:not(:disabled) {
-	background: rgba(0,0,0,0.1);
+	background: rgb(var(--st-ink-rgb) / 0.1);
 }
 
 .steading-herd-step:disabled {
@@ -24267,7 +24272,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	padding: 8px 10px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
 .steading-inn-gathering-title {
@@ -25019,7 +25024,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius);
 	padding: 8px 10px;
-	background: rgba(0,0,0,0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 
 .stonetop-season-gains-label { margin: 0 0 6px; font-weight: 600; }
@@ -25077,7 +25082,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	padding: 8px 10px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
 /* The name and the amount on one line, pushed apart, so a season's yields can be read down
@@ -25177,7 +25182,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
 	border-radius: var(--st-radius);
 	cursor: pointer;
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
 /* Return Triumphant picks a row before it writes it, so a row has a chosen state and is
@@ -25185,7 +25190,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    only ever shows the hover; nothing there sets `.is-selected`. Two classes to one, so
    the chosen state outranks the base rule wherever it sits. */
 .stonetop-disaster-choice:hover {
-	background: rgba(0,0,0,0.06);
+	background: rgb(var(--st-ink-rgb) / 0.06);
 }
 
 .stonetop-disaster-choice:focus-visible {
@@ -25251,7 +25256,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 /* One gathering per season, and saying so is the whole reason there is no button. */
 .stonetop-inn-done {
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	padding: 5px 9px;
 	color: var(--st-text-secondary);
 }
@@ -25281,7 +25286,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	padding: 8px 10px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
 .stonetop-muster-change-head {
@@ -25348,7 +25353,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	flex: 1 1 12ch;
 	min-width: 0;
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	padding: 3px 8px;
 	font-size: var(--st-fs-sm);
 	font-weight: bold;
@@ -25407,7 +25412,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-homestead-reference {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	padding: 7px 10px;
 	font-size: var(--st-fs-sm);
 }
@@ -25817,7 +25822,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-card-header input[type="radio"] {
 	flex-shrink: 0;
 	margin: 0;
-	accent-color: slategrey;
+	accent-color: var(--st-accent-fill);
 }
 
 /* The SVG-skinned checkbox (.stonetop-onboarding-check) is a fixed-size box with
@@ -26155,7 +26160,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	margin: 0 0 10px;
 	padding: 8px 12px;
 	border: 1px solid rgba(150, 100, 20, 0.45);
-	border-radius: 4px;
+	border-radius: var(--st-radius);
 	background: rgba(200, 150, 40, 0.12);
 }
 .stonetop-onboarding-skipped-lead { margin: 0 0 6px; }
@@ -26822,7 +26827,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 /* Native radios (sub-choice lines, either/or move cards) take the slate accent the
    rest of the wizard uses, instead of the browser default. */
-.stonetop-onboarding-radio { flex-shrink: 0; accent-color: slategrey; }
+.stonetop-onboarding-radio { flex-shrink: 0; accent-color: var(--st-accent-fill); }
 
 /* ── Standalone possession-choices editor (sacred-pouch modal) ──────────────── */
 /* Reuses the shared .stonetop-choice-group / -subgroup / -option-label styling;
@@ -27322,7 +27327,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-bg-option input[type="radio"]:checked {
-	background: radial-gradient(circle, slategrey 0 44%, transparent 48%);
+	background: radial-gradient(circle, var(--st-accent-fill) 0 44%, transparent 48%);
 }
 
 .stonetop-onboarding-bg-option > span {
@@ -27608,7 +27613,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-onboarding-arcana-option input {
 	flex-shrink: 0;
 	margin: 0;
-	accent-color: slategrey;
+	accent-color: var(--st-accent-fill);
 }
 
 .stonetop-onboarding-arcana-option--minor-role {
@@ -30153,7 +30158,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	flex-direction: column;
 	gap: 4px;
 	padding: 6px 8px;
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid var(--st-on-dark-rule-soft, #e8e8e8);
 	border-radius: var(--st-radius);
 	font-size: var(--st-fs-sm);
@@ -30268,7 +30273,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	align-items: center;
 	gap: 6px;
 	padding: 4px 8px;
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	border: 1px solid var(--st-on-dark-rule-soft, #eee);
 	border-radius: var(--st-radius);
 	font-size: var(--st-fs-sm);
@@ -32180,7 +32185,7 @@ li.question-bullet::before {
 .stonetop-stat-picker-dialog .stonetop-stat-picker-why {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	padding: 7px 10px;
 	margin-top: 8px;
 	font-size: var(--st-fs-sm);
@@ -32251,7 +32256,7 @@ li.question-bullet::before {
 	padding: 6px 10px;
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 
 .stonetop-foreign-move-dialog .stonetop-foreign-move-desc:empty {
@@ -34853,7 +34858,7 @@ ul:has(> li.st-treasure-line:only-child) {
 /* Pin the checked radio to slate; unstyled it falls back to Foundry v14's core
    orange accent-color, the odd one out versus the rest of the system's radios. */
 .stonetop-content-picker-option input[type="radio"] {
-	accent-color: slategrey;
+	accent-color: var(--st-accent-fill);
 	flex-shrink: 0;
 }
 
@@ -35029,7 +35034,7 @@ th:has(> .stonetop-roll-table-btn) {
 	align-items: center;
 	gap: 12px;
 	padding: 10px 14px;
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 }
@@ -35109,7 +35114,7 @@ th:has(> .stonetop-roll-table-btn) {
    as more of the step. */
 .stonetop-guide-aside-body {
 	padding: 10px 14px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.1));
 	border-radius: var(--st-radius-sm);
 }
@@ -35428,7 +35433,7 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-intros-questions-wrap {
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 	padding: 10px 14px;
@@ -35514,7 +35519,7 @@ th:has(> .stonetop-roll-table-btn) {
 	background-image: var(--stonetop-checkbox-checked-icon);
 }
 
-.stonetop-intros-question-pick:hover { background: rgba(0, 0, 0, 0.05); }
+.stonetop-intros-question-pick:hover { background: rgb(var(--st-ink-rgb) / 0.05); }
 
 .stonetop-intros-question-pick.is-selected {
 	font-weight: 600;
@@ -35532,10 +35537,10 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-intros-question-pick.is-used {
 	cursor: not-allowed;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
-.stonetop-intros-question-pick.is-used:hover { background: rgba(0, 0, 0, 0.03); }
+.stonetop-intros-question-pick.is-used:hover { background: rgb(var(--st-ink-rgb) / 0.03); }
 
 /* Recording field (GM) — reuses the Spring Burst Q&A textarea look. */
 .stonetop-intros-capture {
@@ -35654,7 +35659,7 @@ th:has(> .stonetop-roll-table-btn) {
 /* Read-only recorded answer shown to players for the active PC's turn. */
 .stonetop-intros-recorded {
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 }
@@ -35679,7 +35684,7 @@ th:has(> .stonetop-roll-table-btn) {
 /* "Recorded so far" — the answers this PC has already given this step, listed above
    the compose field so the table sees progress toward passing/exhausting the step. */
 .stonetop-intros-recorded-list {
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 	padding: 8px 14px;
@@ -35840,7 +35845,7 @@ th:has(> .stonetop-roll-table-btn) {
 	gap: 8px;
 	padding: 8px 12px;
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.04);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
 }
@@ -36220,7 +36225,7 @@ th:has(> .stonetop-roll-table-btn) {
 	align-items: center;
 	gap: 10px;
 	padding: 6px 10px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 }
@@ -36288,7 +36293,7 @@ th:has(> .stonetop-roll-table-btn) {
 	padding: 0 6px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius-sm);
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	/* inherit, not a token: tokens are em, so nesting one inside the already-em
 	   .stonetop-welcome-player-has line compounds it down to ~half size. The chip
 	   stays distinct via its background/border, not by shrinking the text. */
@@ -36353,7 +36358,7 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-welcome-outro {
 	margin: 16px 0 4px;
 	padding: 10px 14px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 	line-height: 1.5;
@@ -36639,7 +36644,7 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-fb-outro {
 	margin-top: 16px;
 	padding: 10px 14px;
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
 }
@@ -36781,7 +36786,7 @@ th:has(> .stonetop-roll-table-btn) {
 	overflow-y: auto;
 	padding: 12px 8px 16px;
 	border-right: 1px solid rgb(var(--st-ink-rgb) / 0.1);
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
 .stonetop-guide-toc-list {
@@ -36868,7 +36873,7 @@ th:has(> .stonetop-roll-table-btn) {
 
 /* Active page: subtle fill + accent text/icon (green = active accent per tokens). */
 .stonetop-guide-toc-item.is-active .stonetop-guide-toc-btn {
-	background: var(--st-on-dark-selected, rgba(0, 0, 0, 0.06));
+	background: var(--st-on-dark-selected, rgb(var(--st-ink-rgb) / 0.06));
 	border-color: rgb(var(--st-ink-rgb) / 0.15);
 	font-weight: 700;
 	color: var(--st-green-text);
@@ -36902,7 +36907,7 @@ th:has(> .stonetop-roll-table-btn) {
 	color: inherit;
 }
 :is(.application, .window-app).stonetop-themed .window-content .stonetop-guide-toc-item.is-active .stonetop-guide-toc-btn {
-	background: var(--st-on-dark-selected, rgba(0, 0, 0, 0.06));
+	background: var(--st-on-dark-selected, rgb(var(--st-ink-rgb) / 0.06));
 	border-color: rgb(var(--st-ink-rgb) / 0.15);
 	font-weight: 700;
 	color: var(--st-green-text);
@@ -36933,7 +36938,7 @@ th:has(> .stonetop-roll-table-btn) {
 	   (the tab body beside it is already tinted) and here left the rail floating in the
 	   step column. These two literals are the ones the TOC rail above already uses. */
 	border-left: 1px solid rgb(var(--st-ink-rgb) / 0.1);
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 }
 
 /* `.stonetop-sidebar-body` sets `min-width: max-content` so the character sheet's rail
@@ -37218,7 +37223,7 @@ th:has(> .stonetop-roll-table-btn) {
 	padding: 8px 14px;
 	border: none;
 	border-left: 3px solid var(--st-green-border);
-	background: rgba(0, 0, 0, 0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	border-radius: var(--st-radius-sm);
 	font-style: italic;
 	font-size: calc(1rem * var(--stonetop-font-scale, 1));
@@ -37335,7 +37340,7 @@ th:has(> .stonetop-roll-table-btn) {
 	padding: 8px 12px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	opacity: 0.65;
 	transition: opacity 0.15s, border-color 0.15s, background 0.15s;
 }
@@ -37842,7 +37847,7 @@ th:has(> .stonetop-roll-table-btn) {
 	list-style: none;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
 }
 
@@ -37979,11 +37984,11 @@ th:has(> .stonetop-roll-table-btn) {
 	padding: 3px 8px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-sm);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	cursor: pointer;
 	font-size: var(--st-fs-base);
 }
-.stonetop-cf-option:hover { background: rgba(0, 0, 0, 0.05); }
+.stonetop-cf-option:hover { background: rgb(var(--st-ink-rgb) / 0.05); }
 .stonetop-cf-option.is-selected {
 	border-color: var(--st-green-border);
 	background: var(--st-green-bg);
@@ -38733,7 +38738,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 8px 12px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	cursor: pointer;
 	transition: opacity 0.15s, border-color 0.15s, background 0.15s;
 }
@@ -39514,7 +39519,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--tc-ink);
 	background: linear-gradient(180deg, var(--tc-paper-hi), var(--tc-paper) 22%, var(--tc-paper) 78%, var(--tc-paper-lo));
 	border: 1px solid var(--tc-rule-hard);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	box-shadow: 0 6px 16px rgba(20, 14, 6, 0.18), 0 1px 3px rgba(20, 14, 6, 0.14);
 	font-family: var(--font-stonetop);
 }
@@ -39549,7 +39554,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin: 0;
 	font-family: var(--font-avara);
 	font-weight: 700;
-	font-size: 1.35rem;
+	font-size: calc(1.35rem * var(--stonetop-font-scale, 1));
 	line-height: 1.05;
 	color: var(--tc-ink);
 	border: 0;
@@ -39558,7 +39563,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: inline-block;
 	font-family: var(--font-stonetop);
 	font-style: italic;
-	font-size: 0.95rem;
+	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink-soft);
 }
 .stonetop .threat-type::before { content: "("; }
@@ -39574,7 +39579,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop .threat-instinct {
 	margin: 0.55rem 0 0.1rem;
-	font-size: 1.02rem;
+	font-size: calc(1.02rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink);
 }
 .stonetop .threat-instinct em { font-style: normal; }
@@ -39596,7 +39601,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop .threat-desc {
 	margin: 0 0 0.9rem;
-	font-size: 0.98rem;
+	font-size: calc(0.98rem * var(--stonetop-font-scale, 1));
 	line-height: 1.5;
 }
 .stonetop .threat-desc p { margin: 0 0 0.5rem; }
@@ -39619,7 +39624,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 0.28rem 0.3rem;
 	border-radius: 5px;
 	cursor: pointer;
-	font-size: 0.98rem;
+	font-size: calc(0.98rem * var(--stonetop-font-scale, 1));
 	line-height: 1.35;
 	color: var(--tc-ink);
 }
@@ -39678,7 +39683,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* --- stakes / moves / nested / player moves -------------------------------- */
 .stonetop .threat-stakes {
 	margin: 0 0 0.85rem;
-	font-size: 0.96rem;
+	font-size: calc(0.96rem * var(--stonetop-font-scale, 1));
 	line-height: 1.5;
 }
 .stonetop .threat-stakes__q { font-style: italic; }
@@ -39693,7 +39698,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: calc(0.05rem + var(--st-trim-top)) 0.4rem calc(0.05rem + var(--st-trim-bottom));
 	border: 1px solid color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 45%, transparent);
 	border-radius: 0.5rem;
-	font-size: 0.86rem;
+	font-size: calc(0.86rem * var(--stonetop-font-scale, 1));
 	line-height: 1.35;
 }
 .stonetop .threat-moves { margin: 0 0 0.6rem; }
@@ -39711,18 +39716,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.45rem;
 	break-inside: avoid;
 	padding: 0.1rem 0;
-	font-size: 0.94rem;
+	font-size: calc(0.94rem * var(--stonetop-font-scale, 1));
 	line-height: 1.3;
 	color: var(--tc-ink-soft);
 }
 /* ➤ (U+27A4) marker, matching the follower cards' Moves list glyph. */
 .stonetop .threat-move-caret { color: var(--threat-accent); font-size: 0.8em; line-height: 1.3; }
-.stonetop .threat-nested { margin: 0 0 0.6rem; font-size: 0.94rem; }
+.stonetop .threat-nested { margin: 0 0 0.6rem; font-size: calc(0.94rem * var(--stonetop-font-scale, 1)); }
 .stonetop .threat-nested__item { margin-right: 0.5rem; }
 .stonetop .threat-nested__item em { font-style: italic; color: var(--tc-ink-soft); }
 .stonetop .threat-player-moves { margin: 0.2rem 0 0; }
 .stonetop .threat-player-moves .threat-label { display: block; margin-bottom: 0.35rem; }
-.stonetop .threat-player-move { margin: 0 0 0.5rem; font-size: 0.94rem; line-height: 1.4; }
+.stonetop .threat-player-move { margin: 0 0 0.5rem; font-size: calc(0.94rem * var(--stonetop-font-scale, 1)); line-height: 1.4; }
 .stonetop .threat-player-move__name { display: block; font-family: var(--font-stonetop); font-weight: 700; }
 
 @media (max-width: 720px) {
@@ -39791,7 +39796,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: transparent;
 	box-shadow: none;
 	color: var(--tc-ink-soft);
-	font-size: 0.9rem;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	line-height: 1;
 	cursor: pointer;
 	opacity: 0.6;
@@ -39826,7 +39831,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    it's the hazard's essence the way Instinct is a threat's. */
 .stonetop .hazard-damage {
 	margin: 0.35rem 0 0.1rem;
-	font-size: 1.02rem;
+	font-size: calc(1.02rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink);
 }
 .stonetop .hazard-damage--certain strong { color: var(--st-on-dark-danger, #6e3b3b); }
@@ -39838,7 +39843,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin: 0 0 0 0.4rem;
 	padding: 0.1rem 0.4rem;
 	border: 1px solid color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 45%, transparent);
-	border-radius: 4px;
+	border-radius: var(--st-radius);
 	background: transparent;
 	color: var(--tc-ink-soft);
 	font-size: var(--st-fs-floor);
@@ -39850,7 +39855,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .hazard-advance {
 	margin: 0.45rem 0 0.15rem;
 	font-family: "IM Fell English", var(--font-stonetop);
-	font-size: 0.85rem;
+	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink-soft);
 }
 .stonetop .steading-threats .threat-card.is-collapsed .hazard-advance { display: none; }
@@ -39866,7 +39871,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.3rem 0.55rem;
 	margin: 0.1rem 0 0.5rem;
 	font-family: "IM Fell English", var(--font-stonetop);
-	font-size: 0.9rem;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink-soft);
 }
 /* A middot between the manner, the region and the terrain: they read as one line
@@ -39883,7 +39888,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: center;
 	gap: 0.4rem;
 	margin: 0 0 0.5rem;
-	font-size: 0.9rem;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink);
 }
 .stonetop .site-visited i {
@@ -39891,7 +39896,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop .site-why {
 	margin: 0 0 0.5rem;
-	font-size: 0.9rem;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink-soft);
 }
 /* Site cards read as a list of headed lines (Theme, Size, Purpose...), so their labels are bold
@@ -39899,7 +39904,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    is fine at this size. */
 .stonetop .site-card .threat-label { font-weight: bold; }
 .stonetop .site-picks { margin: 0 0 0.6rem; }
-.stonetop .site-pick { margin: 0 0 0.15rem; font-size: 0.9rem; line-height: 1.35; }
+.stonetop .site-pick { margin: 0 0 0.15rem; font-size: calc(0.9rem * var(--stonetop-font-scale, 1)); line-height: 1.35; }
 .stonetop .site-block {
 	margin: 0 0 0.6rem;
 	padding-top: 0.45rem;
@@ -39913,7 +39918,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	list-style: none;
 	margin: 0 0 0.35rem;
 	padding-left: 0;
-	font-size: 0.92rem;
+	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
 	line-height: 1.35;
 	color: var(--tc-ink-soft);
 }
@@ -39944,18 +39949,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .site-area-title {
 	margin: 0 0 0.2rem;
 	font-family: var(--font-stonetop);
-	font-size: 0.98rem;
+	font-size: calc(0.98rem * var(--stonetop-font-scale, 1));
 	font-weight: 700;
 	border: 0;
 }
 .stonetop .site-area-desc,
 .stonetop .site-area-contents {
 	margin: 0 0 0.25rem;
-	font-size: 0.92rem;
+	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
 	line-height: 1.4;
 	white-space: pre-line;   /* a room description is typed with its own line breaks */
 }
-.stonetop .site-area-exits { margin: 0; font-size: 0.86rem; color: var(--tc-ink-soft); }
+.stonetop .site-area-exits { margin: 0; font-size: calc(0.86rem * var(--stonetop-font-scale, 1)); color: var(--tc-ink-soft); }
 .stonetop .site-table + .site-table { margin-top: 0.5rem; }
 .stonetop .site-table-head { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.25rem; }
 .stonetop .site-table-die { font-size: var(--st-fs-floor); color: var(--tc-ink-soft); }
@@ -39965,7 +39970,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin: 0;
 	padding: 0.1rem 0.35rem;
 	border: 1px solid color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 45%, transparent);
-	border-radius: 4px;
+	border-radius: var(--st-radius);
 	background: transparent;
 	color: var(--tc-ink-soft);
 	font-size: var(--st-fs-floor);
@@ -39981,7 +39986,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    these tables are rolled again and again in play, so nothing is written to the page. */
 .stonetop .site-table-list li.is-rolled {
 	background: color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 14%, transparent);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	color: var(--tc-ink);
 }
 
@@ -40351,7 +40356,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	justify-content: center;
 	padding: 0;
 	line-height: 1;
-	border-radius: 4px;
+	border-radius: var(--st-radius);
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
 	background: var(--st-on-dark-raised, rgba(246, 241, 230, 0.9));
 	color: var(--st-on-dark-ink, #4a4034);
@@ -40379,7 +40384,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.4rem;
 	width: auto;
 	padding: 0.3rem 0.7rem;
-	font-size: 0.85rem;
+	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
 	cursor: pointer;
 }
 .stonetop .threat-edit {
@@ -40410,9 +40415,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .threat-edit__rich {
 	min-height: 3.5em;
 	/* Core's --input-* colours are declared on form controls only, so they are empty here. */
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	border: 1px solid var(--color-border-dark, #7a7971);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 }
 .stonetop .threat-edit__rich .editor-content { padding: 4px 6px; }
 /* Core shows the pencil only on :hover (display: none otherwise). */
@@ -40421,7 +40426,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Proximity picker uses the shared .stonetop-segmented-picker skin; only its own
    padding/font sit here. */
-.stonetop .threat-proximity-option { padding: 0.3rem 0.75rem; font-size: 0.9rem; }
+.stonetop .threat-proximity-option { padding: 0.3rem 0.75rem; font-size: calc(0.9rem * var(--stonetop-font-scale, 1)); }
 
 .stonetop .threat-list { display: flex; flex-direction: column; gap: 0.35rem; }
 .stonetop .threat-list-row { display: flex; align-items: center; gap: 0.4rem; }
@@ -40482,13 +40487,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.15rem;
 	padding: 0.5rem 0.6rem;
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	cursor: pointer;
 	transition: border-color 0.15s ease, background 0.15s ease;
 }
 .stonetop .create-threat .ct-type-tile input { position: absolute; opacity: 0; pointer-events: none; }
 .stonetop .create-threat .ct-type-tile.is-selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
-.stonetop .create-threat .ct-type-name { font-family: var(--font-avara); font-weight: 700; font-size: 0.95rem; }
+.stonetop .create-threat .ct-type-name { font-family: var(--font-avara); font-weight: 700; font-size: calc(0.95rem * var(--stonetop-font-scale, 1)); }
 .stonetop .create-threat .ct-type-name::before { content: ""; display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--c); margin-right: 0.4rem; vertical-align: middle; }
 .stonetop .create-threat .ct-type-blurb { font-size: var(--st-fs-floor); line-height: 1.25; opacity: 0.75; }
 .stonetop .create-threat .ct-suggested-list {
@@ -40500,7 +40505,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding-right: 0.3rem;
 }
 .stonetop .create-threat .ct-suggested-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-.stonetop .create-threat .ct-suggested-item { display: flex; align-items: flex-start; gap: 0.4rem; font-size: 0.88rem; line-height: 1.3; }
+.stonetop .create-threat .ct-suggested-item { display: flex; align-items: flex-start; gap: 0.4rem; font-size: calc(0.88rem * var(--stonetop-font-scale, 1)); line-height: 1.3; }
 .stonetop .create-threat .ct-suggested-hint { margin: 0 0 0.4rem; font-size: var(--st-fs-floor); font-style: italic; opacity: 0.75; }
 .stonetop .create-threat .ct-footer { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
 .stonetop .create-threat .ct-create {
@@ -40676,7 +40681,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop .create-monster .cm-stat b {
 	margin-left: 0.2rem;
-	font-size: 0.92rem;
+	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
 	letter-spacing: 0;
 	text-transform: none;
 	color: var(--st-text);
@@ -40684,7 +40689,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Tags + range-advice glance row beneath the banner (tags can wrap). */
 .stonetop .create-monster .cm-glance { display: flex; flex-direction: column; gap: 0.15rem; }
-.stonetop .create-monster .cm-glance-tags { font-size: 0.85rem; line-height: 1.35; }
+.stonetop .create-monster .cm-glance-tags { font-size: calc(0.85rem * var(--stonetop-font-scale, 1)); line-height: 1.35; }
 .stonetop .create-monster .cm-glance-label {
 	margin-right: 0.3rem;
 	text-transform: uppercase;
@@ -40692,7 +40697,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: var(--st-fs-floor-sm);
 	opacity: 0.8;
 }
-.stonetop .create-monster .cm-summary-tags { font-size: 0.85rem; }
+.stonetop .create-monster .cm-summary-tags { font-size: calc(0.85rem * var(--stonetop-font-scale, 1)); }
 .stonetop .create-monster .cm-summary-range { margin: 0; font-size: var(--st-fs-floor); font-style: italic; opacity: 0.8; }
 
 /* Sections are tab panels; only the active one shows (JS toggles `hidden`). */
@@ -40732,7 +40737,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.1rem;
 	padding: 0.4rem 0.55rem;
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	cursor: pointer;
 	transition: border-color 0.15s ease, background 0.15s ease;
 }
@@ -40742,7 +40747,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: color-mix(in srgb, var(--st-btn-primary-bg, slategrey) 14%, transparent);
 	box-shadow: inset 0 0 0 1px var(--st-btn-primary-border, #4f5b66);
 }
-.stonetop .create-monster .cm-tile-name { font-weight: 700; font-size: 0.9rem; }
+.stonetop .create-monster .cm-tile-name { font-weight: 700; font-size: calc(0.9rem * var(--stonetop-font-scale, 1)); }
 .stonetop .create-monster .cm-tile-hint { font-size: var(--st-fs-floor); line-height: 1.2; opacity: 0.72; }
 
 /* chips (nature, notable, damage tags) */
@@ -40754,7 +40759,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
 	border-radius: 999px;
 	cursor: pointer;
-	font-size: 0.85rem;
+	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
 	transition: border-color 0.15s ease, background 0.15s ease;
 }
 .stonetop .create-monster .cm-chip input { position: absolute; opacity: 0; pointer-events: none; }
@@ -40777,7 +40782,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: flex;
 	align-items: flex-start;
 	gap: 0.45rem;
-	font-size: 0.88rem;
+	font-size: calc(0.88rem * var(--stonetop-font-scale, 1));
 	line-height: 1.3;
 	cursor: pointer;
 }
@@ -40803,7 +40808,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: block;
 	padding: 0.6rem 0.7rem;
 	border: 1px dashed var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	font-size: var(--st-fs-floor);
 	font-style: italic;
 	opacity: 0.62;
@@ -40815,7 +40820,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.35rem;
 	padding: 0.5rem 0.55rem;
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	background: color-mix(in srgb, var(--st-btn-primary-bg, slategrey) 5%, transparent);
 }
 .stonetop .create-monster .cm-move-card-head,
@@ -40856,7 +40861,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: 100%;
 	min-height: 2.6rem;
 	resize: vertical;
-	font-size: 0.86rem;
+	font-size: calc(0.86rem * var(--stonetop-font-scale, 1));
 	line-height: 1.35;
 }
 .stonetop .create-monster .cm-move-add,
@@ -40869,7 +40874,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 0.35rem;
 	padding: 0.25rem 0.7rem;
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
-	border-radius: 6px;
+	border-radius: var(--st-radius-lg);
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
@@ -41018,7 +41023,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .threat-editor-more-toggle {
 	align-self: flex-start; width: auto; margin: 0.1rem 0;
 	display: inline-flex; align-items: center; gap: 0.4rem;
-	padding: 0.25rem 0.35rem; font-size: 0.85rem;
+	padding: 0.25rem 0.35rem; font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
 	background: transparent; border: 0; cursor: pointer;
 	color: var(--st-text-secondary, #4a4034);
 }
@@ -41063,7 +41068,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin-top: 12px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.14);
 	border-radius: var(--st-radius-lg);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	overflow: hidden;
 	/* Never shrink. The step column (.stonetop-guide-main) is a flex column that
 	   scrolls, so its children default to flex-shrink:1; a flex item is normally
@@ -41120,7 +41125,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-load-chip .tick {
 	color: var(--st-green-border); font-weight: 700; font-size: var(--st-fs-2xs);
 }
-.stonetop-expedition-dialog .stonetop-exp-load-chip:hover { background: rgba(0,0,0,0.06); }
+.stonetop-expedition-dialog .stonetop-exp-load-chip:hover { background: rgb(var(--st-ink-rgb) / 0.06); }
 .stonetop-expedition-dialog .stonetop-exp-load-chip.is-out {
 	color: var(--st-text-faint); border-style: dashed; text-decoration: line-through; opacity: 0.75;
 }
@@ -41427,7 +41432,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: none; color: var(--st-text-body); cursor: pointer;
 	font-family: var(--font-stonetop); font-size: var(--st-fs-xs); line-height: 1.35;
 }
-.stonetop-expedition-dialog .stonetop-exp-asset-btn:hover { background: rgba(0,0,0,0.06); }
+.stonetop-expedition-dialog .stonetop-exp-asset-btn:hover { background: rgb(var(--st-ink-rgb) / 0.06); }
 .stonetop-expedition-dialog .stonetop-exp-asset-btn:focus-visible,
 .stonetop-expedition-dialog .stonetop-exp-load-chip:focus-visible {
 	outline: 2px solid var(--st-btn-primary-bg);
@@ -42666,7 +42671,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-people-gallery .stonetop-people-footer button:not([disabled]):hover,
 .stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover,
 .stonetop-people-gallery .stonetop-people-empty button:not([disabled]):hover {
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	border-color: var(--st-btn-primary-border);
 	color: var(--st-text);
 }
@@ -43950,7 +43955,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-migration-assistant .stonetop-migration-lead code {
 	padding: 0 0.25em;
 	border-radius: var(--st-radius-sm);
-	background: rgba(0, 0, 0, 0.08);
+	background: rgb(var(--st-ink-rgb) / 0.08);
 }
 
 .stonetop-migration-assistant .stonetop-migration-panel {
@@ -44189,7 +44194,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    it is there so the GM can deliberately refresh it, not as a suggestion. */
 .stonetop-poster-maps-dialog .stonetop-poster-map.has-scene {
 	border-color: rgb(var(--st-ink-rgb) / 0.18);
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 }
 
 .stonetop-poster-maps-dialog .stonetop-poster-map-body {
@@ -44593,7 +44598,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    class is server-stamped, which is safe here since the flip always re-renders. */
 .stonetop-rel-viewpicker .stonetop-rel-view-btn.is-active {
 	background: var(--st-btn-primary-bg, slategrey);
-	color: #fff;
+	color: var(--st-btn-primary-text);
 }
 
 .stonetop-rel-viewpicker .stonetop-rel-view-btn:hover:not(.is-active) {
@@ -44640,7 +44645,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   idiom used elsewhere rather than tinting the whole column, which would fight the
 	   parchment behind it. */
 	border-top: 3px solid var(--st-lane-accent, #777);
-	border-radius: 4px;
+	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb) / 0.35);
 }
 
@@ -44696,7 +44701,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	min-width: 0;
 	padding: 6px;
 	border: 1px solid rgba(100, 116, 139, 0.25);
-	border-radius: 4px;
+	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb) / 0.72);
 }
 
@@ -45357,7 +45362,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	min-width: 0;
 	padding: 5px 2px 2px;
 	border: 1px dashed var(--st-lane-accent, #777);
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	/* Near-opaque, deliberately. A translucent panel let the card names underneath show
 	   through and collide with the zone labels, which read as noise exactly when the user
 	   needs to make a choice. By this point the card they care about is already in their
@@ -46121,7 +46126,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-catalog-filter.is-active {
 	background: var(--st-btn-primary-bg, slategrey);
 	border-color: var(--st-btn-primary-bg, slategrey);
-	color: #fff;
+	color: var(--st-btn-primary-text);
 }
 
 .stonetop-catalog-filter.is-active > i { opacity: 1; }
@@ -46160,7 +46165,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 6px 8px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.10);
 	border-radius: var(--st-radius);
-	background: rgba(0, 0, 0, 0.02);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 	cursor: pointer;
 }
 
@@ -46256,7 +46261,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-catalog-flag {
 	padding: 0 5px;
 	border-radius: 999px;
-	background: rgba(0, 0, 0, 0.07);
+	background: rgb(var(--st-ink-rgb) / 0.07);
 	color: var(--st-text-secondary);
 	font-size: var(--st-fs-floor-sm);
 	text-transform: uppercase;
@@ -46429,7 +46434,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-catalog-badge--mild {
 	border-color: rgb(var(--st-ink-rgb) / 0.16);
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	color: var(--st-text-secondary);
 }
 
@@ -47090,7 +47095,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-toolkit-moves .stonetop-gm-move:is(.stonetop-spin, .stonetop-flash) {
 	margin-inline: -6px;
 	padding-inline: 6px;
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 }
 
 /* THE PAINT OF THE DRAW, for every surface that has one: this tab's three move lists, the
@@ -49096,7 +49101,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-move-cost {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
+	background: rgb(var(--st-ink-rgb) / 0.03);
 	padding: 7px 10px;
 	font-size: var(--st-fs-sm);
 	color: var(--st-text-body);
@@ -49115,7 +49120,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    empty pouch. */
 .stonetop-move-cost-purse {
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	padding: 1px 7px;
 	white-space: nowrap;
 }
@@ -49190,7 +49195,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* The rite is once per season, and saying so is the whole reason the buttons are gone. */
 .stonetop-rites-done {
 	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 	padding: 5px 9px;
 	color: var(--st-text-secondary);
 }
@@ -49316,7 +49321,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    suggestion, the same way an already-imported poster map is: still actionable, not shouting. */
 .stonetop-rulebooks-dialog .stonetop-rulebook--unset {
 	border-color: rgb(var(--st-ink-rgb) / 0.18);
-	background: rgba(0, 0, 0, 0.05);
+	background: rgb(var(--st-ink-rgb) / 0.05);
 }
 
 .stonetop-rulebooks-dialog .stonetop-rulebook-icon {
@@ -53253,7 +53258,7 @@ button.stonetop-relmap-subtitle:focus-visible {
    `input[type="checkbox"]` back here would not undo the skin -- the master block is all
    `!important` -- but it would say the opposite of what is true. */
 .stonetop-person-picker-row input[type="radio"] {
-	accent-color: slategrey;
+	accent-color: var(--st-accent-fill);
 	flex: 0 0 auto;
 	margin: 0;
 }
@@ -54101,7 +54106,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	width: 100%;
 	min-width: 0;
 	margin: 0;
-	accent-color: slategrey;
+	accent-color: var(--st-accent-fill);
 	cursor: pointer;
 }
 
