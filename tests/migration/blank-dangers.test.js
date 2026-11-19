@@ -106,7 +106,7 @@ describe("the shipped pages", () => {
 describe("the sweep's place in the load", () => {
 	it("runs for the primary GM once per version, and cannot take the load down with it", () => {
 		const READY = readRepo("module/hooks/Ready.js");
-		const gated = READY.slice(READY.indexOf("if (isPrimaryGM()) {"));
+		const gated = READY.slice(READY.indexOf("if (game.user.isGM && isPrimaryGM()) {"));
 		expect(gated).toMatch(/try \{ await oncePerVersion\("blankDangers", clearAllBlankDangers\); \}\s*\n\s*catch/);
 	});
 });
