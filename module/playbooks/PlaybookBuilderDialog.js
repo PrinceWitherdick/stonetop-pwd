@@ -1461,7 +1461,7 @@ export async function explainNoTextPdf(fileName) {
 		content: `<p><strong>${escHtml(fileName)}</strong> has no text in it, only pictures of text. That happens when a playbook is scanned, or made with "Print to PDF" or a similar option that turns every page into an image. There's nothing in it the system can read, so the builder couldn't be filled in.</p>`
 			+ `<p>You can still type the playbook into the builder by hand.</p>`
 			+ `<p><strong>Want it to import by itself?</strong> Ask the playbook's creator to make it with the <em>community Stonetop playbook template</em>, and to save the PDF so its text stays text (exporting to PDF from their layout program does this; printing to PDF often doesn't). Playbooks made from that template can be read straight into the Playbook Builder.</p>`,
-		buttons: [{ key: "ok", label: "Fill it in by hand, with the PDF beside it", icon: "fa-pen", value: true }],
+		buttons: [{ key: "ok", label: "Fill it in by hand, with the PDF beside it", icon: "fa-pencil", value: true }],
 		defaultKey: "ok",
 	});
 }
@@ -1506,7 +1506,7 @@ export async function startNewPlaybook() {
 				+ "<p>Otherwise, type it into the builder yourself.</p>",
 			buttons: [
 				{ key: "pdf", label: "Read it from a PDF…", icon: "fa-file-pdf", value: () => { input.click(); return "pdf"; } },
-				{ key: "hand", label: "Fill it in by hand", icon: "fa-pen", value: "hand" },
+				{ key: "hand", label: "Fill it in by hand", icon: "fa-pencil", value: "hand" },
 			],
 		});
 		if (how === "hand") return new PlaybookBuilderDialog({}).render(true);

@@ -32,7 +32,7 @@
 		<h2 class="stonetop-onboarding-playbook-name">{{this.playbookName}}</h2>
 		{{#if hasFaq}}
 		<button type="button" class="stonetop-onboarding-faq-badge" title="Related questions: click for the full FAQ" aria-label="Related questions">
-			<i class="fas fa-question"></i>
+			<i class="fas fa-question" aria-hidden="true"></i>
 		</button>
 		{{/if}}
 	</div>
@@ -165,7 +165,7 @@
 						        class="onboard-background-neighbor-random"
 						        title="Roll a trait at random"
 						        aria-label="Roll a random trait for {{this.name}}">
-							<i class="fas fa-dice-d6"></i>
+							<i class="fas fa-dice-d6" aria-hidden="true"></i>
 						</button>
 					</label>
 					{{/each}}

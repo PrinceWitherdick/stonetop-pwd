@@ -138,6 +138,11 @@
 /* Custom CSS */
 :root {
 	--font-avara: "Avara", serif;
+	/* The old-book face worn as a LABEL on the cards that are props rather than sheet furniture: a
+	   threat's type, proximity and doom, a hazard's advance, a site's foundation. It was named
+	   outright in five rules. Falls back to the reader's own sheet font, which is what those rules
+	   already said. */
+	--font-fell: "IM Fell English", var(--font-stonetop);
 	--font-primary: "Libre Caslon Text", Signika, sans-serif;
 	--font-stonetop: "Libre Caslon Text", Signika, sans-serif;
 	/* Multiplier for Stonetop sheet/dialog text, driven by the sheetFontScale
@@ -665,6 +670,11 @@
 	   always-on-top overlay joins this rung rather than picking its own number
 	   and silently fighting the first for the top. */
 	--st-z-above-windows: 9998;
+	/* And the rung for our own hover pop-overs (a word's tooltip, the arcana and people previews,
+	   the playbook picker's, the autocomplete list, the basic-move panel): above every window AND
+	   level with core's tooltips, because each of them is opened from inside a window and has to
+	   clear it. Seven rules carried this as 10000 or 9999 by hand. */
+	--st-z-popover: 10000;
 
 	/* ── Green "active/accent" tint ───────────────────────────────────────
 	   Selected/active states (weather + spring tiers, character-foundry
@@ -839,6 +849,17 @@
 	   these fills are not buttons. */
 	--st-quiet-ink:   slategrey;
 	--st-accent-fill: slategrey;
+	/* THE SAME SLATE AS A RULE: the border of an inline button, the tab rail's frame, the underline
+	   of the classic tab strip, a selected card's edge. 57 borders spelled it out. Kept apart from the
+	   two above for the reason they are kept apart from each other: a palette may want to move an
+	   edge without moving a label or a fill. No palette re-points it yet (slategrey is 3:1 or better
+	   as a boundary on every page), so every one of those borders renders as it did. */
+	--st-slate-rule: slategrey;
+	/* AND AS A WASH. The translucent slate under a selected option, a lane, a pip, was written
+	   three ways (100/116/139, 112/128/144 and 106/120/128, some sixty rules between them). One
+	   channel now, at the value two thirds of them already used, read as
+	   rgb(var(--st-slate-rgb) / a) like the ink and paper channels above. */
+	--st-slate-rgb: 100 116 139;
 
 	/* THE CLASSIC LAYOUT'S TAB STRIP, at rest, for the same reason as the two above: a literal
 	   cannot be re-pitched. White on #999 is 2.85:1, and this is the primary navigation of every
@@ -1470,7 +1491,7 @@ figure.stonetop-map figcaption {
 }
 
 #navigation #scene-list .scene.gm {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background-color: hsl(308deg 6.5% 13%);
 }
 
@@ -2627,7 +2648,7 @@ input.stonetop-name-field {
 	align-items: center;
 	gap: 4px;
 	opacity: 0;
-	transition: opacity 0.1s ease;
+	transition: opacity 0.12s ease;
 }
 
 .stonetop-wound:hover .stonetop-wound-actions,
@@ -3012,8 +3033,8 @@ input.stonetop-name-field {
 	font-size: var(--st-fs-floor);
 	line-height: 1;
 	background: transparent;
-	border: 1px dashed var(--st-btn-primary-border, #4f5b66);
-	border-radius: 5px;
+	border: 1px dashed var(--color-border-light, #ccc);
+	border-radius: var(--st-radius);
 	cursor: pointer;
 }
 
@@ -3138,7 +3159,7 @@ input.stonetop-name-field {
 .stonetop-bg-choice-option.is-disabled,
 .stonetop-lore-option.is-disabled {
 	cursor: default;
-	opacity: 0.55;
+	opacity: 0.4;
 }
 
 /* Fewer ticked than the book asks for: said, never refused. */
@@ -3231,7 +3252,7 @@ input.stonetop-name-field {
 }
 
 .stonetop-bg-action-check:disabled ~ .stonetop-bg-action-label {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -4253,7 +4274,7 @@ input.stonetop-name-field {
 	flex-shrink: 0;
 	width: calc(13px * var(--stonetop-font-scale, 1));
 	height: calc(13px * var(--stonetop-font-scale, 1));
-	border: 1.5px solid slategrey;
+	border: 1.5px solid var(--st-slate-rule);
 	border-radius: 50%;
 	background: rgb(var(--st-paper-rgb));
 	cursor: pointer;
@@ -4551,7 +4572,7 @@ input.stonetop-name-field {
 	margin-top: 6px;
 }
 .stonetop-damage-seed:has(.stonetop-damage-seed-check:disabled) {
-	opacity: 0.6;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -4577,7 +4598,7 @@ input.stonetop-name-field {
 	font-size: var(--st-fs-floor);
 	line-height: 1.5;
 	pointer-events: none;
-	z-index: 9999;
+	z-index: var(--st-z-popover);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
 }
 .stonetop-basic-move-panel-name {
@@ -4624,7 +4645,7 @@ input.stonetop-name-field {
 	display: inline-block;
 	text-box: trim-both cap alphabetic;
 	padding: calc(2px + var(--st-trim-top)) 7px calc(2px + var(--st-trim-bottom));
-	border: 1px solid rgba(100,116,139,0.35);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.35);
 	border-radius: 999px;
 	background: var(--st-on-dark-raised, hsl(210 12% 92%));
 	color: var(--st-text-body);
@@ -5543,7 +5564,7 @@ select[name="sheetFont"]:has(option[value="signika"]:checked) {
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-chat-move-name {
 	font-family: var(--font-stonetop, "Signika", serif);
-	font-size: var(--font-size-16);
+	font-size: calc(var(--font-size-16) * var(--stonetop-font-scale, 1));
 	font-weight: bold;
 	line-height: 1.2;
 	margin: 0;
@@ -6104,7 +6125,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	transition: background 0.15s, border-color 0.15s;
 }
 
-.stonetop-weather-row:hover { background: var(--st-warm-hover-bg); }
+.stonetop-weather-row:hover { background: var(--st-slate-hover-bg); }
 
 /* Passing through, one step of the walk the roll makes down the table (utils/flash-highlight.js).
    The hover wash, at full strength but in a different HUE from the green the walk lands on — so
@@ -6394,7 +6415,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    it is the live control. Keep it legible rather than greying it into the background. */
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-switch:disabled,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-gm-move-share:disabled {
-	opacity: 0.65;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -6438,7 +6459,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin: 0 0 8px;
 	padding: 3px 8px;
 	font-family: var(--font-stonetop);
-	font-size: var(--font-size-16);
+	font-size: calc(var(--font-size-16) * var(--stonetop-font-scale, 1));
 	font-weight: bold;
 	text-align: center;
 	background: rgb(var(--st-ink-rgb) / 0.05);
@@ -6487,7 +6508,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-roll-result-label {
 	font-family: var(--font-stonetop);
 	font-weight: bold;
-	font-size: var(--font-size-16);
+	font-size: calc(var(--font-size-16) * var(--stonetop-font-scale, 1));
 	line-height: 1.1;
 }
 .stonetop-roll-result-details:empty { display: none; }
@@ -6607,7 +6628,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    that one still wins. */
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .cell__title {
 	font-family: var(--font-stonetop, "Signika", serif);
-	font-size: var(--font-size-16);
+	font-size: calc(var(--font-size-16) * var(--stonetop-font-scale, 1));
 	font-weight: bold;
 	line-height: 1.2;
 	margin: 0;
@@ -6653,7 +6674,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .result-label {
 	text-align: center;
-	font-size: var(--font-size-18);
+	font-size: calc(var(--font-size-18) * var(--stonetop-font-scale, 1));
 	font-weight: bold;
 	border: 1px solid rgba(159, 146, 117, 0.5);
 	border-radius: var(--st-radius-sm);
@@ -6772,8 +6793,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 }
 
 .stonetop-burn-brightly-btn:disabled {
-	opacity: 0.5;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* ── Know Things: the moves that act on a landed roll ───────────────────────── */
@@ -6794,8 +6815,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 .stonetop-logbook-btn:disabled,
 .stonetop-give-it-all-btn:disabled {
-	opacity: 0.5;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* Never at a Loss: the mark-XP / decline-XP pair, in the failure tier's action row. */
@@ -6809,7 +6830,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 }
 
 .stonetop-know-things-xp:disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -6831,8 +6852,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	gap: 6px;
 }
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-attack-btn:disabled {
-	opacity: 0.5;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 /* These are the tier's PRIMARY action (Confirm / Roll damage / Suffer), not a compact
    Shift-style secondary button — give them CTA height and body-matched text. The generic
@@ -7756,8 +7777,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 }
 .stonetop-personal-symbol-btn:disabled,
 .stonetop-personal-symbol-btn:disabled:hover {
-	opacity: 0.55;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 	background: transparent;
 }
 
@@ -8646,7 +8667,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--color-text-dark-secondary, #666);
 	font-size: var(--st-fs-xs);
 	opacity: 0.55;
-	transition: opacity 120ms ease;
+	transition: opacity 0.12s ease;
 }
 .stonetop-inv-lore-toggle:hover { opacity: 1; }
 /* The caret points at what it opens, like the section headings and the arcanum card's corner:
@@ -8663,7 +8684,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	cursor: pointer;
 	color: var(--color-text-dark-secondary, #666);
 	opacity: 0.55;
-	transition: opacity 120ms ease, color 120ms ease;
+	transition: opacity 0.12s ease, color 0.12s ease;
 }
 .stonetop-inv-artifact-identify:hover,
 .stonetop-inv-artifact-gm:hover { opacity: 1; }
@@ -8808,7 +8829,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 
 .stonetop-inv-harvest:hover { background: var(--st-btn-primary-bg-hover); }
-.stonetop-inv-harvest:disabled { opacity: 0.55; cursor: default; }
+.stonetop-inv-harvest:disabled { opacity: 0.4; cursor: default; }
 
 /* Both ✕s sit after this button, so they need their own auto margin dropped or the two fight
    over the same free space and the ✕ lands mid-row. */
@@ -8996,7 +9017,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 
 .stonetop-camp-portrait-btn:hover,
 .stonetop-camp-portrait-btn:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -9403,7 +9424,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	align-items: center;
 	justify-content: center;
 	padding: 2px 10px;
-	border: 1px solid rgba(100, 116, 139, 0.3);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.3);
 	border-radius: 999px;
 	background: var(--st-on-dark-raised, hsl(210 12% 92%));
 	cursor: pointer;
@@ -9422,7 +9443,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 
 .stonetop-struggle-chip:has(input:focus-visible) {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -9706,7 +9727,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	background: var(--st-btn-primary-bg-hover);
 	border-color: var(--st-btn-primary-border-hover);
 }
-.stonetop-requisition-take:disabled { opacity: 0.5; cursor: not-allowed; }
+.stonetop-requisition-take:disabled { opacity: 0.4; cursor: not-allowed; }
 .stonetop-requisition-results { list-style: none; margin: 8px 0 0; padding-left: 14px; font-size: var(--st-fs-sm); color: var(--color-text-dark-secondary); }
 .stonetop-requisition-results li { position: relative; margin: 2px 0; padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap)); }
 .stonetop-requisition-results li::before {
@@ -10189,7 +10210,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	background: rgb(var(--st-paper-rgb));
 }
 .stonetop-pb-review-block.is-unsure { border-left-color: var(--st-red-border); background: var(--st-red-bg); }
-.stonetop-pb-review-block.is-moved { border-left-color: slategrey; }
+.stonetop-pb-review-block.is-moved { border-left-color: var(--st-slate-rule); }
 .stonetop-pb-review-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .stonetop-pb-review-block-title { font-family: var(--font-stonetop); }
 .stonetop-pb-review-block-tags { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
@@ -10477,7 +10498,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 .stonetop-improvement-builder-req-btns button:hover,
 .stonetop-improvement-builder-group-btns button:hover { color: var(--st-text-body); }
 .stonetop-improvement-builder-req-btns button[disabled],
-.stonetop-improvement-builder-group-btns button[disabled] { opacity: 0.3; cursor: default; }
+.stonetop-improvement-builder-group-btns button[disabled] { opacity: 0.4; cursor: not-allowed; }
 /* Both remove buttons turn red rather than darkening. Each sits inside the -btns span, so the
    shared "... button:hover" above is (0,2,1) and beats a bare ".…-remove:hover" (0,2,0);
    naming the parent takes these to (0,3,0), which is what makes the red land. */
@@ -10574,7 +10595,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	line-height: 1.5;
 	cursor: pointer;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
-	border-radius: var(--st-radius-pill, 999px);
+	border-radius: 999px;
 	background: rgb(var(--st-ink-rgb) / 0.04);
 	color: var(--color-text-dark-primary);
 	transition: background 0.12s, border-color 0.12s;
@@ -10605,7 +10626,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 /* The two text fields that share a row with a number take the rest of it. */
 .stonetop-add-item-value-to,
 .stonetop-add-item-uses-label { flex: 1 1 auto; min-width: 0; }
-.stonetop-add-item-value-to input:disabled { opacity: 0.55; }
+.stonetop-add-item-value-to input:disabled { opacity: 0.4; }
 
 /* Image well: a small square preview beside Choose / Clear. An empty preview keeps its
    square as a dashed outline, so the row doesn't jump when art is picked. */
@@ -10921,7 +10942,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	display: inline-flex;
 	align-self: flex-start;
 	border: 1px solid var(--st-btn-primary-border, #4f5b66);
-	border-radius: 5px;
+	border-radius: var(--st-radius);
 	overflow: hidden;
 }
 .stonetop-segmented-picker-option {
@@ -10992,7 +11013,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 }
 
 .stonetop-roll-mode-picker .stonetop-roll-mode-btn:hover:not(.is-active) {
-	background: rgba(100, 116, 139, 0.16);
+	background: rgb(var(--st-slate-rgb) / 0.16);
 	color: var(--st-text-body);
 }
 
@@ -11238,7 +11259,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
 	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete):disabled {
-	opacity: 0.55;
+	opacity: 0.4;
 	cursor: default;
 }
 /* What the die paid, once it has been thrown. Green for the same reason the pick tally goes
@@ -11310,8 +11331,8 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
 	.stonetop-invoke-debility-btn:disabled {
-	opacity: 0.55;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
@@ -11387,7 +11408,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	color: var(--st-btn-primary-bg);
 }
 .stonetop-open-book:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -13623,7 +13644,7 @@ button.stonetop-holy-light:focus-visible,
 .stonetop-insert-form:focus-visible,
 .stonetop-held-advantage:focus-visible,
 .stonetop-held-disadvantage:focus-visible {
-	outline: 2px solid var(--color-shadow-primary, slategrey);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -13741,7 +13762,7 @@ button.stonetop-invocation-chip:hover {
 }
 
 button.stonetop-invocation-chip:focus-visible {
-	outline: 2px solid var(--color-shadow-primary, slategrey);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -13806,7 +13827,7 @@ button.stonetop-preparation-chip:hover { border-color: var(--st-gold-text); }
 button.stonetop-inspiration-chip:focus-visible,
 button.stonetop-rapport-chip:focus-visible,
 button.stonetop-preparation-chip:focus-visible {
-	outline: 2px solid var(--color-shadow-primary, slategrey);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -15159,7 +15180,7 @@ button.stonetop-mark-sign-btn {
 span.stonetop-mark-sign-btn { cursor: default; }
 
 button.stonetop-mark-sign-btn:hover {
-	background: rgba(112, 128, 144, 0.18);
+	background: rgb(var(--st-slate-rgb) / 0.18);
 	color: var(--st-text-secondary);
 	text-shadow: none;
 }
@@ -15603,12 +15624,12 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .stonetop-pdi-remove--danger {
-	background: #a02020;
-	border-color: var(--st-on-dark-danger, #7a1010);
-	color: #fff;
+	background: var(--st-red-bg);
+	border-color: var(--st-red-border);
+	color: var(--st-red-text);
 }
 .stonetop-pdi-remove--danger:hover {
-	background: #c02828;
+	background: var(--st-red-bg-hover);
 }
 
 /* ── Inventory toolbar ──────────────────────────────────────────── */
@@ -15788,7 +15809,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb) / 0.8);
-	transition: border-color 0.1s;
+	transition: border-color 0.12s;
 }
 
 .asm-input:hover {
@@ -15823,7 +15844,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	line-height: 1;
 	background: rgb(var(--st-paper-rgb) / 0.8);
 	color: var(--color-text-dark-secondary);
-	transition: background 0.1s, border-color 0.1s, color 0.1s;
+	transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
 
@@ -15883,7 +15904,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	cursor: pointer;
 	font-size: var(--st-fs-base);
 	background: rgb(var(--st-paper-rgb) / 0.8);
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 .asm-confirm {
@@ -15991,7 +16012,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-xs);
 	line-height: 1.3;
 	opacity: 0.5;
-	transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease;
+	transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
 
 .stonetop-outfit-load-option.is-active {
@@ -16457,7 +16478,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgb(var(--st-ink-rgb) / 0.02);
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 .stonetop-levelup-move-option:hover,
@@ -16530,7 +16551,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgb(var(--st-ink-rgb) / 0.02);
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 .stonetop-levelup-stat-option:hover {
@@ -16620,7 +16641,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .stonetop-levelup-next-btn:disabled {
-	opacity: 0.45;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -16970,7 +16991,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 :where(.deaths-door-dialog-buttons) .is-primary,
 .deaths-door-cancel-btn {
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 /* The roll is the whole point of the step, so it takes whatever the footer has left over rather
@@ -17049,7 +17070,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: inherit;
 	font-size: var(--st-fs-base);
 	cursor: pointer;
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 .deaths-door-choice-back:hover:not(:disabled),
@@ -17060,7 +17081,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 .deaths-door-choice-back:disabled,
 .deaths-door-choice-next:disabled {
-	opacity: 0.35;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -17081,7 +17102,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: inherit;
 	font-size: var(--st-fs-base);
 	cursor: pointer;
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 .deaths-door-skip-roll-btn:hover,
@@ -17516,7 +17537,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 /* The footer itself is skinned with Death's Door's, up in that section. */
 .undeath-apply-btn:disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -18528,7 +18549,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius-sm);
 	background: var(--dd-surface);
 	cursor: pointer;
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 }
 
 /* Follows the card's cursor rather than declaring its own, so a blocked option reads
@@ -18828,7 +18849,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 .stonetop-instinct-temporary-badge {
 	margin-right: 6px;
-	border-color: var(--st-gold-border, rgba(100,116,139,0.35));
+	border-color: var(--st-gold-border, rgb(var(--st-slate-rgb) / 0.35));
 	background: var(--st-gold-bg, hsl(45 60% 90%));
 }
 
@@ -19023,7 +19044,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
-.stonetop .stonetop-hb-insert-form-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.stonetop .stonetop-hb-insert-form-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .stonetop-hb-insert-banner {
 	margin: 0 0 12px;
@@ -19501,7 +19522,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgb(var(--st-ink-rgb) / 0.02);
-	transition: background 0.1s, border-color 0.1s;
+	transition: background 0.12s, border-color 0.12s;
 	font-size: var(--st-fs-base);
 	line-height: 1.4;
 }
@@ -19742,7 +19763,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	align-items: center;
 	gap: 12px;
 	padding: 6px 12px 10px;
-	border-bottom: 2px solid slategrey;
+	border-bottom: 2px solid var(--st-slate-rule);
 	background: rgb(var(--st-ink-rgb) / 0.04);
 	flex-shrink: 0;
 }
@@ -19832,7 +19853,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 .app.steading .window-content input.steading-subtitle-input:focus {
 	outline: none;
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	box-shadow: none;
 }
 
@@ -20614,7 +20635,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: row;
 	margin-top: 8px;
 	padding: 16px 10px 0;
-	border-bottom: 2px solid slategrey;
+	border-bottom: 2px solid var(--st-slate-rule);
 	flex-shrink: 0;
 }
 
@@ -20797,7 +20818,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 5px;
 	/* A panel, not a strip: bordered and rounded away from the window on the right, open on
 	   the left where it meets the sheet's edge so the two read as one piece. */
-	border: 2px solid slategrey;
+	border: 2px solid var(--st-slate-rule);
 	border-left: none;
 	border-radius: 0 8px 8px 0;
 	background: var(--stonetop-bg);
@@ -20852,7 +20873,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	left: auto;
 	right: 100%;
 	/* Open on the RIGHT now, where it meets the sheet's edge. */
-	border-left: 2px solid slategrey;
+	border-left: 2px solid var(--st-slate-rule);
 	border-right: none;
 	border-radius: 8px 0 0 8px;
 	/* Cast away from the seam, as before — which on this side means leftward. */
@@ -20886,7 +20907,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	height: 32px;
 	margin: 0;
 	padding: 0;
-	border-radius: 5px;
+	border-radius: var(--st-radius);
 	background: transparent;
 	color: var(--st-btn-primary-bg);
 	cursor: pointer;
@@ -20896,7 +20917,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 .stonetop .sheet-tabs.stonetop-tab-rail .item:hover,
 .stonetop .sheet-tabs.stonetop-tab-rail .item:focus {
-	background: rgba(112, 128, 144, 0.22);
+	background: rgb(var(--st-slate-rgb) / 0.22);
 	color: var(--st-btn-primary-bg);
 }
 
@@ -21133,7 +21154,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	margin: 4px 0 0;
 	padding: 0;
 	border-top: none;
-	border-bottom: 2px solid slategrey;
+	border-bottom: 2px solid var(--st-slate-rule);
 	flex: 0 0 auto;
 }
 
@@ -21153,7 +21174,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: row;
 	margin-top: 0;
 	padding: 8px 10px 0;
-	border-bottom: 2px solid slategrey;
+	border-bottom: 2px solid var(--st-slate-rule);
 	flex-shrink: 0;
 }
 
@@ -21630,17 +21651,17 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	   out so align-items:center lands the box level with its label. */
 	position: relative;
 	top: 0;
-	border: 2px solid slategrey;
+	border: 2px solid var(--st-slate-rule);
 	border-radius: var(--st-radius-sm);
 	cursor: pointer;
-	background: rgba(106, 120, 128, 0.15);
-	transition: background 0.1s;
+	background: rgb(var(--st-slate-rgb) / 0.15);
+	transition: background 0.12s;
 }
 
 /* Hover to signal interactivity (only fires in editable sections; read-only
    ones get pointer-events: none from the shared .stonetop-readonly rule). */
 .steading-track-option input[type="radio"]:hover {
-	background: rgba(106, 120, 128, 0.35);
+	background: rgb(var(--st-slate-rgb) / 0.35);
 }
 
 .steading-track-option input[type="radio"]:checked,
@@ -21653,7 +21674,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-readonly .steading-track-option input[type="radio"] {
 	cursor: default;
 	opacity: 1;
-	background: rgba(106, 120, 128, 0.08);
+	background: rgb(var(--st-slate-rgb) / 0.08);
 }
 
 .stonetop-readonly .steading-track-option input[type="radio"]:checked,
@@ -21692,7 +21713,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	text-align: center;
 	font-size: 1.6em;
 	font-weight: bold;
-	border: 2px solid slategrey;
+	border: 2px solid var(--st-slate-rule);
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb));
 }
@@ -21706,7 +21727,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	text-align: center;
 	font-size: 1.6em;
 	font-weight: bold;
-	border: 2px solid slategrey;
+	border: 2px solid var(--st-slate-rule);
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb));
 	color: var(--st-text);
@@ -21744,7 +21765,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	   sits level with the size label. */
 	position: relative;
 	top: 0;
-	border: 1.5px solid slategrey;
+	border: 1.5px solid var(--st-slate-rule);
 	border-radius: 50%;
 	background: rgb(var(--st-paper-rgb));
 	cursor: pointer;
@@ -21816,14 +21837,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	height: calc(14px * var(--stonetop-font-scale, 1)) !important;
 	flex: 0 0 calc(14px * var(--stonetop-font-scale, 1)) !important;
 	border-radius: 100% !important;
-	border: 2px solid slategrey !important;
-	background: rgba(106, 120, 128, 0.15) !important;
+	border: 2px solid var(--st-slate-rule) !important;
+	background: rgb(var(--st-slate-rgb) / 0.15) !important;
 	cursor: pointer;
-	transition: background 0.1s;
+	transition: background 0.12s;
 }
 
 .steading-debility-check:hover {
-	background: rgba(106, 120, 128, 0.35) !important;
+	background: rgb(var(--st-slate-rgb) / 0.35) !important;
 }
 
 .steading-debility-check:checked {
@@ -21836,7 +21857,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-readonly input[type="checkbox"].steading-debility-check {
 	cursor: default;
 	opacity: 1;
-	background: rgba(106, 120, 128, 0.08) !important;
+	background: rgb(var(--st-slate-rgb) / 0.08) !important;
 }
 
 .stonetop-readonly input[type="checkbox"].steading-debility-check:checked {
@@ -22138,7 +22159,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 4px 10px;
 	line-height: 1.2;
 	background: transparent;
-	border: 1px dashed var(--st-btn-primary-border, #4f5b66);
+	border: 1px dashed var(--color-border-light, #ccc);
 	border-radius: var(--st-radius);
 }
 .stonetop-steading-plan button.spe-req-add:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }
@@ -22482,6 +22503,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	60%  { opacity: 0.85; }
 	100% { opacity: 0; }
 }
+/* Motion off: the check is simply gone, which is where the fade ends. */
+@media (prefers-reduced-motion: reduce) {
+	.steading-edit-section > .steading-section-edit-toggle.steading-section-toggle-faded {
+		animation: none;
+		opacity: 0;
+	}
+}
 
 /* ── Steading section folds ───────────────────────────────────────────────
    The fold caret takes the section's top-right corner and the pencil/check step
@@ -22721,7 +22749,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-base);
 	opacity: 0.6;
 	color: var(--st-on-dark-danger, #c00);
-	transition: opacity 0.1s;
+	transition: opacity 0.12s;
 }
 
 .steading-residents-col-actions .steading-list-delete:hover {
@@ -23490,7 +23518,7 @@ a.steading-player-open:hover {
 
 .steading-place-name:focus {
 	outline: none;
-	border-bottom-color: slategrey;
+	border-bottom-color: var(--st-slate-rule);
 }
 
 /* -- Improvements tab ------------------------------------------ */
@@ -23569,7 +23597,7 @@ a.steading-player-open:hover {
 .steading-improvement-filter.is-active > i { opacity: 1; }
 
 .steading-improvement-filter:hover:not(.is-active) {
-	background: rgba(100, 116, 139, 0.16);
+	background: rgb(var(--st-slate-rgb) / 0.16);
 	color: var(--st-text-body);
 }
 
@@ -23694,7 +23722,7 @@ a.steading-player-open:hover {
 	-webkit-appearance: none;
 	width: 16px;
 	height: 16px;
-	border: 2px solid slategrey;
+	border: 2px solid var(--st-slate-rule);
 	border-radius: var(--st-radius-sm);
 	flex-shrink: 0;
 	cursor: pointer;
@@ -23788,7 +23816,7 @@ a.steading-player-open:hover {
 	cursor: pointer;
 }
 .steading-improvement-toggle:hover {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	color: var(--st-text-body);
 	border: none;
 	box-shadow: none;
@@ -24022,7 +24050,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	-webkit-appearance: none;
 	width: 13px;
 	height: 13px;
-	border: 1px solid slategrey;
+	border: 1px solid var(--st-slate-rule);
 	border-radius: var(--st-radius-sm);
 	flex-shrink: 0;
 	margin-top: 1px;
@@ -24307,8 +24335,8 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .steading-inn-gathering-btn:hover:not(:disabled) { background: var(--st-btn-primary-bg-hover); }
 
 .steading-inn-gathering-btn:disabled {
-	opacity: 0.5;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* The Inn's name, and the button that names (or renames) it after the build-time window's
@@ -24342,7 +24370,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	cursor: pointer;
 }
 .steading-inn-name-btn > i { margin: 0; }
-.steading-inn-name-btn:hover:not(:disabled) { background: var(--st-warm-hover-bg); color: var(--st-text-body); }
+.steading-inn-name-btn:hover:not(:disabled) { background: var(--st-slate-hover-bg); color: var(--st-text-body); }
 .steading-inn-name-btn:disabled { cursor: default; }
 
 /* An improvement that is a move (Aurochs Hunting, Heroic Reputation) rolls from its own card: the
@@ -24971,16 +24999,16 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    and the later rule is the one that wins. */
 .stonetop-season-btn--warn {
 	background: transparent;
-	color: var(--st-text-body);
-	border: 1px solid rgba(140, 0, 0, 0.45);
+	color: var(--st-red-text);
+	border: 1px solid var(--st-red-border);
 }
 
-.stonetop-season-btn--warn:hover { background: rgba(140, 0, 0, 0.10); }
+.stonetop-season-btn--warn:hover { background: var(--st-red-bg); }
 
 .stonetop-season-btn:disabled,
 .stonetop-season-btn--warn:disabled {
-	opacity: 0.5;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* The watch's seasonal upkeep sits in its own block so the two outcomes (feed it, or let it go)
@@ -25232,7 +25260,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    the extra weight. */
 .stonetop-disaster-choice.is-disabled,
 .stonetop-disaster-choice.is-disabled:hover {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 	background: none;
 }
@@ -25592,12 +25620,12 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	border: 2px solid transparent;
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
-	transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+	transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
 	box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
 .stonetop-playbook-picker-card:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	box-shadow: 0 3px 10px rgba(0,0,0,0.2);
 	transform: translateY(-2px);
 }
@@ -25647,7 +25675,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	line-height: 1.2;
 }
 .stonetop .stonetop-playbook-picker-card.is-taken { border-style: dashed; }
-.stonetop .stonetop-playbook-picker-card.is-taken:not(:hover) { border-color: slategrey; }
+.stonetop .stonetop-playbook-picker-card.is-taken:not(:hover) { border-color: var(--st-slate-rule); }
 
 /* Per-playbook accent colors on hover border */
 .stonetop-playbook-picker-card--the-blessed:hover      { border-color: var(--color-the-blessed); }
@@ -25662,7 +25690,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 .stonetop-playbook-picker-tooltip {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--st-z-popover);
 	max-width: 220px;
 	background: #2a2a2a;
 	color: #f0f0f0;
@@ -25809,8 +25837,8 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	transition: border-color 0.15s;
 }
 
-.stonetop-onboarding-card:hover  { border-color: slategrey; }
-.stonetop-onboarding-card.is-selected { border-color: slategrey; background: var(--st-on-dark-selected, hsl(210 15% 96%)); }
+.stonetop-onboarding-card:hover  { border-color: var(--st-slate-rule); }
+.stonetop-onboarding-card.is-selected { border-color: var(--st-slate-rule); background: var(--st-on-dark-selected, hsl(210 15% 96%)); }
 
 .stonetop-onboarding-card-header {
 	--st-onboarding-header-gap: 6px;
@@ -25953,9 +25981,9 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	transition: border-color 0.12s, background 0.12s;
 }
 
-.stonetop-onboarding-appearance-option:hover     { border-color: slategrey; }
+.stonetop-onboarding-appearance-option:hover     { border-color: var(--st-slate-rule); }
 .stonetop-onboarding-appearance-option.is-selected {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-selected, hsl(210 15% 92%));
 	font-weight: 600;
 }
@@ -26020,9 +26048,9 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	transition: border-color 0.12s, background 0.12s;
 }
 
-.stonetop-onboarding-origin-label:hover    { border-color: slategrey; }
+.stonetop-onboarding-origin-label:hover    { border-color: var(--st-slate-rule); }
 .stonetop-onboarding-origin-label.is-selected {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-selected, hsl(210 15% 92%));
 	font-weight: 600;
 }
@@ -26053,7 +26081,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border-radius: var(--st-radius);
 }
 
-.onboard-name-input:focus { outline: none; border-color: slategrey; }
+.onboard-name-input:focus { outline: none; border-color: var(--st-slate-rule); }
 
 /* A write-in place, and a homebrew playbook's question about the place picked. */
 .onboard-origin-place {
@@ -26082,7 +26110,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border-radius: var(--st-radius);
 }
 .onboard-origin-place:focus,
-.onboard-origin-answer:focus { outline: none; border-color: slategrey; }
+.onboard-origin-answer:focus { outline: none; border-color: var(--st-slate-rule); }
 
 /* Name suggestions */
 .stonetop-onboarding-names-section {
@@ -26142,7 +26170,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .onboard-name-chip:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-hover, hsl(210 15% 94%));
 }
 
@@ -26290,7 +26318,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .stonetop-onboarding-next:disabled,
 .stonetop-onboarding-confirm:disabled {
-	opacity: 0.35;
+	opacity: 0.4;
 	cursor: not-allowed;
 	pointer-events: none;
 }
@@ -26306,7 +26334,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	justify-content: center;
 	padding: 8px 12px;
 	margin-bottom: 14px;
-	background: rgba(100,116,139,0.08);
+	background: rgb(var(--st-slate-rgb) / 0.08);
 	border-radius: var(--st-radius-lg);
 }
 
@@ -26330,14 +26358,14 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	padding: 2px 8px;
 	font-size: var(--st-fs-2xs);
 	line-height: 1.4;
-	border: 1px solid rgba(100,116,139,0.35);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.35);
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb));
 	color: var(--st-text-secondary);
 }
 
 .stonetop-onboarding-stats-reset:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	color: var(--st-text);
 }
 
@@ -26374,20 +26402,20 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	align-items: center;
 	gap: 4px;
 	padding: 8px 6px 6px;
-	border: 2px solid rgba(100,116,139,0.2);
+	border: 2px solid rgb(var(--st-slate-rgb) / 0.2);
 	border-radius: var(--st-radius-lg);
 	background: rgb(var(--st-paper-rgb));
 	transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .stonetop-onboarding-stat-box.is-filled {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 }
 
 .stonetop-onboarding-stat-box.is-drag-over {
 	background: var(--st-on-dark-hover, hsl(210 15% 94%));
-	border-color: slategrey;
-	box-shadow: 0 0 0 2px rgba(112,128,144,0.18);
+	border-color: var(--st-slate-rule);
+	box-shadow: 0 0 0 2px rgb(var(--st-slate-rgb) / 0.18);
 }
 
 .stonetop-onboarding-stat-abbr {
@@ -26404,7 +26432,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-size: var(--st-fs-lg);
 	font-weight: 700;
 	padding: 3px 2px;
-	border: 1px solid rgba(100,116,139,0.3);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.3);
 	border-radius: var(--st-radius);
 	background: transparent;
 	cursor: pointer;
@@ -26445,7 +26473,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-move-search:focus-within,
-.stonetop-levelup-move-search:focus-within { border-color: slategrey; }
+.stonetop-levelup-move-search:focus-within { border-color: var(--st-slate-rule); }
 
 .stonetop-onboarding-move-search i,
 .stonetop-levelup-move-search i {
@@ -26505,7 +26533,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .stonetop-onboarding-move-chip:hover,
 .stonetop-levelup-move-chip:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-hover, hsl(210 15% 94%));
 }
 
@@ -26547,7 +26575,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 /* Option cards are picked from the keyboard too (role="button", tabindex): show where focus is. */
 .stonetop-levelup-pickable:focus-visible {
-	outline: 2px solid slategrey;
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -26589,7 +26617,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-move-stat-option.is-disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -26634,8 +26662,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .stonetop-onboarding-card--possession.is-preselected,
 .stonetop-onboarding-card--invocation.is-preselected {
-	background: rgba(100,116,139,0.06);
-	border-color: rgba(100,116,139,0.3);
+	background: rgb(var(--st-slate-rgb) / 0.06);
+	border-color: rgb(var(--st-slate-rgb) / 0.3);
 }
 
 .stonetop-onboarding-card--possession .stonetop-onboarding-card-header,
@@ -26676,7 +26704,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 	color: var(--st-quiet-ink);
-	border: 1px solid rgba(100,116,139,0.5);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.5);
 	border-radius: var(--st-radius-sm);
 	white-space: nowrap;
 }
@@ -26704,7 +26732,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	min-width: 0;
 	margin-top: 6px;
 	padding: 4px 8px;
-	border: 1px solid rgba(100,116,139,0.35);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.35);
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb));
 	font: inherit;
@@ -26714,11 +26742,11 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .vtt .window-app .stonetop-onboarding-card--custom .onboard-possession-custom:focus {
 	outline: none;
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 }
 
 .stonetop-onboarding-card--custom .onboard-possession-custom:disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -26741,8 +26769,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	gap: 3px;
 	margin: 0 0 0 18px;
 	padding: 8px 10px;
-	background: rgba(100,116,139,0.05);
-	border: 1px solid rgba(100,116,139,0.25);
+	background: rgb(var(--st-slate-rgb) / 0.05);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius-sm);
 }
 
@@ -26773,7 +26801,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-suboption input:disabled ~ .stonetop-onboarding-suboption-label {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -26789,8 +26817,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-onboarding-choice-group {
 	margin: 6px 0 0 18px;
 	padding: 8px 10px;
-	background: rgba(100,116,139,0.05);
-	border: 1px solid rgba(100,116,139,0.25);
+	background: rgb(var(--st-slate-rgb) / 0.05);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius-sm);
 }
 
@@ -26809,7 +26837,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-onboarding-choice-subgroup + .stonetop-onboarding-choice-subgroup {
 	margin-top: 4px;
 	padding-top: 4px;
-	border-top: 1px solid rgba(100,116,139,0.15);
+	border-top: 1px solid rgb(var(--st-slate-rgb) / 0.15);
 }
 
 /* Live "N / max" badge on a capped multi-select line (the remarkable-trait line,
@@ -26855,8 +26883,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .stonetop-possession-choices .stonetop-choice-group {
 	padding: 8px 10px;
-	background: rgba(100,116,139,0.05);
-	border: 1px solid rgba(100,116,139,0.25);
+	background: rgb(var(--st-slate-rgb) / 0.05);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius-sm);
 }
 
@@ -26871,7 +26899,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-pc-count { font-weight: 700; }
 
 .stonetop-possession-choices .stonetop-choice-option-label.is-disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -27043,7 +27071,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	align-items: center;
 	gap: 5px;
 	padding: 4px 10px;
-	border: 1.5px solid rgba(100,116,139,0.3);
+	border: 1.5px solid rgb(var(--st-slate-rgb) / 0.3);
 	border-radius: 999px;
 	font-size: var(--st-fs-sm);
 	cursor: pointer;
@@ -27056,8 +27084,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-onboarding-tag-option input[type="radio"] { display: none; }
 
 .stonetop-onboarding-tag-option.is-selected {
-	border-color: slategrey;
-	background: rgba(100,116,139,0.1);
+	border-color: var(--st-slate-rule);
+	background: rgb(var(--st-slate-rgb) / 0.1);
 	font-weight: 600;
 }
 
@@ -27162,8 +27190,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-onboarding-lore-context {
 	margin: 0 0 12px;
 	padding: 8px 10px;
-	border-left: 3px solid slategrey;
-	background: rgba(112,128,144,0.08);
+	border-left: 3px solid var(--st-slate-rule);
+	background: rgb(var(--st-slate-rgb) / 0.08);
 	color: var(--st-on-dark-ink, #1f2937);
 	font-size: var(--st-fs-base);
 	line-height: 1.4;
@@ -27190,7 +27218,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .stonetop-onboarding-lore-section {
 	padding-top: 10px;
-	border-top: 1px solid rgba(100,116,139,0.18);
+	border-top: 1px solid rgb(var(--st-slate-rgb) / 0.18);
 }
 
 .stonetop-onboarding-lore-section:first-child {
@@ -27221,7 +27249,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-onboarding-background-arcana {
 	margin-top: 8px;
 	padding-top: 8px;
-	border-top: 1px solid rgba(100,116,139,0.16);
+	border-top: 1px solid rgb(var(--st-slate-rgb) / 0.16);
 }
 
 .stonetop-onboarding-background-arcana-label,
@@ -27244,7 +27272,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	gap: 8px;
 	margin-top: 8px;
 	padding-top: 8px;
-	border-top: 1px solid rgba(100,116,139,0.16);
+	border-top: 1px solid rgb(var(--st-slate-rgb) / 0.16);
 }
 
 /* A background's own "choose N" list: sentences (Driven) stack, short words (Destined) wrap as
@@ -27256,7 +27284,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .stonetop-onboarding-background-pick-option:has(input:disabled) {
 	cursor: default;
-	opacity: 0.55;
+	opacity: 0.4;
 }
 
 .stonetop-onboarding-background-picks-flag {
@@ -27299,11 +27327,11 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-bg-option:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 }
 
 .stonetop-onboarding-bg-option.is-selected {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-selected, hsl(210 15% 96%));
 }
 
@@ -27316,7 +27344,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	width: 13px;
 	height: 13px;
 	margin: 0;
-	border: 1.5px solid slategrey;
+	border: 1.5px solid var(--st-slate-rule);
 	background: rgb(var(--st-paper-rgb));
 	cursor: pointer;
 	box-shadow: none;
@@ -27404,7 +27432,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-size: var(--st-fs-sm);
 	line-height: 1;
 	cursor: pointer;
-	transition: background 0.1s, border-color 0.1s, color 0.1s;
+	transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
 /* A whole-px glyph on an even step, so it has an even margin to sit in: measured with the other
@@ -27440,7 +27468,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
    further near a viewport edge. */
 .stonetop-autocomplete {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--st-z-popover);
 	max-height: 250px;
 	overflow-y: auto;
 	margin: 0;
@@ -27597,16 +27625,16 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-arcana-option:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 }
 
 .stonetop-onboarding-arcana-option.is-selected {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-selected, hsl(210 15% 96%));
 }
 
 .stonetop-onboarding-arcana-option.is-disabled {
-	opacity: 0.45;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -27649,10 +27677,17 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	from { opacity: 0; transform: scale(0.4); }
 	to   { opacity: 1; transform: scale(1); }
 }
+/* Motion off: both previews that grow in with it are simply there. */
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-avatar-preview,
+	.stonetop-arcana-preview-popup {
+		animation: none;
+	}
+}
 
 .stonetop-arcana-preview-popup {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--st-z-popover);
 	display: grid;
 	gap: 6px;
 	width: min(280px, 88vw);
@@ -27700,9 +27735,9 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	justify-content: flex-start;
 	gap: 6px;
 	padding: 4px 6px;
-	border: 1px solid rgba(100,116,139,0.25);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius);
-	background: rgba(100,116,139,0.06);
+	background: rgb(var(--st-slate-rgb) / 0.06);
 	font-size: var(--st-fs-sm);
 	line-height: 1;
 }
@@ -27747,7 +27782,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	width: 100%;
 	min-height: 0;
 	padding: 3px 6px;
-	border: 1px solid rgba(100,116,139,0.35);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.35);
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb));
 	color: inherit;
@@ -27758,7 +27793,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-onboarding-minor-swap-select:hover {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 }
 
 .stonetop-onboarding-redraw-minor {
@@ -27795,10 +27830,10 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	transition: border-color 0.12s, background 0.12s;
 }
 
-.stonetop-onboarding-lore-pick:hover { border-color: slategrey; }
+.stonetop-onboarding-lore-pick:hover { border-color: var(--st-slate-rule); }
 
 .stonetop-onboarding-lore-pick.is-selected {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-selected, hsl(210 15% 96%));
 }
 
@@ -27851,7 +27886,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 
 .onboard-lore-text:focus {
 	outline: none;
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: rgb(var(--st-paper-rgb));
 }
 
@@ -27872,7 +27907,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	gap: 8px;
 	padding: 10px 12px;
 	border: 1.5px solid var(--st-on-dark-rule-soft, #ddd);
-	border-left: 3px solid slategrey;
+	border-left: 3px solid var(--st-slate-rule);
 	border-radius: var(--st-radius);
 	background: var(--st-on-dark-raised, #fafafa);
 }
@@ -27956,7 +27991,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 /* Word tooltip */
 .stonetop-word-tooltip {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--st-z-popover);
 	max-width: 300px;
 	background: var(--st-on-dark-raised, #fffdf7);
 	border: 1px solid var(--st-on-dark-rule, #9ca3af);
@@ -28034,7 +28069,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
    long answers can be read. */
 .stonetop-onboarding-faq-popup {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--st-z-popover);
 	width: min(360px, 90vw);
 	max-height: min(60vh, 460px);
 	overflow-y: auto;
@@ -28850,10 +28885,10 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-spend-radio:checked {
 	background: radial-gradient(circle, currentColor 0 45%, transparent 50%) !important;
 }
-.stonetop-spend-choice:hover { background: rgba(112, 128, 144, 0.12); }
+.stonetop-spend-choice:hover { background: rgb(var(--st-slate-rgb) / 0.12); }
 .stonetop-spend-choice--unwilling {
 	margin-top: 4px;
-	border-top: 1px dashed rgba(112, 128, 144, 0.4);
+	border-top: 1px dashed rgb(var(--st-slate-rgb) / 0.4);
 	padding-top: 8px;
 }
 .stonetop-spend-note {
@@ -29340,7 +29375,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	cursor: pointer;
 }
 .stonetop-call-up-dialog .stonetop-cu-option.is-checked { background: var(--st-blue-bg); color: var(--st-blue-text); }
-.stonetop-call-up-dialog .stonetop-cu-option.is-disabled { opacity: 0.45; cursor: default; }
+.stonetop-call-up-dialog .stonetop-cu-option.is-disabled { opacity: 0.4; cursor: default; }
 .stonetop-call-up-dialog .stonetop-cu-option-detail { grid-column: 2; font-size: var(--st-fs-xs); color: var(--st-text-muted); }
 .stonetop-call-up-dialog .stonetop-cu-name-label { display: block; }
 .stonetop-call-up-dialog .stonetop-cu-preview {
@@ -29371,7 +29406,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-call-up-dialog .stonetop-cu-cost { display: flex; flex-direction: column; gap: 4px; }
 .stonetop-call-up-dialog .stonetop-cu-cost-label { font-size: var(--st-fs-xs); color: var(--st-text-muted); }
 .stonetop-call-up-dialog .stonetop-cu-cost-choice { display: flex; align-items: center; gap: 6px; font-size: var(--st-fs-sm); cursor: pointer; }
-.stonetop-call-up-dialog .stonetop-cu-cost-choice.is-disabled { opacity: 0.5; cursor: default; }
+.stonetop-call-up-dialog .stonetop-cu-cost-choice.is-disabled { opacity: 0.4; cursor: default; }
 .stonetop-call-up-dialog .stonetop-cu-cost-note { color: var(--st-text-muted); }
 .stonetop-call-up-dialog .stonetop-cu-missing { margin: 0; font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
 
@@ -29603,7 +29638,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 }
 
 .stonetop-follower-hp-input:focus {
-	outline: 2px solid slategrey;
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -29643,7 +29678,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	text-box: trim-both ex alphabetic;
 	padding: calc(1px + var(--st-trim-ex-top)) 8px calc(1px + var(--st-trim-ex-bottom));
 	background: hsl(210 12% 92%);
-	border: 1px solid rgba(100,116,139,0.3);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.3);
 	border-radius: 999px;
 	font-size: var(--st-fs-sm);
 	color: var(--st-text-body);
@@ -29726,7 +29761,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	min-height: 0;
 	min-width: 0;
 	border-radius: 50%;
-	border: 1.5px solid slategrey;
+	border: 1.5px solid var(--st-slate-rule);
 	background: transparent;
 	cursor: pointer;
 	padding: 0;
@@ -29743,7 +29778,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 .stonetop-readiness-pip.is-filled { background: var(--st-accent-fill); }
 
 .stonetop-loyalty-pip:hover,
-.stonetop-readiness-pip:hover { background: rgba(112, 128, 144, 0.45); }
+.stonetop-readiness-pip:hover { background: rgb(var(--st-slate-rgb) / 0.45); }
 
 /* Defend's Readiness circles on the Moves sidebar (p.216). They sit snug against the
    move name (no auto-margin push), slightly smaller and tighter than the follower pips
@@ -29834,7 +29869,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	color: var(--color-text-dark-secondary, #666);
 	font-size: 0.9em;
 	opacity: 0.55;
-	transition: transform 0.15s, opacity 120ms ease;
+	transition: transform 0.15s, opacity 0.12s ease;
 }
 
 .stonetop-follower-section-summary:hover .stonetop-follower-section-caret { opacity: 1; }
@@ -29954,7 +29989,7 @@ details.stonetop-crew-collapsible:not([open]) {
 	   carets reads as a different control rather than the same one. */
 	font-size: var(--st-fs-sm);
 	opacity: 0.55;
-	transition: opacity 120ms ease;
+	transition: opacity 0.12s ease;
 	/* A caret is a small target for a control that folds the whole card, so it carries a
 	   hit area wider than its glyph. Both numbers are chosen to cost nothing: the top padding
 	   stays inside the tags row's own height, so the row does not grow, and the negative
@@ -30124,13 +30159,13 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
    rows too, and sits after :checked so a filled pip lightens on hover the same way.
    The Inventory diamonds above keep their own SVG art. */
 .vtt .window-app input[type=checkbox].stonetop-crew-supplies-pip {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 }
 .vtt .window-app input[type=checkbox].stonetop-crew-supplies-pip:checked {
 	background: var(--st-accent-fill);
 }
 .vtt .window-app input[type=checkbox].stonetop-crew-supplies-pip:hover {
-	background: rgba(112, 128, 144, 0.45);
+	background: rgb(var(--st-slate-rgb) / 0.45);
 }
 
 .stonetop-crew-supplies-grid {
@@ -30710,7 +30745,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	padding: 0 1px;
 	line-height: 1;
 }
-.stonetop-follower-hp-octagon-max-input:focus { outline: 2px solid slategrey; outline-offset: 1px; }
+.stonetop-follower-hp-octagon-max-input:focus { outline: 2px solid var(--st-btn-primary-border); outline-offset: 1px; }
 
 /* Body */
 .stonetop-follower-body {
@@ -30863,7 +30898,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	color: #fff;
 }
 .stonetop-crew-tag-choice.is-auto { cursor: default; }
-.stonetop-crew-tag-choice.is-disabled:not(.is-selected) { opacity: 0.35; cursor: default; }
+.stonetop-crew-tag-choice.is-disabled:not(.is-selected) { opacity: 0.4; cursor: default; }
 
 /* A tag's remove button: the companion's conditions (always) and every hand-editable tag under the
    card's pencil (Updating followers, p.480). A bare glyph inside the chip, so core's button rules
@@ -31197,7 +31232,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	align-items: center;
 	gap: 4px;
 	padding: 2px 8px;
-	border: 1px solid slategrey;
+	border: 1px solid var(--st-slate-rule);
 	border-radius: var(--st-radius-sm);
 	background: transparent;
 	color: var(--st-quiet-ink);
@@ -31631,7 +31666,7 @@ li.question-bullet::before {
 	mask-image: url('/systems/stonetop-pwd/assets/icons/steading/checkbox-checked.svg');
 }
 .stonetop-journal-check:focus-visible {
-	outline: 2px solid var(--color-shadow-primary, slategrey);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 	border-radius: var(--st-radius-sm);
 }
@@ -31994,7 +32029,7 @@ li.question-bullet::before {
 	flex: none !important;
 	width: calc(14px * var(--stonetop-font-scale, 1)) !important;
 	height: calc(14px * var(--stonetop-font-scale, 1)) !important;
-	border: 1.5px solid slategrey !important;
+	border: 1.5px solid var(--st-slate-rule) !important;
 	border-radius: 50% !important;
 	background: transparent !important;
 	margin: 0 !important;
@@ -32006,7 +32041,7 @@ li.question-bullet::before {
 	background: var(--st-accent-fill) !important;
 }
 .vtt .window-app input[type=checkbox].stonetop-follower-ammo-input:hover {
-	background: rgba(112, 128, 144, 0.45) !important;
+	background: rgb(var(--st-slate-rgb) / 0.45) !important;
 }
 
 /* The top of the monster stat block splits into two EQUAL columns: Type, Damage, Special
@@ -32275,7 +32310,7 @@ li.question-bullet::before {
 }
 
 .stonetop-individual-trait-chip:has(input:checked) {
-	border-color: slategrey;
+	border-color: var(--st-slate-rule);
 	background: var(--st-on-dark-selected, hsl(210 12% 92%));
 	font-weight: 600;
 }
@@ -32311,7 +32346,7 @@ li.question-bullet::before {
 	display: none;
 	font-size: var(--st-fs-sm);
 	padding: 1px 5px;
-	border: 1px solid slategrey;
+	border: 1px solid var(--st-slate-rule);
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb));
 	line-height: 1.4;
@@ -32582,7 +32617,7 @@ li.question-bullet::before {
 	gap: .32em;
 	padding: .05em .55em;
 	border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-	border-radius: var(--st-radius-pill, 20px);
+	border-radius: 999px;
 	cursor: grab;
 }
 .st-treasure-chip:hover {
@@ -32635,7 +32670,7 @@ li.question-bullet::before {
 	text-decoration: none;
 	border-bottom: 1px dashed currentColor;
 	cursor: pointer;
-	transition: background-color 0.1s ease, border-bottom-color 0.1s ease;
+	transition: background-color 0.12s ease, border-bottom-color 0.12s ease;
 }
 
 .stonetop-monster-ref:hover {
@@ -33082,7 +33117,7 @@ li.question-bullet::before {
 	align-items: flex-end;
 	margin-top: 8px;
 	padding: 16px 10px 0;
-	border-bottom: 2px solid slategrey;
+	border-bottom: 2px solid var(--st-slate-rule);
 	flex: 0 0 auto;
 	min-height: 0;
 	height: auto;
@@ -34542,7 +34577,7 @@ body.game .sheet.app.stonetop-bestiary-page .stonetop-bestiary-page-edit .editor
 	border-left: 4px solid var(--st-cell-accent);
 	border-radius: var(--st-radius);
 	background: color-mix(in srgb, currentColor 6%, transparent);
-	transition: background-color .1s ease, border-color .1s ease;
+	transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
 /* Only a cell that actually carries the drag advertises the grab affordance —
@@ -35395,7 +35430,7 @@ th:has(> .stonetop-roll-table-btn) {
 	transition: background 0.15s;
 }
 .stonetop-intros-move:hover:not(:disabled) { background: var(--st-green-bg-hover); }
-.stonetop-intros-move:disabled { opacity: 0.35; cursor: default; }
+.stonetop-intros-move:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .stonetop-intros-reminder {
 	margin: 0;
@@ -36478,8 +36513,8 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-seasons-reset-btn:disabled {
-	opacity: 0.6;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* "New to Foundry?" text link, sitting under the intro on the Welcome guide. A
@@ -37255,7 +37290,7 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-spring-roll-btn:hover,
-.stonetop-spring-ask-btn:hover { background: var(--st-warm-hover-bg); }
+.stonetop-spring-ask-btn:hover { background: var(--st-slate-hover-bg); }
 .stonetop-spring-roll-btn > i,
 .stonetop-spring-ask-btn > i { margin-right: 4px; }
 
@@ -37570,7 +37605,7 @@ th:has(> .stonetop-roll-table-btn) {
 	transition: background 0.15s;
 }
 
-.stonetop-exp-new:hover { background: var(--st-warm-hover-bg); }
+.stonetop-exp-new:hover { background: var(--st-slate-hover-bg); }
 
 /* Icon-only "delete this expedition" pill. No font-family (it holds a Font Awesome
    glyph); danger tint on hover. */
@@ -38121,7 +38156,7 @@ th:has(> .stonetop-roll-table-btn) {
 	flex: 0 0 auto;
 	width: auto;
 	padding: calc(1px + var(--st-trim-top)) 9px calc(1px + var(--st-trim-bottom));
-	border: 1px solid rgba(100, 116, 139, 0.3);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.3);
 	border-radius: 999px;
 	background: var(--st-on-dark-raised, hsl(210 12% 92%));
 	color: var(--st-text-body);
@@ -38195,7 +38230,7 @@ th:has(> .stonetop-roll-table-btn) {
 	width: 100%;
 	justify-content: center;
 	border-style: dashed;
-	border-color: var(--st-btn-primary-border, #4f5b66);
+	border-color: var(--color-border-light, #ccc);
 	background: transparent;
 }
 .stonetop-cf-mini-btn--add:hover {
@@ -38367,7 +38402,7 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-create-site-dialog span.stonetop-cs-foundation-field { display: block; }
 /* Terrain before a region is chosen: there to hold its place, plainly not usable yet. */
 .stonetop-create-site-dialog .stonetop-cs-foundation :is(select, button):disabled {
-	opacity: 0.55;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 .stonetop-create-site-dialog .stonetop-cs-foundation-part :is(.stonetop-cs-foundation-field, .stonetop-cs-pick-slot:first-child > .stonetop-field-btns) {
@@ -38639,7 +38674,7 @@ th:has(> .stonetop-roll-table-btn) {
 	display: inline-block;
 	text-box: trim-both cap alphabetic;
 	padding: var(--st-trim-top) 7px var(--st-trim-bottom);
-	border: 1px solid rgba(100, 116, 139, 0.3);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.3);
 	border-radius: 999px;
 	background: var(--st-on-dark-raised, hsl(210 12% 92%));
 	font-size: var(--st-fs-xs);
@@ -38767,7 +38802,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-share-owner-row.is-disabled {
-	opacity: 0.45;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -39570,7 +39605,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .threat-type::after { content: ")"; }
 
 .stonetop .threat-label {
-	font-family: "IM Fell English", var(--font-stonetop);
+	font-family: var(--font-fell);
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-size: var(--st-fs-floor-sm);
@@ -39588,7 +39623,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: center;
 	gap: 0.4rem;
 	margin: 0.25rem 0 0.7rem;
-	font-family: "IM Fell English", var(--font-stonetop);
+	font-family: var(--font-fell);
 	font-size: var(--st-fs-floor);
 	color: var(--tc-ink-soft);
 }
@@ -39622,7 +39657,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: flex-start;
 	gap: 0.6rem;
 	padding: 0.28rem 0.3rem;
-	border-radius: 5px;
+	border-radius: var(--st-radius);
 	cursor: pointer;
 	font-size: calc(0.98rem * var(--stonetop-font-scale, 1));
 	line-height: 1.35;
@@ -39672,7 +39707,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .threat-portent--doom .threat-portent__box { border-color: var(--threat-accent); }
 .stonetop .threat-portent--doom .threat-portent__check:checked + .threat-portent__box { background: var(--threat-accent); }
 .stonetop .threat-doom-label {
-	font-family: "IM Fell English", var(--font-stonetop);
+	font-family: var(--font-fell);
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
 	font-size: var(--st-fs-floor);
@@ -39854,7 +39889,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .hazard-damage-btn:hover { color: var(--threat-accent); border-color: var(--threat-accent); }
 .stonetop .hazard-advance {
 	margin: 0.45rem 0 0.15rem;
-	font-family: "IM Fell English", var(--font-stonetop);
+	font-family: var(--font-fell);
 	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink-soft);
 }
@@ -39870,7 +39905,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex-wrap: wrap;
 	gap: 0.3rem 0.55rem;
 	margin: 0.1rem 0 0.5rem;
-	font-family: "IM Fell English", var(--font-stonetop);
+	font-family: var(--font-fell);
 	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	color: var(--tc-ink-soft);
 }
@@ -40287,7 +40322,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1.1;
 	color: var(--st-text);
 	opacity: 0.8;
-	transition: transform 120ms ease, opacity 120ms ease;
+	transition: transform 0.12s ease, opacity 0.12s ease;
 }
 .stonetop .steading-threat-type-toggle:hover::after {
 	opacity: 1;
@@ -40451,7 +40486,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: auto; margin-top: 0.15rem;
 	padding: 0.25rem 0.6rem;
 	font-size: var(--st-fs-floor); background: transparent;
-	border: 1px dashed var(--st-btn-primary-border, #4f5b66); border-radius: 5px; cursor: pointer;
+	border: 1px dashed var(--color-border-light, #ccc); border-radius: var(--st-radius); cursor: pointer;
 }
 .stonetop .threat-doom-edit { display: flex; align-items: center; gap: 0.5rem; }
 .stonetop .threat-doom-edit input[type="text"] { flex: 1 1 auto; }
@@ -40512,7 +40547,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: inline-flex; align-items: center; gap: 0.4rem;
 	width: auto; padding: 0.4rem 0.9rem;
 	background: var(--st-btn-primary-bg); border: 1px solid var(--st-btn-primary-border);
-	color: var(--st-btn-primary-text); border-radius: 5px; cursor: pointer;
+	color: var(--st-btn-primary-text); border-radius: var(--st-radius-sm); cursor: pointer;
 }
 .stonetop .create-threat .ct-create:hover { background: var(--st-btn-primary-bg-hover); border-color: var(--st-btn-primary-border-hover); }
 .stonetop .create-threat .ct-cancel { width: auto; padding: 0.4rem 0.9rem; background: transparent; cursor: pointer; }
@@ -40841,7 +40876,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	height: 1.7rem;
 	padding: 0;
 	border: 1px solid transparent;
-	border-radius: 5px;
+	border-radius: var(--st-radius-sm);
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
@@ -41034,7 +41069,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .threat-editor__footer { display: flex; justify-content: flex-end; margin-top: 0.25rem; }
 .stonetop .threat-editor-done {
 	display: inline-flex; align-items: center; gap: 0.4rem; width: auto;
-	padding: 0.35rem 0.9rem; cursor: pointer; border-radius: 5px;
+	padding: 0.35rem 0.9rem; cursor: pointer; border-radius: var(--st-radius-sm);
 	background: var(--st-btn-primary-bg); border: 1px solid var(--st-btn-primary-border);
 	color: var(--st-btn-primary-text);
 }
@@ -41435,7 +41470,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-asset-btn:hover { background: rgb(var(--st-ink-rgb) / 0.06); }
 .stonetop-expedition-dialog .stonetop-exp-asset-btn:focus-visible,
 .stonetop-expedition-dialog .stonetop-exp-load-chip:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 .stonetop-expedition-dialog .stonetop-exp-asset-btn .tick {
@@ -41717,7 +41752,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   meant for whatever is under it, and on this map a click is how a destination gets chosen — so
 	   the fade takes the pointer with it. */
 	opacity: 0; pointer-events: none;
-	transition: opacity var(--st-popout-fade, 250ms) ease, color 120ms ease, border-color 120ms ease;
+	transition: opacity var(--st-popout-fade, 250ms) ease, color 0.12s ease, border-color 0.12s ease;
 }
 /* Later than the base rule, per the modifier-ordering house rule. Focus stands beside hover
    because a keyboard has no pointer to reveal it with, and a control that can be tabbed to but
@@ -41877,7 +41912,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* A halo so a dot stays legible over the maps' tree-line hatching. box-shadow, not a
 	   filter: a drop-shadow is erased by any mask, and these sit near masked glyphs. */
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
-	transition: transform 120ms ease;
+	transition: transform 0.12s ease;
 }
 .stonetop-journey-canvas .stonetop-journey-pick:hover .stonetop-journey-dot { transform: scale(1.35); }
 .stonetop-journey-canvas .stonetop-journey-arrow {
@@ -41908,7 +41943,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: 9px; color: var(--stonetop-route-case);
 	background: var(--site-accent, #5a5f6b); border: 2px solid var(--stonetop-route-case);
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
-	transition: transform 120ms ease;
+	transition: transform 0.12s ease;
 }
 .stonetop-journey-canvas .stonetop-journey-site:hover .stonetop-journey-sitemark { transform: scale(1.2); }
 /* Its name is set in the same stone, so a pin and its label read as one mark and neither is
@@ -42204,7 +42239,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    own outline unpinned below, and a keyboard reader tabbing down the list otherwise saw nothing
    move. */
 .stonetop-journey .stonetop-journey-list li:has(.stonetop-journey-row:focus-visible) {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 /* A prose row that happens to be a <button>, so core's button rule has to be unpinned in full:
@@ -42381,8 +42416,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 2px 9px;
 	line-height: 1.7;
 	font-size: var(--st-fs-2xs);
-	background: rgba(100, 116, 139, 0.05);
-	border: 1px solid rgba(100, 116, 139, 0.25);
+	background: rgb(var(--st-slate-rgb) / 0.05);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: 999px;
 	/* Explicit, and not cosmetic: core hands a window button white text, which on the pale
 	   chip fill left every un-selected filter unreadable. */
@@ -42418,9 +42453,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	from { opacity: 0; transform: scale(0.92); }
 	to   { opacity: 1; transform: scale(1); }
 }
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-people-preview { animation: none; }
+}
 .stonetop-people-preview {
 	position: fixed;
-	z-index: 10000;
+	z-index: var(--st-z-popover);
 	display: grid;
 	gap: 6px;
 	justify-items: center;
@@ -42556,8 +42594,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: 100%;
 	height: auto;
 	line-height: 1.2;
-	background: rgba(100, 116, 139, 0.05);
-	border: 1px solid rgba(100, 116, 139, 0.25);
+	background: rgb(var(--st-slate-rgb) / 0.05);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
 }
@@ -42599,9 +42637,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    off-screen and the grid scrolls to it. Declared after .is-selected so an offer that lands
    on the portrait already in use still reads as the offer. */
 .stonetop-people-gallery .stonetop-people-pick.is-proposed {
-	background: rgba(112, 128, 144, 0.12);
+	background: rgb(var(--st-slate-rgb) / 0.12);
 	border-color: var(--st-btn-primary-border);
-	box-shadow: 0 0 0 2px var(--st-btn-primary-border) inset, 0 0 10px rgba(112, 128, 144, 0.6);
+	box-shadow: 0 0 0 2px var(--st-btn-primary-border) inset, 0 0 10px rgb(var(--st-slate-rgb) / 0.6);
 }
 .stonetop-people-gallery .stonetop-people-pick.is-proposed .stonetop-people-label {
 	color: var(--st-text);
@@ -42641,7 +42679,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 8px;
 	justify-content: flex-end;
 	padding-top: 8px;
-	border-top: 1px solid rgba(100, 116, 139, 0.25);
+	border-top: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 }
 /* The house modal button skin, shared by the footer pair and the header column: light
    secondary buttons plus one solid-slate affirmative, the same pairing as the Add Resident
@@ -42666,7 +42704,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-body);
 	box-shadow: none;
 	cursor: pointer;
-	transition: background 0.1s, border-color 0.1s, color 0.1s;
+	transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .stonetop-people-gallery .stonetop-people-footer button:not([disabled]):hover,
 .stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover,
@@ -42710,8 +42748,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    rebuild, and read the same way. */
 .stonetop-people-gallery .stonetop-people-footer button[disabled],
 .stonetop-people-gallery .stonetop-people-empty button[disabled] {
-	opacity: 0.45;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* ==========================================================================
@@ -43741,7 +43779,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	-webkit-mask: url("../assets/icons/hearts.svg") center / contain no-repeat;
 	mask: url("../assets/icons/hearts.svg") center / contain no-repeat;
 	background-color: color-mix(in srgb, var(--color-text-dark-secondary, #4b4a44) 28%, transparent);
-	transition: background-color 0.1s ease;
+	transition: background-color 0.12s ease;
 }
 .stonetop-rel-heart.is-filled {
 	background-color: var(--st-heart, #c0473b);
@@ -44272,7 +44310,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Spent. Ties with the :hover rule above on specificity, so it must sit LATER to win. */
 .stonetop-roll-card .stonetop-xp-undo:disabled {
-	opacity: 0.55;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -44501,7 +44539,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    has to read as "not yet" rather than as a dead control. Same specificity as the :hover rule
    above, so it must sit LATER to win when both apply. */
 .stonetop-token-link-dialog .stonetop-token-link-actions button[data-action="apply"]:disabled {
-	opacity: 0.5;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
@@ -44602,7 +44640,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-rel-viewpicker .stonetop-rel-view-btn:hover:not(.is-active) {
-	background: rgba(100, 116, 139, 0.16);
+	background: rgb(var(--st-slate-rgb) / 0.16);
 	color: var(--st-text-body);
 }
 
@@ -44640,7 +44678,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex-direction: column;
 	min-width: 0;
 	padding: 6px;
-	border: 1px solid rgba(100, 116, 139, 0.28);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.28);
 	/* The lane's identity is a 3px cap in its own accent, matching the --st-cell-accent
 	   idiom used elsewhere rather than tinting the whole column, which would fight the
 	   parchment behind it. */
@@ -44678,7 +44716,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	text-box: trim-both cap alphabetic;
 	padding: var(--st-trim-top) 5px var(--st-trim-bottom);
 	border-radius: 999px;
-	background: rgba(100, 116, 139, 0.18);
+	background: rgb(var(--st-slate-rgb) / 0.18);
 	font-size: var(--st-fs-xs, 0.75rem);
 	font-weight: normal;
 	text-align: center;
@@ -44700,7 +44738,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 5px;
 	min-width: 0;
 	padding: 6px;
-	border: 1px solid rgba(100, 116, 139, 0.25);
+	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-paper-rgb) / 0.72);
 }
@@ -44985,7 +45023,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* The same translucent slate wash the step arrows use, so the two controls on a card read as
    one family rather than importing a colour. */
 .stonetop-rel-note-toggle:hover {
-	background: rgb(100 116 139 / 0.16);
+	background: rgb(var(--st-slate-rgb) / 0.16);
 	color: var(--st-btn-primary-border, #4f5b66);
 }
 
@@ -45016,7 +45054,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* Closed: up. Open: a half-turn to down — the same way round as every other
 	   fold on these sheets, so one glance reads the same everywhere. */
 	transform: rotate(180deg);
-	transition: transform 120ms ease;
+	transition: transform 0.12s ease;
 }
 
 .stonetop-rel-card-note-wrap.is-open .stonetop-rel-note-caret {
@@ -45960,7 +45998,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-catalog-source:hover:not(.is-active) {
-	background: rgba(100, 116, 139, 0.10);
+	background: rgb(var(--st-slate-rgb) / 0.10);
 	color: var(--st-text-body);
 }
 
@@ -46093,7 +46131,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-catalog-select:hover {
-	background: rgba(100, 116, 139, 0.16);
+	background: rgb(var(--st-slate-rgb) / 0.16);
 }
 
 .stonetop-catalog-select:focus-visible {
@@ -46112,7 +46150,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-catalog-filter:hover:not(.is-active) {
-	background: rgba(100, 116, 139, 0.16);
+	background: rgb(var(--st-slate-rgb) / 0.16);
 	color: var(--st-text-body);
 }
 
@@ -46171,7 +46209,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-catalog-row:hover {
 	border-color: var(--st-btn-primary-border, #4f5b66);
-	background: rgba(100, 116, 139, 0.10);
+	background: rgb(var(--st-slate-rgb) / 0.10);
 }
 
 /* A row also drags out of the window as the document it summarises — a card onto a character
@@ -46636,7 +46674,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-btn-primary-bg);
 }
 .stonetop-gm-toolkit-book:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -46946,7 +46984,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1;
 	color: var(--st-text);
 	opacity: 0.8;
-	transition: transform 120ms ease, opacity 120ms ease;
+	transition: transform 0.12s ease, opacity 0.12s ease;
 }
 .stonetop-gm-toolkit-moves .stonetop-gm-move-toggle:hover::after {
 	opacity: 1;
@@ -47048,7 +47086,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop .stonetop-book-cite:focus-visible,
 .stonetop-fight-tracker .stonetop-book-cite:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -47297,7 +47335,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-name:focus,
 .stonetop-gm-encounter-entry-note:focus {
 	border-color: var(--st-btn-primary-border);
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 }
 
 .stonetop-gm-wonder-item .stonetop-gm-wonder-question {
@@ -47384,7 +47422,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-gm-wonder-item .stonetop-gm-wonder-answer:focus {
 	border-color: var(--st-btn-primary-border);
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	font-style: normal;
 }
 
@@ -47472,7 +47510,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-tools > button:hover,
 .stonetop-gm-encounter-toggle:hover,
 .stonetop-gm-encounter-entry-remove:hover {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 }
 
@@ -47574,7 +47612,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-gm-wonder-add-btn:hover {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 }
 
@@ -48015,7 +48053,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: none;
 }
 .stonetop-gm-diagram-zoom:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -48234,7 +48272,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-toggle > i {
 	font-size: 14px;
 	line-height: 1;
-	transition: transform 120ms ease;
+	transition: transform 0.12s ease;
 }
 
 .stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-toggle > i {
@@ -48483,7 +48521,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy:hover,
 .stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight:hover {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 }
 /* Deploy and fight's glyph is Font Awesome, sized to the same 16px the Deploy mask draws at. */
@@ -48729,7 +48767,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-gm-encounter-used:hover {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 	color: var(--st-text-body);
 }
@@ -49159,7 +49197,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    is the one place a Blessed can pay for Call the Spirits or Barkskin without leaving the card
    and hunting for the pouch. Disabled once paid, and it says so. */
 :is(.stonetop-roll-card, .stonetop-chat-move) .stonetop-spend-stock:disabled {
-	opacity: 0.55;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -49488,8 +49526,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    off for most of an evening — it is off the moment the window opens — so this is the state it is
    usually in, not an edge case. `pointer-events` stays on so the tooltip still says WHY. */
 .stonetop-relmap-tool:disabled {
-	opacity: 0.45;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN, as a pair set apart from the tool beside
@@ -49702,7 +49740,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-page:hover,
 .stonetop-relmap-page:focus-visible {
 	color: var(--st-text);
-	background: rgba(112, 128, 144, 0.22);
+	background: rgb(var(--st-slate-rgb) / 0.22);
 }
 
 /* THE ONE THAT IS UP. An underline AND full-strength ink, never colour alone: which tab is
@@ -49836,7 +49874,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    reset again because core paints one on hover of its own. */
 .stonetop-relmap-page-tool:hover,
 .stonetop-relmap-page-tool:focus-visible {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 	color: var(--st-text);
 }
@@ -49968,7 +50006,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
 	opacity: 0;
 	pointer-events: none;
-	transition: opacity var(--st-popout-fade, 250ms) ease, background 120ms ease, color 120ms ease;
+	transition: opacity var(--st-popout-fade, 250ms) ease, background 0.12s ease, color 0.12s ease;
 }
 
 /* Later than the base rule, per the modifier-ordering house rule. Focus stands beside hover
@@ -49984,7 +50022,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    `.stonetop-relmap-page-tool` takes. */
 .stonetop-relmap-popout:hover,
 .stonetop-relmap-popout:focus-visible {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	color: var(--st-text);
 }
 
@@ -50172,7 +50210,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	border-radius: var(--st-radius-sm);
 	color: var(--st-text-secondary);
 	line-height: 1;
-	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+	transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 /* The glyph inside it loses core's label gap (`body.game .app button > i` carries a
@@ -50186,7 +50224,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 /* Later than the base rule. The warm hover ground every other tool in this window takes. */
 .stonetop-relmap-heft-step:hover:not(:disabled),
 .stonetop-relmap-heft-step:focus-visible {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	border-color: var(--st-card-rule);
 	color: var(--st-text);
 }
@@ -50195,8 +50233,8 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    see that there IS an end rather than finding a button gone -- and so the two dials beside it do
    not slide sideways the moment this one is run to its limit. */
 .stonetop-relmap-heft-step:disabled {
-	opacity: 0.3;
-	cursor: default;
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* THE READING, WHICH IS ALSO THE WAY BACK to a hundred per cent.
@@ -50238,14 +50276,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	font-variant-numeric: tabular-nums;
 	line-height: 1.35;
 	text-align: center;
-	transition: background 120ms ease, border-color 120ms ease;
+	transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 /* Later than the base rule. Only where there is somewhere to go back to: at the base this is a
    readout and pressing it would do nothing, so it must not look like a button that will. */
 .stonetop-relmap-heft-now[aria-disabled="false"]:hover,
 .stonetop-relmap-heft-now[aria-disabled="false"]:focus-visible {
-	background: var(--st-warm-hover-bg);
+	background: var(--st-slate-hover-bg);
 	border-color: var(--st-card-rule);
 }
 
@@ -50916,7 +50954,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 }
 
 .stonetop-relmap-group-name:focus-visible {
-	outline: 2px solid var(--st-accent-fill);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
@@ -51103,7 +51141,7 @@ textarea.stonetop-relmap-personbar-field {
 }
 .stonetop-relmap-personbar-side:not(:has(input:checked)):hover { background: var(--st-slate-hover-bg); }
 .stonetop-relmap-personbar-side:has(input:focus-visible) {
-	outline: 2px solid var(--st-accent-fill);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: -2px;
 }
 .stonetop-relmap-personbar-side > span {
@@ -51151,7 +51189,7 @@ div.stonetop-relmap-personbar button.stonetop-relmap-personbar-save:hover {
 	background: var(--st-btn-primary-bg-hover);
 }
 div.stonetop-relmap-personbar button.stonetop-relmap-personbar-save:focus-visible {
-	outline: 2px solid var(--st-accent-fill);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 .stonetop-relmap-personbar-save > i {
@@ -51222,7 +51260,7 @@ button.stonetop-relmap-chip:focus-visible,
 .stonetop-relmap-personbar-chipoff:focus-visible,
 .stonetop-relmap-personbar-add:focus-visible,
 .stonetop-relmap-chipform-btn:focus-visible {
-	outline: 2px solid var(--st-accent-fill);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -51738,7 +51776,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	outline: 1px dashed rgb(var(--st-ink-rgb) / 0.45);
 	outline-offset: -1px;
 	color: var(--st-text-body);
-	transition: opacity 120ms ease;
+	transition: opacity 0.12s ease;
 }
 
 .stonetop-relmap-node:hover .stonetop-relmap-subtitle.is-empty,
@@ -51847,7 +51885,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	   portraits and lines rather than a rash of buttons. Focus is what keeps it reachable from a
 	   keyboard, where there is no hover to give. */
 	opacity: 0;
-	transition: opacity 120ms ease;
+	transition: opacity 0.12s ease;
 }
 
 .stonetop-relmap-node:hover .stonetop-relmap-handle,
@@ -52163,7 +52201,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 .stonetop-relmap-inkpop-add:focus-visible,
 .stonetop-relmap-dashpop-row:focus-visible,
 .stonetop-relmap-sizepop-row:focus-visible {
-	outline: 2px solid var(--st-accent-fill);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -52193,7 +52231,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 .stonetop-relmap-dashpop-row:disabled,
 .stonetop-relmap-sizepop-row:disabled,
 .stonetop-relmap-sizepop-num:disabled {
-	opacity: 0.55;
+	opacity: 0.4;
 	cursor: default;
 }
 
@@ -52773,7 +52811,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 }
 
 .stonetop-relmap-sizepop-num:focus-visible {
-	outline: 2px solid var(--st-accent-fill);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 1px;
 }
 
@@ -53339,7 +53377,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	line-height: 1.5;
 	cursor: pointer;
 	border: 1px solid var(--st-btn-primary-bg, #3b4252);
-	border-radius: var(--st-radius-pill, 999px);
+	border-radius: 999px;
 	background: var(--st-btn-primary-bg, #3b4252);
 	color: var(--st-btn-primary-text, #f5f5f5);
 	transition: background 0.12s, border-color 0.12s;
@@ -54120,12 +54158,12 @@ button.stonetop-relmap-subtitle:focus-visible {
 }
 
 .stonetop-timeline-scrub-range:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: 2px;
 }
 
 .stonetop-timeline-scroll:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: -2px;
 }
 
@@ -54273,7 +54311,7 @@ button.stonetop-timeline-age {
 }
 
 button.stonetop-timeline-age:focus-visible {
-	outline: 2px solid var(--st-btn-primary-bg);
+	outline: 2px solid var(--st-btn-primary-border);
 	outline-offset: -2px;
 }
 
@@ -54864,7 +54902,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	gap: 2px;
 	margin-top: 6px;
 	opacity: 0;
-	transition: opacity 120ms ease;
+	transition: opacity 0.12s ease;
 }
 
 .stonetop-timeline-card:hover .stonetop-timeline-card-actions,
@@ -54937,7 +54975,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 .stonetop-timeline-add-slot {
 	display: flex;
 	opacity: 0;
-	transition: opacity 120ms ease;
+	transition: opacity 0.12s ease;
 }
 
 .stonetop-timeline-period:hover .stonetop-timeline-add-slot,

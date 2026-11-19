@@ -27,7 +27,7 @@
 		{{#each tabs}}
 		<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}{{#if unsure}} is-unsure{{/if}}">
 			<button type="button" class="stonetop-guide-toc-btn {{../btnClass}}" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
-				<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+				<i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
 				<span class="stonetop-guide-toc-text">{{this.title}}</span>
 				{{#if count}}<span class="stonetop-guide-toc-count"{{#if this.countTip}} data-tooltip="{{this.countTip}}"{{/if}}>{{this.count}}</span>{{/if}}
 			</button>

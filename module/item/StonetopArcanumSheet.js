@@ -240,14 +240,14 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 					// character, so label it "Save" to make that commit obvious.
 					label: this._editMode ? (this._arcanumDraft ? "Save" : "Done") : "Edit",
 					class: "stonetop-arcanum-edit-toggle",
-					icon:  this._editMode ? "fas fa-eye" : "fas fa-pen-to-square",
+					icon:  this._editMode ? "fas fa-eye" : "fas fa-pencil",
 					onclick: () => this._toggleEditMode(),
 				});
 			} else if (this._canEditGear()) {
 				buttons.unshift({
 					label: "Edit",
 					class: "stonetop-gear-edit",
-					icon:  "fas fa-pen-to-square",
+					icon:  "fas fa-pencil",
 					onclick: () => this._openInventoryEditor(),
 				});
 			}

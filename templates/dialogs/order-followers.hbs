@@ -5,7 +5,7 @@
   <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas fa-hand-point-right stonetop-guide-banner-icon"></i>
+      <i class="fas fa-hand-point-right stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">Order {{this.followerName}}</div>
         <div class="stonetop-guide-banner-sub">Direct them to make a move</div>
@@ -68,7 +68,7 @@
           <button type="button"
                   class="stonetop-of-tag{{#if help}} is-help{{/if}}{{#if hinder}} is-hinder{{/if}}"
                   data-tag="{{this.tag}}">
-            {{#if help}}<i class="fas fa-arrow-up"></i> {{/if}}{{#if hinder}}<i class="fas fa-arrow-down"></i> {{/if}}<span class="stonetop-chip-text">{{this.tag}}</span>
+            {{#if help}}<i class="fas fa-arrow-up" aria-hidden="true"></i> {{/if}}{{#if hinder}}<i class="fas fa-arrow-down" aria-hidden="true"></i> {{/if}}<span class="stonetop-chip-text">{{this.tag}}</span>
           </button>
           {{/each}}
         </div>
@@ -87,14 +87,14 @@
           <button type="button"
                   class="stonetop-of-tag stonetop-of-move-chip{{#if help}} is-help{{/if}}"
                   data-move="{{this.move}}">
-            {{#if help}}<i class="fas fa-arrow-up"></i> {{/if}}<span class="stonetop-chip-text">{{this.move}}</span>
+            {{#if help}}<i class="fas fa-arrow-up" aria-hidden="true"></i> {{/if}}<span class="stonetop-chip-text">{{this.move}}</span>
           </button>
           {{/each}}
         </div>
         {{/if}}
 
         {{#if exceptional}}
-        <div class="stonetop-of-exceptional"><i class="fas fa-star"></i> <strong>exceptional</strong>: +2 instead of +1 when a tag or move applies</div>
+        <div class="stonetop-of-exceptional"><i class="fas fa-star" aria-hidden="true"></i> <strong>exceptional</strong>: +2 instead of +1 when a tag or move applies</div>
         {{/if}}
       </div>
 
@@ -139,14 +139,14 @@
         {{#if modeNote}}<div class="stonetop-of-mode-note">{{this.modeNote}}</div>{{/if}}
       </div>
 
-      <div class="stonetop-of-readout"><i class="fas fa-dice"></i> {{this.readout}}</div>
+      <div class="stonetop-of-readout"><i class="fas fa-dice" aria-hidden="true"></i> {{this.readout}}</div>
 
     </div>
 
   </div>
 
   <div class="stonetop-guide-nav">
-    <button class="stonetop-of-roll stonetop-guide-btn--primary"><i class="fas fa-dice-d6"></i> Order {{this.followerName}}</button>
+    <button class="stonetop-of-roll stonetop-guide-btn--primary"><i class="fas fa-dice-d6" aria-hidden="true"></i> Order {{this.followerName}}</button>
     <button class="stonetop-of-cancel">Cancel</button>
   </div>
 

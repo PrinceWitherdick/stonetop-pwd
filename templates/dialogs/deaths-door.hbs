@@ -15,7 +15,7 @@
 		      carries markup is emitted raw (triple braces), so whatever rides into it (a name) is escaped on the
 		      way in with escapeHtml. --}}
 		<p class="deaths-door-note">
-			<i class="fas fa-feather"></i>
+			<i class="fas fa-feather" aria-hidden="true"></i>
 			<span>{{localize "stonetop.specialMoves.deathsDoor.roll.describe"}}</span>
 		</p>
 
@@ -47,7 +47,7 @@
 
 		{{#if unstoppableMarks}}
 		<p class="deaths-door-penalty-note">
-			<i class="fas fa-triangle-exclamation"></i>
+			<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
 			{{#if (eq unstoppableMarks 1)}}{{{localize "stonetop.specialMoves.deathsDoor.roll.unstoppableOne" penalty=penalty count=unstoppableMarks}}}{{else}}{{{localize "stonetop.specialMoves.deathsDoor.roll.unstoppableMany" penalty=penalty count=unstoppableMarks}}}{{/if}}
 		</p>
 		{{/if}}
@@ -57,18 +57,18 @@
 		    roll), and says so when that use is already spent. }}
 		{{#if tierShift}}
 		<p class="deaths-door-note">
-			<i class="fas fa-star"></i>
+			<i class="fas fa-star" aria-hidden="true"></i>
 			<span>{{{localize "stonetop.specialMoves.deathsDoor.roll.destined" name=(escapeHtml tierShift)}}}</span>
 		</p>
 		{{/if}}
 		{{#if skipRollMove}}
 		<p class="deaths-door-note">
-			<i class="fas fa-shield-heart"></i>
+			<i class="fas fa-shield-heart" aria-hidden="true"></i>
 			<span>{{{localize "stonetop.specialMoves.deathsDoor.roll.neverGonna" name=(escapeHtml skipRollMove)}}}</span>
 		</p>
 		{{else if neverGonnaUsed}}
 		<p class="deaths-door-note">
-			<i class="fas fa-shield-heart"></i>
+			<i class="fas fa-shield-heart" aria-hidden="true"></i>
 			<span>{{{localize "stonetop.specialMoves.deathsDoor.roll.neverGonnaUsed" name=(escapeHtml neverGonnaName)}}}</span>
 		</p>
 		{{/if}}
@@ -76,7 +76,7 @@
 		    the footer). Not worn per the inventory: said in gold, never refused. Both strings arrive escaped. }}
 		{{#if scalesOffer}}
 		<p class="deaths-door-note">
-			<i class="fas fa-shield-halved"></i>
+			<i class="fas fa-shield-halved" aria-hidden="true"></i>
 			<span>{{{scalesOffer.text}}}</span>
 		</p>
 		{{#if scalesOffer.notWorn}}
@@ -92,7 +92,7 @@
 		</div>
 
 		<p class="deaths-door-note">
-			<i class="fas fa-hourglass-half"></i>
+			<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 			<span>{{localize "stonetop.specialMoves.deathsDoor.roll.noRush"}}</span>
 		</p>
 	</div>
@@ -110,7 +110,7 @@
 		{{/if}}
 		{{else}}
 		<p class="deaths-door-note">
-			<i class="fas fa-dice"></i>
+			<i class="fas fa-dice" aria-hidden="true"></i>
 			<span>{{localize "stonetop.specialMoves.deathsDoor.watch.inTheAir"}}</span>
 		</p>
 		{{/if}}
@@ -121,12 +121,12 @@
 
 		{{#if watch.canTakeOver}}
 		<p class="deaths-door-note">
-			<i class="fas fa-user-clock"></i>
+			<i class="fas fa-user-clock" aria-hidden="true"></i>
 			<span>{{watch.whyTakeOver}} {{#if watch.takeOverAccepts}}{{localize "stonetop.specialMoves.deathsDoor.watch.takeOverAccepts"}}{{else}}{{localize "stonetop.specialMoves.deathsDoor.watch.takeOverRolls"}}{{/if}}</span>
 		</p>
 		{{else}}
 		<p class="deaths-door-note">
-			<i class="fas fa-hourglass-half"></i>
+			<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 			<span>{{localize "stonetop.specialMoves.deathsDoor.watch.follows"}}</span>
 		</p>
 		{{/if}}
@@ -160,7 +160,7 @@
 			{{! A private roll taken over, with no GM connected to change its card (DeathsDoorDialog#_boostOffers). }}
 			{{#if privateBoostsNote}}
 			<p class="deaths-door-note">
-				<i class="fas fa-user-shield"></i>
+				<i class="fas fa-user-shield" aria-hidden="true"></i>
 				<span>{{this.privateBoostsNote}}</span>
 			</p>
 			{{/if}}
@@ -170,7 +170,7 @@
 		{{#if isStrong}}
 		<div class="deaths-door-actions">
 			{{#if restored}}
-			<p class="deaths-door-applied"><i class="fas fa-check"></i> {{{localize "stonetop.specialMoves.deathsDoor.result.restored"}}}</p>
+			<p class="deaths-door-applied"><i class="fas fa-check" aria-hidden="true"></i> {{{localize "stonetop.specialMoves.deathsDoor.result.restored"}}}</p>
 			{{/if}}
 
 			{{! The mark is already a wound on the sheet by the time this renders (the tier seeds it),
@@ -192,7 +192,7 @@
 				</div>
 				{{#if markSeeded}}
 				<p class="deaths-door-mark-done">
-					<i class="fas fa-check"></i>
+					<i class="fas fa-check" aria-hidden="true"></i>
 					{{#if markText}}{{localize "stonetop.specialMoves.deathsDoor.mark.recorded"}}
 					{{else}}{{localize "stonetop.specialMoves.deathsDoor.mark.seeded"}}{{/if}}
 				</p>
@@ -206,7 +206,7 @@
 		<div class="deaths-door-actions">
 			{{#if outOfAction}}
 			<p class="deaths-door-applied">
-				<i class="fas fa-check"></i> {{localize "stonetop.specialMoves.deathsDoor.result.outOfAction"}}
+				<i class="fas fa-check" aria-hidden="true"></i> {{localize "stonetop.specialMoves.deathsDoor.result.outOfAction"}}
 			</p>
 			{{/if}}
 
@@ -216,7 +216,7 @@
 			{{#unless spectator}}
 			<div class="deaths-door-debility-trade">
 				{{#if debilityTraded}}
-				<p class="deaths-door-applied"><i class="fas fa-check"></i> {{{localize "stonetop.specialMoves.deathsDoor.result.debilityTraded"}}}</p>
+				<p class="deaths-door-applied"><i class="fas fa-check" aria-hidden="true"></i> {{{localize "stonetop.specialMoves.deathsDoor.result.debilityTraded"}}}</p>
 				{{else if debilityChoices.length}}
 				<p class="deaths-door-mark-label">{{{localize "stonetop.specialMoves.deathsDoor.result.debilityAsk"}}}</p>
 				<div class="deaths-door-debility-choices">
@@ -259,7 +259,7 @@
 			    one is closed, the window offers it here too, for a player who has gone. }}
 			<p class="deaths-door-roll-option-hint">{{{localize "stonetop.specialMoves.deathsDoor.result.fateSpectator" name=(escapeHtml rolledBy)}}}</p>
 			{{else if fateApplied}}
-			<p class="deaths-door-applied"><i class="fas fa-check"></i> {{localize "stonetop.specialMoves.deathsDoor.result.fateRecorded"}}</p>
+			<p class="deaths-door-applied"><i class="fas fa-check" aria-hidden="true"></i> {{localize "stonetop.specialMoves.deathsDoor.result.fateRecorded"}}</p>
 			{{else}}
 			{{! A fate a held arcanum's marked Consequence dictates: flagged in gold and marked as the
 			    suggestion. The other fates stay clickable (flagged, never blocked). }}
@@ -269,11 +269,11 @@
 			{{#if soulsOffer}}
 			<div class="deaths-door-soul-release">
 				<p class="deaths-door-note">
-					<i class="fas fa-ghost"></i>
+					<i class="fas fa-ghost" aria-hidden="true"></i>
 					<span>{{{soulsOffer.text}}}</span>
 				</p>
 				<button type="button" class="deaths-door-boost-btn deaths-door-release-soul-btn">
-					<i class="fas fa-ghost"></i>
+					<i class="fas fa-ghost" aria-hidden="true"></i>
 					<span>{{soulsOffer.button}}</span>
 				</button>
 			</div>
@@ -360,7 +360,7 @@
 					<li class="stonetop-guide-toc-item{{#if isActive}} is-active{{/if}}{{#if done}} is-answered{{/if}}">
 						<button type="button" class="stonetop-guide-toc-btn deaths-door-choice-tab"
 						        data-choice-step="{{this.key}}"{{#if isActive}} aria-current="true"{{/if}}>
-							<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+							<i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
 							<span class="stonetop-guide-toc-text">{{this.label}}</span>
 							{{#if done}}<i class="fas fa-check deaths-door-choice-tab-done" aria-label="{{localize "stonetop.specialMoves.deathsDoor.choices.answered"}}"></i>{{/if}}
 						</button>
@@ -375,7 +375,7 @@
 				    any more — the Post-Death tab prints the insert's own state — so it points at the
 				    tab, and at edit mode, which is now the way to change an answer afterwards. }}
 				<p class="deaths-door-note">
-					<i class="fas fa-hourglass-half"></i>
+					<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 					<span>{{localize "stonetop.specialMoves.deathsDoor.choices.noRush"}}</span>
 				</p>
 			</div>
@@ -391,7 +391,7 @@
 	    affirmative, so it takes the left (Foundry's order), and Close keeps the right. }}
 	{{#if watch.canTakeOver}}
 	<button class="deaths-door-take-over-btn is-primary" type="button">
-		<i class="fas fa-hand"></i>
+		<i class="fas fa-hand" aria-hidden="true"></i>
 		<span>{{#if watch.takeOverAccepts}}{{localize "stonetop.specialMoves.deathsDoor.buttons.takeOverAccept"}}{{else}}{{localize "stonetop.specialMoves.deathsDoor.buttons.takeOverRoll"}}{{/if}}</span>
 	</button>
 	{{/if}}
@@ -404,18 +404,18 @@
 	    being rolled: with no stat choice on offer there is nothing else on the step that says
 	    "+nothing". }}
 	<button class="deaths-door-roll-btn is-primary" type="button" title="{{localize "stonetop.specialMoves.deathsDoor.buttons.rollTitle"}}">
-		<i class="fas fa-dice-d6"></i>
+		<i class="fas fa-dice-d6" aria-hidden="true"></i>
 		<span>{{#if hasStatChoice}}{{localize "stonetop.specialMoves.deathsDoor.buttons.rollDice"}}{{else}}{{localize "stonetop.specialMoves.deathsDoor.buttons.rollNothing"}}{{/if}}</span>
 	</button>
 	{{#if skipRollMove}}
 	<button class="deaths-door-skip-roll-btn" type="button" title="{{localize "stonetop.specialMoves.deathsDoor.buttons.skipTitle" move=skipRollMove}}">
-		<i class="fas fa-shield-heart"></i>
+		<i class="fas fa-shield-heart" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.skip"}}</span>
 	</button>
 	{{/if}}
 	{{#if scalesOffer}}
 	<button class="deaths-door-boost-btn deaths-door-scales-btn" type="button" title="{{scalesOffer.title}}">
-		<i class="fas fa-shield-halved"></i>
+		<i class="fas fa-shield-halved" aria-hidden="true"></i>
 		<span>{{scalesOffer.button}}</span>
 	</button>
 	{{/if}}
@@ -427,20 +427,20 @@
 	{{! Accepting is the affirmative, so it takes the left (Foundry's order); each boost names what it
 	    does and what it costs. }}
 	<button class="deaths-door-accept-btn is-primary" type="button">
-		<i class="fas fa-check"></i>
+		<i class="fas fa-check" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.accept"}}</span>
 	</button>
 	{{#if canBurnBrightly}}
 	<button class="deaths-door-boost-btn deaths-door-burn-btn" type="button"
 	        title="{{localize "stonetop.specialMoves.deathsDoor.buttons.burnTitle" cost=burnBrightlyCost}}">
-		<i class="fas fa-fire"></i>
+		<i class="fas fa-fire" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.burn" cost=burnBrightlyCost}}</span>
 	</button>
 	{{/if}}
 	{{#if canGiveItAll}}
 	<button class="deaths-door-boost-btn deaths-door-give-all-btn" type="button"
 	        title="{{localize "stonetop.specialMoves.deathsDoor.buttons.giveAllTitle"}}">
-		<i class="fas fa-hand-fist"></i>
+		<i class="fas fa-hand-fist" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.giveAll"}}</span>
 	</button>
 	{{/if}}
@@ -448,13 +448,13 @@
 	    Blessing), labelled as the card labels them. Other players press theirs on the card. }}
 	{{#each plusOneButtons}}
 	<button class="deaths-door-boost-btn deaths-door-plus-one-btn" type="button" data-plus-one="{{this.key}}" title="{{this.title}}">
-		<i class="fas fa-plus"></i>
+		<i class="fas fa-plus" aria-hidden="true"></i>
 		<span>{{this.label}}</span>
 	</button>
 	{{/each}}
 	{{else}}
 	<button class="deaths-door-close-btn is-primary" type="button">
-		<i class="fas fa-check"></i> {{localize "stonetop.specialMoves.deathsDoor.buttons.done"}}
+		<i class="fas fa-check" aria-hidden="true"></i> {{localize "stonetop.specialMoves.deathsDoor.buttons.done"}}
 	</button>
 	{{/if}}
 	{{/if}}
@@ -478,7 +478,7 @@
 			{{localize "stonetop.specialMoves.deathsDoor.buttons.next"}}<span class="stonetop-nav-arrow"></span>
 		</button>
 		<button class="deaths-door-close-btn is-primary" type="button">
-			<i class="fas fa-check"></i> {{localize "stonetop.specialMoves.deathsDoor.buttons.done"}}
+			<i class="fas fa-check" aria-hidden="true"></i> {{localize "stonetop.specialMoves.deathsDoor.buttons.done"}}
 		</button>
 	</span>
 	{{/if}}

@@ -14319,7 +14319,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// any interim penalty like "Let Fly at disadvantage until practiced") lives on the
 			// wound's own edit form, so point there rather than duplicating that editor.
 			const permHint = permanent.length
-				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pen"></i> edit on the sheet.</p>`
+				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pencil"></i> edit on the sheet.</p>`
 				: "";
 			const permSection =
 				permBlock("Permanent injury: retire or Make a Plan to adapt:", permanent.filter(w => w.origin !== "deaths-door")) +
@@ -15013,7 +15013,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					content: `<p>${_esc(format("stonetop.newCharacter.outOfPlayContent", { name: this.actor.name }))}</p>`,
 					buttons: [
 						{ key: "mint", label: localize("stonetop.newCharacter.outOfPlayMint"), icon: "fa-user-plus", value: "mint" },
-						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"),   icon: "fa-edit",      value: "edit" },
+						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"),   icon: "fa-pencil",      value: "edit" },
 						{ key: "keep", label: localize("stonetop.newCharacter.confirmKeep"),   icon: "fa-xmark",     value: null },
 					],
 					defaultKey: "keep",
@@ -15037,8 +15037,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					title:   localize("stonetop.newCharacter.confirmTitle"),
 					content: `<p>${_esc(localize("stonetop.newCharacter.confirmContent"))}</p>`,
 					buttons: [
-						{ key: "new",  label: localize("stonetop.newCharacter.confirmNew"),  icon: "fa-undo",  value: "new" },
-						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"), icon: "fa-edit",  value: "edit" },
+						{ key: "new",  label: localize("stonetop.newCharacter.confirmNew"),  icon: "fa-rotate-left",  value: "new" },
+						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"), icon: "fa-pencil",  value: "edit" },
 						{ key: "keep", label: localize("stonetop.newCharacter.confirmKeep"), icon: "fa-xmark", value: null },
 					],
 					defaultKey: "keep",

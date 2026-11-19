@@ -6,7 +6,7 @@
 	{{#if (and stonetop.editMode stonetop.inventoryReset.show)}}
 	<div class="stonetop-inventory-toolbar">
 		<button type="button" class="stonetop-inventory-reset-btn" data-tooltip="{{localize 'stonetop.inventory.resetTooltip'}}" data-tooltip-direction="UP">
-			<i class="fas fa-eraser"></i> {{localize "stonetop.inventory.resetLabel"}}
+			<i class="fas fa-eraser" aria-hidden="true"></i> {{localize "stonetop.inventory.resetLabel"}}
 		</button>
 	</div>
 	{{/if}}
@@ -74,7 +74,7 @@
 					</label>
 					{{#if note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 					{{#if (and isCustom @root.stonetop.editMode)}}
-					<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-times"></i></a>
+					<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 					{{/if}}
 				</div>
 				{{/each}}
@@ -88,7 +88,7 @@
 			{{/if}}
 			{{/each}}
 			<button type="button" class="stonetop-inv-add-btn" data-column="regular">
-				<i class="fas fa-plus"></i> {{localize "stonetop.inventory.addItem"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.inventory.addItem"}}
 			</button>
 			{{!-- The ◇ half of the Arcana section: owned arcana whose curio has weight.
 			      Their weightless siblings sit under the matching heading in the small
@@ -161,7 +161,7 @@
 			</div>
 			{{/if}}
 			<button type="button" class="stonetop-inv-add-btn" data-column="small">
-				<i class="fas fa-plus"></i> {{localize "stonetop.inventory.addSmallItem"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.inventory.addSmallItem"}}
 			</button>
 			{{!-- The weightless half of the Arcana section, level with the ◇ half in the
 			      regular column. Rendered INERT on purpose — no checkbox, matching what a
@@ -229,12 +229,12 @@
 					</span>
 					{{/if}}
 					{{#if (and isCustom @root.stonetop.possessionsEdit)}}
-					<a class="stonetop-possession-custom-remove" data-slug="{{this.slug}}" title="{{localize 'stonetop.character.gear.removePossession'}}"><i class="fas fa-times"></i></a>
+					<a class="stonetop-possession-custom-remove" data-slug="{{this.slug}}" title="{{localize 'stonetop.character.gear.removePossession'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 					{{/if}}
 					{{#if (and hasChoiceGroups @root.stonetop.possessionsEdit)}}
 					<a class="stonetop-possession-choices-edit" data-possession-choices="{{this.slug}}"
 					   data-tooltip="Edit your sacred pouch's details &amp; remarkable trait(s)" data-tooltip-direction="UP">
-						<i class="fas fa-pen-to-square" aria-hidden="true"></i>
+						<i class="fas fa-pencil" aria-hidden="true"></i>
 					</a>
 					{{/if}}
 				</div>
@@ -269,7 +269,7 @@
 						<button type="button" class="stonetop-pouch-slot-remove stonetop-inline-btn" data-slot-id="{{this.id}}"
 						        data-tooltip="Take it out of the pouch (its space comes back empty)" data-tooltip-direction="UP"
 						        aria-label="Take {{this.name}} out of the pouch">
-							<i class="fas fa-times" aria-hidden="true"></i>
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 						{{/if}}
 					</p>
@@ -407,7 +407,7 @@
 		{{#if stonetop.inventory.possessions.isIncomplete}}
 		<div class="stonetop-details-onboarding-actions">
 			<button type="button" class="stonetop-choose-possessions-btn" data-onboarding-start="possession">
-				<i class="fas fa-question-circle" aria-hidden="true"></i>
+				<i class="fas fa-circle-question" aria-hidden="true"></i>
 				{{localize "stonetop.inventory.choosePossessionsButton"}}
 			</button>
 		</div>

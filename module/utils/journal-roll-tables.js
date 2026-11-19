@@ -218,7 +218,7 @@ export function applyJournalRollTables(app, html) {
 		btn.setAttribute("role", "button");
 		btn.setAttribute("tabindex", "0");
 		btn.title = `Roll ${formula} on this table`;
-		btn.innerHTML = '<i class="fas fa-dice-d20"></i>';
+		btn.innerHTML = '<i class="fas fa-dice-d6"></i>';
 		th.prepend(btn);
 
 		const fire = () => rollTable({ formula, label: labelParts, rows });

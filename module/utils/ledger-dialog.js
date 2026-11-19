@@ -95,7 +95,7 @@ export function openLedgerDialog(actor, ledger) {
 			${mayEdit ? `<label class="stonetop-edit-toggle stonetop-ledger-edit-toggle" title="Edit entries">
 				<input type="checkbox" class="stonetop-ledger-edit-check">
 				<span class="stonetop-toggle-track">
-					<span class="stonetop-toggle-thumb"><i class="fas fa-pen"></i></span>
+					<span class="stonetop-toggle-thumb"><i class="fas fa-pencil"></i></span>
 				</span>
 			</label>
 			<label class="stonetop-ledger-select-all-label" title="Select all">

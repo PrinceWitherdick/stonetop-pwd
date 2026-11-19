@@ -13,7 +13,7 @@
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
 					<button type="button" class="stonetop-guide-toc-btn cm-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
 						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
@@ -26,7 +26,7 @@
 			{{!-- Banner: active section + a live stat line that recomputes as boxes are
 			      ticked (updated in JS; no re-render, so fields keep focus). --}}
 			<div class="stonetop-guide-banner cm-banner">
-				<i class="fas {{active.icon}} stonetop-guide-banner-icon cm-banner-icon"></i>
+				<i class="fas {{active.icon}} stonetop-guide-banner-icon cm-banner-icon" aria-hidden="true"></i>
 				<div class="stonetop-guide-banner-info">
 					<div class="stonetop-guide-banner-title cm-banner-title">{{active.title}}</div>
 					<div class="cm-statline">
@@ -217,7 +217,7 @@
 				<div class="cm-field">
 					<span class="cm-label">Other attacks <em>(optional)</em></span>
 					<div class="cm-attack-list" data-empty="Just the one attack. Add another if it fights more than one way."></div>
-					<button type="button" class="cm-attack-add"><i class="fas fa-plus"></i> Add another attack</button>
+					<button type="button" class="cm-attack-add"><i class="fas fa-plus" aria-hidden="true"></i> Add another attack</button>
 				</div>
 
 				{{!-- Cloned per card by the dialog; kept here so the markup lives with the rest. --}}
@@ -227,7 +227,7 @@
 							<input type="text" class="cm-attack-name" placeholder="What it attacks with (e.g. bow)">
 							<input type="text" class="cm-attack-die" placeholder="die"
 							       data-tooltip="Its own die, if it differs. Leave blank to use the creature's." data-tooltip-direction="UP">
-							<button type="button" class="cm-attack-remove" data-tooltip="Remove this attack" aria-label="Remove this attack"><i class="fas fa-xmark"></i></button>
+							<button type="button" class="cm-attack-remove" data-tooltip="Remove this attack" aria-label="Remove this attack"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 						</div>
 						<div class="cm-chip-grid">
 							{{#each damageRangeTags}}
@@ -267,7 +267,7 @@
 					<span class="cm-label">This monster's moves</span>
 					<div class="cm-move-list" data-empty="No moves yet. Use Add a move below."></div>
 					{{!-- Opens a menu: a blank move, then the book's prompts (utils/suggestion-menu.js). --}}
-					<button type="button" class="cm-move-add" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-plus"></i> Add a move</button>
+					<button type="button" class="cm-move-add" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-plus" aria-hidden="true"></i> Add a move</button>
 				</div>
 
 				{{!-- Cloned per card by the dialog; kept here so the markup lives with the rest. --}}
@@ -275,7 +275,7 @@
 					<div class="cm-move-card">
 						<div class="cm-move-card-head stonetop-field-btns">
 							<input type="text" class="cm-move-name" placeholder="Move name (e.g. Snatch and drag off)">
-							<button type="button" class="cm-move-remove" data-tooltip="Remove this move" aria-label="Remove this move"><i class="fas fa-xmark"></i></button>
+							<button type="button" class="cm-move-remove" data-tooltip="Remove this move" aria-label="Remove this move"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 						</div>
 						<textarea class="cm-move-desc" rows="2" placeholder="What does it do? Narrate it; no roll needed."></textarea>
 					</div>
@@ -287,7 +287,7 @@
 	</div>
 
 	<div class="stonetop-guide-nav cm-footer">
-		<button type="button" class="cm-create stonetop-guide-btn--primary"><i class="fas fa-dragon"></i> Create monster</button>
+		<button type="button" class="cm-create stonetop-guide-btn--primary"><i class="fas fa-dragon" aria-hidden="true"></i> Create monster</button>
 		<span class="cm-footer-note">Description &amp; lore are added on the stat block.</span>
 		<button type="button" class="cm-next">Next<span class="stonetop-nav-arrow"></span></button>
 	</div>

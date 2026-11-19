@@ -75,7 +75,7 @@
 		<div class="stonetop-arcanum-footer">
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 		</div>
 		{{/if}}
@@ -124,7 +124,7 @@
 			      back in chat; the GM settles it with the footer's reveal toggle. --}}
 			{{#if showBackOwed}}
 			<div class="stonetop-arcanum-backowed">
-				<i class="fas fa-hourglass-half"></i>
+				<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 				<span>{{localize "stonetop.arcana.backOwedText"}}</span>
 				<button type="button" class="stonetop-arcanum-backowed-btn" data-slug="{{this.slug}}">
 					{{localize "stonetop.arcana.backOwedStudy"}}
@@ -162,7 +162,7 @@
 			{{else if unlockChoice}}
 			{{#if (and unlockChoice.owed @root.stonetop.canEdit)}}
 			<div class="stonetop-arcanum-backowed stonetop-arcanum-unlock-choice-owed">
-				<i class="fas fa-book-open"></i>
+				<i class="fas fa-book-open" aria-hidden="true"></i>
 				<span>{{localize "stonetop.arcana.unlockChoiceOwed" name=unlockChoice.name owed=unlockChoice.owed}}</span>
 				<button type="button" class="stonetop-arcanum-unlock-choice-btn" data-slug="{{this.slug}}">
 					{{localize "stonetop.arcana.unlockChoiceChoose"}}
@@ -240,7 +240,7 @@
 			<div class="stonetop-arcanum-summon">
 				<button type="button" class="stonetop-arcanum-summon-btn{{#if summon.added}} is-added{{/if}}"
 				        data-slug="{{this.slug}}"{{#if summon.added}} disabled{{/if}}>
-					<i class="fas {{#if summon.added}}fa-check{{else}}fa-user-plus{{/if}}"></i> {{summon.label}}
+					<i class="fas {{#if summon.added}}fa-check{{else}}fa-user-plus{{/if}}" aria-hidden="true"></i> {{summon.label}}
 				</button>
 				{{!-- Another character already has this creature (A16, arcana-summon-gates.js): flagged, never blocked. --}}
 				{{#if summon.caution}}<p class="stonetop-arcanum-summon-caution">{{summon.caution}}</p>{{/if}}
@@ -282,7 +282,7 @@
 			{{#if canFlip}}
 			<button type="button" class="stonetop-arcanum-flip-btn"
 			        data-slug="{{this.slug}}" data-show="{{this.showBack}}">
-				<i class="fas fa-rotate"></i>
+				<i class="fas fa-rotate" aria-hidden="true"></i>
 				{{#if showBack}}{{localize "stonetop.arcana.showFront"}}{{else}}{{localize "stonetop.arcana.showBack"}}{{/if}}
 			</button>
 			{{/if}}
@@ -292,7 +292,7 @@
 			{{#if canToggleBoth}}
 			<button type="button" class="stonetop-arcanum-showboth-btn{{#if showBoth}} is-active{{/if}}"
 			        data-slug="{{this.slug}}" data-show="{{this.showBoth}}">
-				<i class="fas {{#if showBoth}}fa-book{{else}}fa-book-open{{/if}}"></i>
+				<i class="fas {{#if showBoth}}fa-book{{else}}fa-book-open{{/if}}" aria-hidden="true"></i>
 				{{#if showBoth}}{{localize "stonetop.arcana.showFrontOnly"}}{{else}}{{localize "stonetop.arcana.showBothSides"}}{{/if}}
 			</button>
 			{{/if}}
@@ -303,14 +303,14 @@
 			{{#if canReveal}}
 			<button type="button" class="stonetop-arcanum-reveal-btn{{#if revealedToPlayers}} is-revealed{{/if}}"
 			        data-slug="{{this.slug}}" data-revealed="{{this.revealedToPlayers}}">
-				<i class="fas {{#if revealedToPlayers}}fa-eye-slash{{else}}fa-eye{{/if}}"></i>
+				<i class="fas {{#if revealedToPlayers}}fa-eye-slash{{else}}fa-eye{{/if}}" aria-hidden="true"></i>
 				{{#if revealedToPlayers}}{{localize "stonetop.arcana.hideFromPlayers"}}{{else}}{{localize "stonetop.arcana.revealToPlayers"}}{{/if}}
 			</button>
 			{{/if}}
 			{{#if sectionEditable}}
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 			{{/if}}
 		</div>
@@ -326,7 +326,7 @@
 			</div>
 		</div>
 		<div class="stonetop-arcanum-body stonetop-arcanum-lead-body">
-			<i class="fas fa-map-location-dot stonetop-arcanum-lead-icon"></i>
+			<i class="fas fa-map-location-dot stonetop-arcanum-lead-icon" aria-hidden="true"></i>
 			<p>{{localize "stonetop.arcana.leadText"}}</p>
 			{{#if @root.stonetop.canEdit}}
 			<button type="button" class="stonetop-arcanum-discover-btn" data-slug="{{this.slug}}">
@@ -338,7 +338,7 @@
 		<div class="stonetop-arcanum-footer">
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 		</div>
 		{{/if}}
@@ -359,13 +359,13 @@
 				{{#if @root.stonetop.canEdit}}
 				<button type="button" class="stonetop-arcanum-identify-btn" data-slug="{{this.slug}}"
 				        title="{{localize 'stonetop.arcana.identifyHint'}}">
-					<i class="fas fa-dice-d6"></i> {{localize "stonetop.arcana.identify"}}
+					<i class="fas fa-dice-d6" aria-hidden="true"></i> {{localize "stonetop.arcana.identify"}}
 				</button>
 				{{/if}}
 				{{#if canGiveCard}}
 				<button type="button" class="stonetop-arcanum-givecard-btn" data-slug="{{this.slug}}"
 				        title="{{localize 'stonetop.arcana.giveCardHint'}}">
-					<i class="fas fa-hand-holding"></i> {{localize "stonetop.arcana.giveCard"}}
+					<i class="fas fa-hand-holding" aria-hidden="true"></i> {{localize "stonetop.arcana.giveCard"}}
 				</button>
 				{{/if}}
 			</div>
@@ -374,7 +374,7 @@
 		<div class="stonetop-arcanum-footer">
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 		</div>
 		{{/if}}

@@ -12,7 +12,7 @@
     <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+      <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
         {{!-- Past the opening step this reads "Expedition: <the trip's name>",
@@ -128,11 +128,11 @@
         <span class="stonetop-spring-roll-result-label">{{{roll.label}}}</span>
       </div>
       <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn">
-        <i class="fas fa-rotate-right"></i> Roll again
+        <i class="fas fa-rotate-right" aria-hidden="true"></i> Roll again
       </button>
       {{else}}
       <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-dice"></i> Roll +Fortunes ({{this.fortunesLabel}})
+        <i class="fas fa-dice" aria-hidden="true"></i> Roll +Fortunes ({{this.fortunesLabel}})
       </button>
       {{/if}}
     </div>
@@ -239,7 +239,7 @@
       </div>
       {{/if}}
       <button type="button" class="stonetop-exp-fate-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-dice-d6"></i> Roll the Die of Fate
+        <i class="fas fa-dice-d6" aria-hidden="true"></i> Roll the Die of Fate
       </button>
     </div>
     {{/if}}
@@ -478,7 +478,7 @@
       {{/if}}
       <button type="button" class="stonetop-exp-triumph-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary"
               {{#unless returnTriumphant.hasSteading}}disabled{{/unless}}>
-        <i class="fas fa-house-chimney-heart"></i> Return Triumphant
+        <i class="fas fa-house-chimney-heart" aria-hidden="true"></i> Return Triumphant
       </button>
       {{#unless returnTriumphant.hasSteading}}
       <p class="stonetop-exp-triumph-note">No steading sheet in this world yet, so there is nothing to clear.</p>
@@ -524,7 +524,7 @@
       <button type="button" class="stonetop-sidebar-toggle"
               aria-expanded="{{#if movesRailCollapsed}}false{{else}}true{{/if}}"
               aria-label="{{#if movesRailCollapsed}}Expand exploration moves{{else}}Collapse exploration moves{{/if}}">
-        <i class="fas fa-chevron-right"></i>
+        <i class="fas fa-chevron-right" aria-hidden="true"></i>
         <span class="stonetop-sidebar-toggle-label" aria-hidden="true">Exploration moves</span>
       </button>
       <div class="stonetop-sidebar-body">

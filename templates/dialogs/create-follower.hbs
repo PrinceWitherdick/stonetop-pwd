@@ -14,7 +14,7 @@
     <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+      <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
         <div class="stonetop-guide-banner-sub">Create a follower</div>
@@ -53,14 +53,14 @@
         {{#if chosenTags.length}}
         <div class="stonetop-cf-chosen-tags">
           {{#each chosenTags}}
-          <button type="button" class="stonetop-cf-chosen-tag" data-tag="{{this}}"><span class="stonetop-chip-text">{{this}}</span> <i class="fas fa-times"></i></button>
+          <button type="button" class="stonetop-cf-chosen-tag" data-tag="{{this}}"><span class="stonetop-chip-text">{{this}}</span> <i class="fas fa-xmark" aria-hidden="true"></i></button>
           {{/each}}
         </div>
         {{else}}<span class="stonetop-cf-chosen-empty">none yet</span>{{/if}}
       </div>
       <div class="stonetop-cf-tag-add-row stonetop-field-btns">
         <input type="text" class="stonetop-cf-input stonetop-cf-tag-input" placeholder="add your own tag (or comma-separated)…">
-        <button type="button" class="stonetop-cf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add</button>
+        <button type="button" class="stonetop-cf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
       </div>
       {{#each tagGroups}}
       <div class="stonetop-cf-tag-group">
@@ -99,7 +99,7 @@
           {{/each}}
         </div>
       </div>
-      <div class="stonetop-cf-total"><i class="fas fa-heart"></i> <strong>{{this.hpTotal}} HP</strong>{{#if isGroup}} <span class="stonetop-cf-pick-hint">each</span>{{/if}}</div>
+      <div class="stonetop-cf-total"><i class="fas fa-heart" aria-hidden="true"></i> <strong>{{this.hpTotal}} HP</strong>{{#if isGroup}} <span class="stonetop-cf-pick-hint">each</span>{{/if}}</div>
       {{!-- Group follower (p.470): a warband/posse shares these stats, but every
             member tracks their own HP and the card gains the group-fight tools. --}}
       <label class="stonetop-cf-label stonetop-cf-group-label">
@@ -137,7 +137,7 @@
           {{/each}}
         </div>
       </div>
-      <div class="stonetop-cf-total"><i class="fas fa-shield-halved"></i> <strong>{{this.armorTotal}} Armor</strong></div>
+      <div class="stonetop-cf-total"><i class="fas fa-shield-halved" aria-hidden="true"></i> <strong>{{this.armorTotal}} Armor</strong></div>
       {{/if}}
 
       {{#if is_damage}}
@@ -158,14 +158,14 @@
         {{#if chosenTags.length}}
         <div class="stonetop-cf-chosen-tags">
           {{#each chosenTags}}
-          <button type="button" class="stonetop-cf-chosen-tag" data-tag="{{this}}"><span class="stonetop-chip-text">{{this}}</span> <i class="fas fa-times"></i></button>
+          <button type="button" class="stonetop-cf-chosen-tag" data-tag="{{this}}"><span class="stonetop-chip-text">{{this}}</span> <i class="fas fa-xmark" aria-hidden="true"></i></button>
           {{/each}}
         </div>
         {{else}}<span class="stonetop-cf-chosen-empty">none yet</span>{{/if}}
       </div>
       <div class="stonetop-cf-tag-add-row stonetop-field-btns">
         <input type="text" class="stonetop-cf-input stonetop-cf-tag-input" placeholder="add your own (or comma-separated)…">
-        <button type="button" class="stonetop-cf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add</button>
+        <button type="button" class="stonetop-cf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
       </div>
       {{#each tagGroups}}
       <div class="stonetop-cf-tag-group">
@@ -177,7 +177,7 @@
         </div>
       </div>
       {{/each}}
-      <div class="stonetop-cf-total"><i class="fas fa-burst"></i> <strong>{{this.damagePreview}}</strong></div>
+      <div class="stonetop-cf-total"><i class="fas fa-burst" aria-hidden="true"></i> <strong>{{this.damagePreview}}</strong></div>
       {{/if}}
 
       {{#if is_instinct}}
@@ -214,10 +214,10 @@
         {{#each sel.gear}}
         <div class="stonetop-cf-gear-row stonetop-field-btns">
           <input type="text" class="stonetop-cf-input stonetop-cf-gear-label" data-index="{{@index}}" value="{{this.label}}" placeholder="bow &amp; iron arrows, old cloak, supplies…">
-          <button type="button" class="stonetop-cf-gear-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{@index}}"><i class="fas fa-times"></i></button>
+          <button type="button" class="stonetop-cf-gear-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{@index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
         </div>
         {{/each}}
-        <button type="button" class="stonetop-cf-gear-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add gear</button>
+        <button type="button" class="stonetop-cf-gear-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add gear</button>
       </div>
 
       {{#with preview}}
@@ -250,7 +250,7 @@
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
-    <button class="stonetop-cf-create stonetop-guide-btn--primary"><i class="fas fa-user-plus"></i> Create follower</button>
+    <button class="stonetop-cf-create stonetop-guide-btn--primary"><i class="fas fa-user-plus" aria-hidden="true"></i> Create follower</button>
     {{else}}
     <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
     {{/if}}

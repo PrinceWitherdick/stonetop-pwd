@@ -46,7 +46,7 @@
 				{{#if simple.note}}<p class="stonetop-item-tags">{{{simple.note}}}</p>{{/if}}
 				{{#if simple.artifact.concealed}}
 				<p class="stonetop-item-artifact-chip{{#if simple.artifact.gmPeeking}} is-gm-peek{{/if}}">
-					<i class="fas fa-circle-question"></i>
+					<i class="fas fa-circle-question" aria-hidden="true"></i>
 					{{#if simple.artifact.loreOwed}}{{localize 'stonetop.artifact.chipPartial'}}{{else}}{{localize 'stonetop.artifact.chipUnknown'}}{{/if}}
 				</p>
 				{{/if}}
@@ -56,7 +56,7 @@
 				      so its prose (tight paragraphs, spiral bullets) is styled in one place. --}}
 				{{#if simple.artifact.lore}}<div class="stonetop-inv-artifact-lore{{#if simple.artifact.gmPeeking}} is-gm-peek{{/if}}">{{{simple.artifact.lore}}}</div>{{/if}}
 				{{#if simple.artifact.lead}}
-				<p class="stonetop-inv-artifact-lead" data-tooltip="{{localize 'stonetop.artifact.leadTooltip'}}"><i class="fas fa-signs-post"></i> {{simple.artifact.lead}}</p>
+				<p class="stonetop-inv-artifact-lead" data-tooltip="{{localize 'stonetop.artifact.leadTooltip'}}"><i class="fas fa-signs-post" aria-hidden="true"></i> {{simple.artifact.lead}}</p>
 				{{/if}}
 				{{{simple.description}}}
 			</div>

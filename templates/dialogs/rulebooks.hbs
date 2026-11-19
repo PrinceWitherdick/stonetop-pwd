@@ -24,7 +24,7 @@
 					{{#if this.path}}
 						<button type="button" data-action="read" data-book="{{this.book}}"
 							data-tooltip="Open this book">
-							<i class="fas fa-book-open"></i>
+							<i class="fas fa-book-open" aria-hidden="true"></i>
 						</button>
 					{{/if}}
 					{{!-- THE ORDINARY DOOR, and it opens your computer's own file dialog, exactly
@@ -35,19 +35,19 @@
 						data-action="choose" data-book="{{this.book}}"
 						{{#unless ../canStore}}disabled{{/unless}}
 						data-tooltip="Choose the PDF on this computer">
-						<i class="fas fa-upload"></i>
+						<i class="fas fa-upload" aria-hidden="true"></i>
 					</button>
 					{{!-- The second door, for a book already on the server: one copied in earlier,
 					      or, on a hosted setup, one already sitting in the assets library. --}}
 					<button type="button" data-action="browse" data-book="{{this.book}}"
 						{{#unless ../canBrowse}}disabled{{/unless}}
 						data-tooltip="Pick one already in this world">
-						<i class="fas fa-folder-open"></i>
+						<i class="fas fa-folder-open" aria-hidden="true"></i>
 					</button>
 					{{#if this.path}}
 						<button type="button" data-action="forget" data-book="{{this.book}}"
 							data-tooltip="Forget this file">
-							<i class="fas fa-xmark"></i>
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 					{{/if}}
 				</span>
@@ -76,7 +76,7 @@
 
 	<div class="stonetop-rulebooks-actions">
 		<button type="button" class="stonetop-rulebooks-done" data-action="done">
-			<i class="fas fa-check"></i> <span>Done</span>
+			<i class="fas fa-check" aria-hidden="true"></i> <span>Done</span>
 		</button>
 	</div>
 

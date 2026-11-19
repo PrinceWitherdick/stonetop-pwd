@@ -7,7 +7,7 @@
      the table sees what there is to spend on a blow. --}}
 {{#if readiness}}
 <div class="stonetop-fight-ring-readiness" role="status" aria-label="{{readiness.label}}" data-tooltip="{{readiness.label}}">
-	<span class="stonetop-fight-ring-readiness-pips" inert>{{#each readiness.pips}}<i class="fa-solid fa-shield"></i>{{/each}}</span>
+	<span class="stonetop-fight-ring-readiness-pips" inert>{{#each readiness.pips}}<i class="fas fa-shield" aria-hidden="true"></i>{{/each}}</span>
 	<span class="stonetop-fight-ring-readiness-text">{{readiness.count}}</span>
 </div>
 {{/if}}

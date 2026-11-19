@@ -54,7 +54,7 @@ function modeButtons(active) {
 		return `<button type="button"
 		        class="stonetop-segmented-picker-option stonetop-roll-mode-btn${on ? " is-active" : ""}"
 		        data-roll-mode="${mode}" aria-pressed="${on}">
-			<i class="fa-solid ${icon}" aria-hidden="true"></i><span>${localize(`stonetop.rollMode.${mode}`)}</span>
+			<i class="fas ${icon}" aria-hidden="true"></i><span>${localize(`stonetop.rollMode.${mode}`)}</span>
 		</button>`;
 	}).join("");
 }

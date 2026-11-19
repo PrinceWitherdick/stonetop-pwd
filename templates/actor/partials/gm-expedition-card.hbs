@@ -30,7 +30,7 @@
 	<div class="stonetop-gm-encounter-head stonetop-field-btns">
 		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
 		      data-tooltip="{{localize "stonetop.gmToolkit.expeditions.reorder"}}" data-tooltip-direction="UP">
-			<i class="fas fa-grip-vertical"></i>
+			<i class="fas fa-grip-vertical" aria-hidden="true"></i>
 		</span>
 		<input type="text" class="stonetop-gm-encounter-name" value="{{this.name}}" maxlength="120"
 		       aria-label="{{localize "stonetop.gmToolkit.expeditions.nameLabel"}}">
@@ -45,12 +45,12 @@
 		{{/if}}
 		<button type="button" class="stonetop-gm-encounter-toggle" aria-expanded="{{#if open}}true{{else}}false{{/if}}"
 		        aria-label="{{#if open}}{{localize "stonetop.gmToolkit.expeditions.collapse"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.expand"}}{{/if}}">
-			<i class="fas fa-caret-down"></i>
+			<i class="fas fa-caret-down" aria-hidden="true"></i>
 		</button>
 		<span class="stonetop-gm-encounter-tools stonetop-field-btns__tools">
 			<button type="button" class="stonetop-gm-encounter-remove"
 			        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.removeEncounter"}}" data-tooltip-direction="UP">
-				<i class="fas fa-trash"></i>
+				<i class="fas fa-trash" aria-hidden="true"></i>
 			</button>
 		</span>
 	</div>
@@ -64,7 +64,7 @@
 			{{/if}}
 			<button type="button" class="stonetop-gm-encounter-notes-edit"
 			        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.notesEdit"}}" data-tooltip-direction="UP">
-				<i class="fas fa-pen"></i>
+				<i class="fas fa-pencil" aria-hidden="true"></i>
 			</button>
 		</div>
 
@@ -91,7 +91,7 @@
 					        data-tooltip-direction="UP">{{this.name}}</button>
 					<button type="button" class="stonetop-gm-encounter-entry-remove"
 					        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.removeEntry"}}" data-tooltip-direction="UP">
-						<i class="fas fa-xmark"></i>
+						<i class="fas fa-xmark" aria-hidden="true"></i>
 					</button>
 					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{this.note}}" maxlength="200"
 					       placeholder="{{localize "stonetop.gmToolkit.expeditions.entryNotePlaceholder"}}"
@@ -122,12 +122,12 @@
 			<button type="button" class="stonetop-gm-expedition-run"
 			        data-tooltip="{{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopenTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.runTip"}}{{/if}}"
 			        data-tooltip-direction="UP">
-				<i class="fas fa-person-hiking"></i> {{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}
+				<i class="fas fa-person-hiking" aria-hidden="true"></i> {{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}
 			</button>
 			<button type="button" class="stonetop-gm-encounter-used"
 			        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsed"}}{{/if}}"
 			        data-tooltip-direction="UP">
-				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}"></i> {{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsedShort"}}{{/if}}
+				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}" aria-hidden="true"></i> {{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsedShort"}}{{/if}}
 			</button>
 		</div>
 	</div>

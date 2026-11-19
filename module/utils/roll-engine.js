@@ -199,7 +199,7 @@ function _resultTableLadder(resultTable, tier) {
 }
 
 // The title row's "?" that reveals a hidden move description, shared by every card that carries one.
-const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" title="Show move description"><i class="fas fa-question-circle"></i></button>`;
+const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" title="Show move description"><i class="fas fa-circle-question"></i></button>`;
 
 // The die-faces readouts live with the card pieces (utils/chat.js); re-exported for the callers that
 // have always taken them from here.

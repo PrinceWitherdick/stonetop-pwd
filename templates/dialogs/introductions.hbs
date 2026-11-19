@@ -10,12 +10,12 @@
 
     {{#if hasNone}}
     <div class="stonetop-intros-notice stonetop-intros-notice--warn">
-      <i class="fas fa-exclamation-triangle"></i>
+      <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
       <span>No characters with a playbook were found. Create your player characters first.</span>
     </div>
     {{else}}
     <div class="stonetop-intros-notice stonetop-intros-notice--ok">
-      <i class="fas fa-check-circle"></i>
+      <i class="fas fa-circle-check" aria-hidden="true"></i>
       <div class="stonetop-intros-ok-body">
         <p>All {{this.pcCount}} player characters are ready, in order:</p>
         {{!-- The order is the introductions' own setting (dialogs/introductions-order.js). A GM
@@ -46,14 +46,14 @@
       </div>
       {{#if canReorder}}
       <button type="button" class="stonetop-intros-shuffle" title="Randomize the order">
-        <i class="fas fa-shuffle"></i> Randomize
+        <i class="fas fa-shuffle" aria-hidden="true"></i> Randomize
       </button>
       {{/if}}
     </div>
     {{/if}}
 
     <p class="stonetop-intros-reminder">
-      <i class="fas fa-info-circle"></i>
+      <i class="fas fa-circle-info" aria-hidden="true"></i>
       <em>When someone reveals something and you want to know more, ask them about it. When someone asks you a question, answer it truthfully.</em>
     </p>
 
@@ -85,7 +85,7 @@
 
     {{#if placeInLine}}
     <div class="stonetop-intros-place stonetop-intros-place--{{placeInLine.state}}">
-      <i class="fas {{placeInLine.icon}}"></i>
+      <i class="fas {{placeInLine.icon}}" aria-hidden="true"></i>
       <span class="stonetop-intros-place-text">{{placeInLine.text}}{{#if placeInLine.pcNote}} <span class="stonetop-intros-place-pc">{{placeInLine.pcNote}}</span>{{/if}}</span>
     </div>
     {{/if}}
@@ -94,7 +94,7 @@
           whose turn it was has gone. A wait, not the first PC being up. --}}
     {{#if waiting}}
     <div class="stonetop-intros-place stonetop-intros-place--wait">
-      <i class="fas fa-hourglass-half"></i>
+      <i class="fas fa-hourglass-half" aria-hidden="true"></i>
       <span class="stonetop-intros-place-text">Waiting for the GM to move on to the next turn.</span>
     </div>
     {{/if}}
@@ -102,7 +102,7 @@
     {{!-- A second GM: who is running the table, in place of the controls only they have. --}}
     {{#if watchingNote}}
     <div class="stonetop-intros-place stonetop-intros-place--watching">
-      <i class="fas fa-eye"></i>
+      <i class="fas fa-eye" aria-hidden="true"></i>
       <span class="stonetop-intros-place-text">{{this.watchingNote}}</span>
     </div>
     {{/if}}
@@ -115,7 +115,7 @@
     {{#if capture.hasRecorded}}
     <div class="stonetop-intros-recorded-list">
       <p class="stonetop-intros-recorded-list-label">
-        <i class="fas fa-feather"></i>
+        <i class="fas fa-feather" aria-hidden="true"></i>
         {{#if capture.isAsk}}Asked so far{{else}}Recorded so far{{/if}} ({{capture.answeredCount}}{{#if capture.total}} / {{capture.total}}{{/if}})
       </p>
       <ul>
@@ -135,7 +135,7 @@
           {{/if}}
           {{!-- Who it was recorded as being about, where somebody picked. The only part of an
                 answer that is not in its own writing, so it is said back here. --}}
-          {{#if this.about}}<span class="stonetop-intros-recorded-about"><i class="fas fa-arrow-right"></i> {{this.about}}</span>{{/if}}
+          {{#if this.about}}<span class="stonetop-intros-recorded-about"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{this.about}}</span>{{/if}}
           </div>
           {{#if ../capture.canManage}}{{#unless this.editing}}
           {{!-- The GM's corrections to a recorded answer. Icon buttons, so each says what it does
@@ -144,7 +144,7 @@
             <button type="button" class="stonetop-intros-recorded-edit"
                     data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-answer-index="{{this.index}}"
                     aria-label="{{this.editLabel}}" data-tooltip="{{this.editLabel}}">
-              <i class="fas fa-pen" aria-hidden="true"></i>
+              <i class="fas fa-pencil" aria-hidden="true"></i>
             </button>
             <button type="button" class="stonetop-intros-recorded-delete"
                     data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-answer-index="{{this.index}}"
@@ -161,7 +161,7 @@
 
     {{#if capture.passed}}
     <div class="stonetop-intros-passed">
-      <i class="fas fa-check-circle"></i> <span>Passed: no more questions this step.</span>
+      <i class="fas fa-circle-check" aria-hidden="true"></i> <span>Passed: no more questions this step.</span>
       {{#if capture.canManage}}
       <button type="button" class="stonetop-intros-unpass" data-actor-id="{{capture.actorId}}" data-step-key="{{capture.stepKey}}"
               data-tooltip="{{capture.unpassLabel}}: they can answer again" aria-label="{{capture.unpassLabel}}">Un-pass</button>
@@ -170,7 +170,7 @@
     {{else if capture.noQuestions}}
     {{!-- A playbook the introductions have no questions for: nothing to pick, so nothing to wait on. --}}
     <div class="stonetop-intros-place stonetop-intros-place--wait">
-      <i class="fas fa-circle-info"></i>
+      <i class="fas fa-circle-info" aria-hidden="true"></i>
       <span class="stonetop-intros-place-text">{{currentPc.name}}'s playbook has no questions for this step, so they sit this one out.</span>
     </div>
     {{else}}
@@ -225,11 +225,11 @@
     {{else if capture.canPreview}}
     {{!-- GM watching the active player type: read-only mirror, no data-* so no stray write. --}}
     <div class="stonetop-intros-capture">
-      <label class="stonetop-intros-capture-label"><i class="fas fa-feather"></i> {{#if currentPc.name}}{{currentPc.name}} is writing…{{else}}Their answer, as they write it…{{/if}}</label>
+      <label class="stonetop-intros-capture-label"><i class="fas fa-feather" aria-hidden="true"></i> {{#if currentPc.name}}{{currentPc.name}} is writing…{{else}}Their answer, as they write it…{{/if}}</label>
       <textarea class="stonetop-intros-draft" rows="3" readonly
                 placeholder="{{capture.placeholder}}">{{capture.draftAnswer}}</textarea>
       {{#if capture.aboutName}}
-      <p class="stonetop-intros-about-said"><i class="fas fa-arrow-right"></i> {{#if capture.isAsk}}Asking{{else}}About{{/if}} <strong>{{capture.aboutName}}</strong></p>
+      <p class="stonetop-intros-about-said"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{#if capture.isAsk}}Asking{{else}}About{{/if}} <strong>{{capture.aboutName}}</strong></p>
       {{/if}}
     </div>
     {{/if}}
@@ -238,7 +238,7 @@
 
     {{#if stepReady}}
     <div class="stonetop-intros-ready-tally{{#if stepReady.all}} is-all{{/if}}">
-      <i class="fas fa-users"></i>
+      <i class="fas fa-users" aria-hidden="true"></i>
       {{stepReady.count}} / {{stepReady.total}} done{{#if stepReady.all}}, everyone's passed or answered all{{/if}}
     </div>
     {{/if}}
@@ -255,7 +255,7 @@
     {{else if capture.canPreview}}
     {{!-- GM watching the active player type their narration: read-only mirror, no data-* so no stray write. --}}
     <div class="stonetop-intros-capture">
-      <label class="stonetop-intros-capture-label"><i class="fas fa-feather"></i> {{#if currentPc.name}}{{currentPc.name}} is writing…{{else}}Their answer, as they write it…{{/if}}</label>
+      <label class="stonetop-intros-capture-label"><i class="fas fa-feather" aria-hidden="true"></i> {{#if currentPc.name}}{{currentPc.name}} is writing…{{else}}Their answer, as they write it…{{/if}}</label>
       <textarea class="stonetop-intros-answer" rows="3" readonly
                 placeholder="{{capture.placeholder}}">{{capture.answer}}</textarea>
     </div>

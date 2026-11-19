@@ -5,9 +5,9 @@
   <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas {{this.bannerIcon}} stonetop-guide-banner-icon"></i>
+      <i class="fas {{this.bannerIcon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
-        <div class="stonetop-guide-banner-title">{{this.monsterName}} <i class="fas fa-arrow-right stonetop-mf-arrow"></i> {{this.actorName}}'s follower</div>
+        <div class="stonetop-guide-banner-title">{{this.monsterName}} <i class="fas fa-arrow-right stonetop-mf-arrow" aria-hidden="true"></i> {{this.actorName}}'s follower</div>
         <div class="stonetop-guide-banner-sub">Convert a monster to a follower</div>
       </div>
     </div>
@@ -41,14 +41,14 @@
         {{#if addedTags.length}}
         <div class="stonetop-cf-chosen-tags">
           {{#each addedTags}}
-          <button type="button" class="stonetop-cf-chosen-tag stonetop-mf-added-tag" data-tag="{{this}}"><span class="stonetop-chip-text">{{this}}</span> <i class="fas fa-times"></i></button>
+          <button type="button" class="stonetop-cf-chosen-tag stonetop-mf-added-tag" data-tag="{{this}}"><span class="stonetop-chip-text">{{this}}</span> <i class="fas fa-xmark" aria-hidden="true"></i></button>
           {{/each}}
         </div>
         {{else}}<span class="stonetop-cf-chosen-empty">none</span>{{/if}}
       </div>
       <div class="stonetop-cf-tag-add-row stonetop-field-btns">
         <input type="text" class="stonetop-cf-input stonetop-mf-tag-input" placeholder="add a tag (or comma-separated)…">
-        <button type="button" class="stonetop-mf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add</button>
+        <button type="button" class="stonetop-mf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
       </div>
 
       {{!-- Group follower (p.470): a group- or horde-organization monster becomes a
@@ -83,7 +83,7 @@
   </div>
 
   <div class="stonetop-guide-nav">
-    <button class="stonetop-mf-create stonetop-guide-btn--primary"><i class="fas fa-user-plus"></i> Create follower</button>
+    <button class="stonetop-mf-create stonetop-guide-btn--primary"><i class="fas fa-user-plus" aria-hidden="true"></i> Create follower</button>
     <button class="stonetop-mf-cancel">Cancel</button>
   </div>
 

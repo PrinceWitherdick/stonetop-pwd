@@ -1263,7 +1263,7 @@ export function wireDefendSpends(message, html, { scope = SYSTEM_ID, user = glob
 		const label = offers[kind].length === 1
 			? format(`${KEY}.${kind}${free}One`, { defender: one.defender.name, ward: one.row.name, move: one.move ?? "", harm: one.harm ?? "" })
 			: format(`${KEY}.${kind}`, {});
-		button.innerHTML = `<i class="fa-solid fa-shield-halved"></i> ${escHtml(label)}`;
+		button.innerHTML = `<i class="fas fa-shield-halved"></i> ${escHtml(label)}`;
 		button.addEventListener("click", async () => {
 			if (button.disabled) return;
 			button.disabled = true;

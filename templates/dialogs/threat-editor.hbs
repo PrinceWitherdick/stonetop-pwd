@@ -45,10 +45,10 @@
 			<div class="threat-list-row threat-list-row--portent stonetop-field-btns" data-index="{{this.index}}">
 				<input type="checkbox" class="threat-list-done" data-field="done"{{#if done}} checked{{/if}} data-tooltip="Come to pass">
 				<input type="text" class="threat-list-text" data-field="text" value="{{this.text}}" placeholder="A concrete, observable milestone">
-				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 			</div>
 			{{/each}}
-			<button type="button" class="threat-list-add" data-list="grimPortents"><i class="fas fa-plus"></i> Add portent</button>
+			<button type="button" class="threat-list-add" data-list="grimPortents"><i class="fas fa-plus" aria-hidden="true"></i> Add portent</button>
 		</div>
 	</div>
 
@@ -60,7 +60,7 @@
 		</div>
 	</div>
 
-	<button type="button" class="threat-editor-more-toggle{{#if moreOpen}} is-open{{/if}}"><i class="fas fa-chevron-up"></i> Stakes, GM moves &amp; more</button>
+	<button type="button" class="threat-editor-more-toggle{{#if moreOpen}} is-open{{/if}}"><i class="fas fa-chevron-up" aria-hidden="true"></i> Stakes, GM moves &amp; more</button>
 	<div class="threat-editor-more{{#if moreOpen}} is-open{{/if}}">
 
 		<div class="threat-edit__field">
@@ -100,10 +100,10 @@
 						{{#each @root.typeOptions}}<option value="{{this.id}}"{{#if (eq id ../type)}} selected{{/if}}>{{this.label}}</option>{{/each}}
 					</select>
 					<input type="text" class="threat-list-text" data-field="instinct" value="{{this.instinct}}" placeholder="instinct">
-					<button type="button" class="threat-list-remove" data-list="nested" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+					<button type="button" class="threat-list-remove" data-list="nested" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 				</div>
 				{{/each}}
-				<button type="button" class="threat-list-add" data-list="nested"><i class="fas fa-plus"></i> Add lesser threat</button>
+				<button type="button" class="threat-list-add" data-list="nested"><i class="fas fa-plus" aria-hidden="true"></i> Add lesser threat</button>
 			</div>
 		</div>
 
@@ -114,16 +114,16 @@
 				<div class="threat-list-row threat-list-row--pmove" data-index="{{this.index}}">
 					<input type="text" class="threat-list-text" data-field="label" value="{{this.label}}" placeholder="Move name or trigger">
 					<textarea class="threat-list-textarea" data-field="text" rows="2" placeholder="The move text">{{this.text}}</textarea>
-					<button type="button" class="threat-list-remove" data-list="customPlayerMoves" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+					<button type="button" class="threat-list-remove" data-list="customPlayerMoves" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 				</div>
 				{{/each}}
-				<button type="button" class="threat-list-add" data-list="customPlayerMoves"><i class="fas fa-plus"></i> Add player move</button>
+				<button type="button" class="threat-list-add" data-list="customPlayerMoves"><i class="fas fa-plus" aria-hidden="true"></i> Add player move</button>
 			</div>
 		</div>
 
 	</div>
 
 	<footer class="threat-editor__footer">
-		<button type="button" class="threat-editor-done"><i class="fas fa-check"></i> Done</button>
+		<button type="button" class="threat-editor-done"><i class="fas fa-check" aria-hidden="true"></i> Done</button>
 	</footer>
 </form>

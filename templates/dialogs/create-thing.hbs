@@ -11,7 +11,7 @@
     <div class="stonetop-guide-main">
 
       <div class="stonetop-guide-banner">
-        <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+        <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">Create a Thing Below</div>
@@ -35,7 +35,7 @@
         <label class="stonetop-cf-label">Titles <span class="stonetop-cf-pick-hint">(one per line)</span>
           <textarea class="stonetop-cf-textarea" data-field="titles" rows="3" placeholder="the Pale Serpent&#10;Slitherer in Darkness&#10;Death Is Its Eyes">{{this.titlesText}}</textarea>
         </label>
-        <button type="button" class="stonetop-tb-roll-name stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll a name &amp; titles</button>
+        <button type="button" class="stonetop-tb-roll-name stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll a name &amp; titles</button>
         <div class="stonetop-cf-pick">
           <div class="stonetop-cf-pick-label">Proximity</div>
           <div class="stonetop-cf-option-list stonetop-cf-option-list--row">
@@ -61,7 +61,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-themes stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll 2</button>
+        <button type="button" class="stonetop-tb-roll-themes stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll 2</button>
         {{/if}}
 
         {{#if is_aspects}}
@@ -76,7 +76,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-aspects stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll 2</button>
+        <button type="button" class="stonetop-tb-roll-aspects stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll 2</button>
         {{/if}}
 
         {{#if is_instinct}}
@@ -91,7 +91,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-instinct stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll</button>
+        <button type="button" class="stonetop-tb-roll-instinct stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll</button>
         <label class="stonetop-cf-label">Or write your own
           <input type="text" class="stonetop-cf-input" data-field="instinctCustom" value="{{this.instinctCustom}}" placeholder="to smother life, hope, and light…">
         </label>
@@ -114,10 +114,10 @@
           {{#each customMoveRows}}
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <input type="text" class="stonetop-cf-input stonetop-tb-move-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="a move of your own…">
-            <button type="button" class="stonetop-tb-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
+            <button type="button" class="stonetop-tb-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
-          <button type="button" class="stonetop-tb-move-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add GM move</button>
+          <button type="button" class="stonetop-tb-move-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add GM move</button>
         </div>
         {{/if}}
 
@@ -147,7 +147,7 @@
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
-    <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-eye"></i> Create the Thing</button>
+    <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-eye" aria-hidden="true"></i> Create the Thing</button>
     {{else}}
     <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
     {{/if}}

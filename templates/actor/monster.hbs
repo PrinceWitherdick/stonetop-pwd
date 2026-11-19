@@ -75,7 +75,7 @@
 						       name="system.tags" value="{{system.tags}}"
 						       placeholder="hoarder, cautious, stealthy...">
 						<a class="stonetop-monster-reset-defaults" title='{{localize "stonetop.monster.resetDefaults"}}'>
-							<i class="fas fa-rotate-left"></i>
+							<i class="fas fa-rotate-left" aria-hidden="true"></i>
 						</a>
 						{{else}}
 						{{#if stonetop.organizationLabel}}<span class="stonetop-monster-org-pill"{{#if stonetop.organizationTooltip}} data-tooltip="{{stonetop.organizationTooltip}}" data-tooltip-direction="UP"{{/if}}>{{localize stonetop.organizationLabel}}</span>{{/if}}
@@ -131,7 +131,7 @@
 								{{else}}{{#if stonetop.armorBoost}}
 								<span class="stonetop-monster-armor-source stonetop-monster-armor-boost-note"
 								      data-tooltip="{{stonetop.armorBoost.tooltip}}" data-tooltip-direction="DOWN">
-									<i class="fas fa-arrow-up"></i> {{stonetop.armorBoost.label}}
+									<i class="fas fa-arrow-up" aria-hidden="true"></i> {{stonetop.armorBoost.label}}
 								</span>
 								{{else}}{{#if system.attributes.armor.source}}
 								<span class="stonetop-monster-armor-source">({{system.attributes.armor.source}})</span>
@@ -181,7 +181,7 @@
 						<li class="stonetop-monster-damage-mode">
 							{{#if formula}}
 							<a class="stonetop-monster-damage-roll" data-mode-index="{{@index}}" data-roll-formula="{{this.formula}}" data-roll-label="{{this.title}}" data-roll-keywords="{{this.keywords}}" data-roll-mode="{{this.rollMode}}" title="Roll damage ({{this.formula}})">
-								<i class="fas fa-dice-d6"></i>
+								<i class="fas fa-dice-d6" aria-hidden="true"></i>
 							</a>
 							{{/if}}
 							<span class="stonetop-monster-prose">{{this.text}}</span>
@@ -289,7 +289,7 @@
 							<span class="stonetop-monster-numbers-fields">
 								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-swarm-count" data-numbers-count="attackers" type="number" min="1" value="{{stonetop.swarmCount}}" title="How many of them pile onto that one foe"> <span class="stonetop-outnumber-vs">attackers</span></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.swarmClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
-								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (swarm)" title="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (swarm)" title="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
 							</span>
 						</span>
 
@@ -301,7 +301,7 @@
 							<span class="stonetop-monster-numbers-fields">
 								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-outnumber-yours" data-numbers-count="yours" type="number" min="1" value="{{stonetop.swarmCount}}" title="How many of this group"> <span class="stonetop-outnumber-vs">vs</span> <input class="stonetop-monster-outnumber-theirs" data-numbers-count="theirs" type="number" min="1" value="1" title="How many they face"></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.exchangeClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
-								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (group)" title="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (group)" title="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
 							</span>
 						</span>
 						{{/if}}
@@ -334,7 +334,7 @@
 								       title='{{localize "stonetop.monster.moveFormulaHint"}}' placeholder="d6">
 								<span class="stonetop-monster-move-controls">
 									<a class="stonetop-monster-delete-move" title='{{localize "stonetop.monster.deleteMove"}}'>
-										<i class="fas fa-trash"></i>
+										<i class="fas fa-trash" aria-hidden="true"></i>
 									</a>
 								</span>
 							</div>
@@ -344,10 +344,10 @@
 							<div class="stonetop-monster-move-head">
 								{{#if system.rollFormula}}
 								<a class="stonetop-monster-move-roll" title="Roll {{system.rollFormula}}">
-									<i class="fas fa-dice-d6"></i>
+									<i class="fas fa-dice-d6" aria-hidden="true"></i>
 								</a>
 								{{/if}}
-								<span class="stonetop-monster-move-name"{{#if boostTooltip}} data-tooltip="{{this.boostTooltip}}" data-tooltip-direction="UP"{{/if}}>{{#if showBoostIcon}}<i class="fas fa-shield-halved stonetop-monster-move-boost-icon"></i> {{/if}}{{this.name}}</span>
+								<span class="stonetop-monster-move-name"{{#if boostTooltip}} data-tooltip="{{this.boostTooltip}}" data-tooltip-direction="UP"{{/if}}>{{#if showBoostIcon}}<i class="fas fa-shield-halved stonetop-monster-move-boost-icon" aria-hidden="true"></i> {{/if}}{{this.name}}</span>
 							</div>
 							{{#if system.description}}
 							<div class="stonetop-monster-move-description">{{{moveBody system.description system.moveResults}}}</div>
@@ -365,7 +365,7 @@
 				{{#if stonetop.editMode}}
 				<div class="stonetop-monster-add-controls">
 					<a class="stonetop-monster-add-move">
-						<i class="fas fa-plus"></i> {{localize "stonetop.monster.addMove"}}
+						<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.monster.addMove"}}
 					</a>
 				</div>
 				{{/if}}

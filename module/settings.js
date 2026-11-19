@@ -2175,7 +2175,7 @@ export function registerSettings() {
 		name: "stonetop.settings.hoverDescriptionSettings.name",
 		label: "stonetop.settings.hoverDescriptionSettings.label",
 		hint: "stonetop.settings.hoverDescriptionSettings.hint",
-		icon: "fas fa-info-circle",
+		icon: "fas fa-circle-info",
 		type: _createHoverDescriptionSettingsApp(),
 		restricted: false,
 	});

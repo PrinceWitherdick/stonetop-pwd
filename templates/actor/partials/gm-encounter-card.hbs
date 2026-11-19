@@ -37,7 +37,7 @@
 	<div class="stonetop-gm-encounter-head stonetop-field-btns">
 		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
 		      data-tooltip="{{localize "stonetop.gmToolkit.encounters.reorder"}}" data-tooltip-direction="UP">
-			<i class="fas fa-grip-vertical"></i>
+			<i class="fas fa-grip-vertical" aria-hidden="true"></i>
 		</span>
 		{{!-- The name IS the input, not a label with a pencil beside it: an encounter gets
 		      renamed as often as it gets used ("the bridge" becomes "the bridge at dusk"
@@ -93,12 +93,12 @@
 		      nothing about that. --}}
 		<button type="button" class="stonetop-gm-encounter-toggle" aria-expanded="{{#if open}}true{{else}}false{{/if}}"
 		        aria-label="{{#if open}}{{localize "stonetop.gmToolkit.encounters.collapse"}}{{else}}{{localize "stonetop.gmToolkit.encounters.expand"}}{{/if}}">
-			<i class="fas fa-caret-down"></i>
+			<i class="fas fa-caret-down" aria-hidden="true"></i>
 		</button>
 		<span class="stonetop-gm-encounter-tools stonetop-field-btns__tools">
 			<button type="button" class="stonetop-gm-encounter-remove"
 			        data-tooltip="{{localize "stonetop.gmToolkit.encounters.removeEncounter"}}" data-tooltip-direction="UP">
-				<i class="fas fa-trash"></i>
+				<i class="fas fa-trash" aria-hidden="true"></i>
 			</button>
 		</span>
 	</div>
@@ -134,7 +134,7 @@
 			{{/if}}
 			<button type="button" class="stonetop-gm-encounter-notes-edit"
 			        data-tooltip="{{localize "stonetop.gmToolkit.encounters.notesEdit"}}" data-tooltip-direction="UP">
-				<i class="fas fa-pen"></i>
+				<i class="fas fa-pencil" aria-hidden="true"></i>
 			</button>
 		</div>
 
@@ -196,7 +196,7 @@
 				<button type="button" class="stonetop-gm-encounter-fight"
 				        data-tooltip="{{localize "stonetop.gmToolkit.encounters.deployAndFight"}}" data-tooltip-direction="UP"
 				        aria-label="{{localize "stonetop.gmToolkit.encounters.deployAndFight"}}">
-					<i class="fa-solid fa-swords" aria-hidden="true"></i>
+					<i class="fas fa-swords" aria-hidden="true"></i>
 				</button>
 				{{/if}}
 				<span class="stonetop-gm-entry-card-count">{{this.count}}</span>
@@ -215,7 +215,7 @@
 					        data-tooltip-direction="UP">{{this.name}}</button>
 					<button type="button" class="stonetop-gm-encounter-entry-remove"
 					        data-tooltip="{{localize "stonetop.gmToolkit.encounters.removeEntry"}}" data-tooltip-direction="UP">
-						<i class="fas fa-xmark"></i>
+						<i class="fas fa-xmark" aria-hidden="true"></i>
 					</button>
 					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{this.note}}" maxlength="200"
 					       placeholder="{{localize "stonetop.gmToolkit.encounters.entryNotePlaceholder"}}"
@@ -254,7 +254,7 @@
 		<button type="button" class="stonetop-gm-encounter-used"
 		        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsed"}}{{/if}}"
 		        data-tooltip-direction="UP">
-			<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}"></i> {{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsedShort"}}{{/if}}
+			<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}" aria-hidden="true"></i> {{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsedShort"}}{{/if}}
 		</button>
 	</div>
 </li>

@@ -18,13 +18,13 @@
 			{{#if stonetop.editing.concept}}
 			<div class="stonetop-section-head">
 				{{> "stonetop.section-heading" title="Concept"}}
-				{{#if stonetop.inlineOwner}}<a class="stonetop-section-done" data-section="concept" title="Done editing"><i class="fas fa-check"></i></a>{{/if}}
+				{{#if stonetop.inlineOwner}}<a class="stonetop-section-done" data-section="concept" title="Done editing"><i class="fas fa-check" aria-hidden="true"></i></a>{{/if}}
 			</div>
 			<textarea data-doc-field="concept"
 			          placeholder='{{localize "stonetop.bestiary.conceptPlaceholder"}}'>{{system.concept}}</textarea>
 			{{else}}{{#if stonetop.visible.concept}}
 			<p class="stonetop-monster-prose stonetop-bestiary-page-concept">{{{stonetop.enrichedConcept}}}{{#if stonetop.inlineOwner}}
-				<a class="stonetop-section-edit stonetop-concept-edit" data-section="concept" title="Edit section"><i class="fas fa-pencil"></i></a>{{/if}}</p>
+				<a class="stonetop-section-edit stonetop-concept-edit" data-section="concept" title="Edit section"><i class="fas fa-pencil" aria-hidden="true"></i></a>{{/if}}</p>
 			{{/if}}{{/if}}
 		</section>
 
@@ -73,13 +73,13 @@
 						       value="{{this.prompt}}" placeholder='{{localize "stonetop.bestiary.questionPlaceholder"}}'>
 						<textarea class="stonetop-entry-qa-input stonetop-entry-qa-answer"
 						          placeholder='{{localize "stonetop.bestiary.answerPlaceholder"}}'>{{this.answer}}</textarea>
-						<a class="stonetop-entry-remove-qa" title="Remove"><i class="fas fa-trash"></i></a>
+						<a class="stonetop-entry-remove-qa" title="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
 					</div>
 				</li>
 				{{/each}}
 			</ul>
 			<button type="button" class="stonetop-entry-add-qa" data-field="{{this.key}}">
-				<i class="fas fa-plus"></i> {{localize "stonetop.bestiary.addQuestion"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.bestiary.addQuestion"}}
 			</button>
 			{{else}}
 			<ul class="stonetop-entry-qa-list">

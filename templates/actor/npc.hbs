@@ -24,7 +24,7 @@
 				</span>
 				{{else}}
 				<span class="stonetop-portrait stonetop-npc-portrait-placeholder" title="{{actor.name}}">
-					<i class="fas fa-user"></i>
+					<i class="fas fa-user" aria-hidden="true"></i>
 				</span>
 				{{/if}}
 				{{/if}}
@@ -168,7 +168,7 @@
 				</ul>
 				{{#if stonetop.canAddImpression}}
 				<div class="stonetop-npc-add-controls">
-					<a class="stonetop-npc-add-impression"><i class="fas fa-plus"></i> {{localize "stonetop.npc.addImpression"}}</a>
+					<a class="stonetop-npc-add-impression"><i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.npc.addImpression"}}</a>
 				</div>
 				{{/if}}
 				{{else}}
@@ -231,7 +231,7 @@
 					{{else}}
 					{{#if system.attributes.damage.rollFormula}}
 					<a class="stonetop-npc-damage-roll" title="Roll damage ({{system.attributes.damage.rollFormula}})">
-						<i class="fas fa-dice-d6"></i>
+						<i class="fas fa-dice-d6" aria-hidden="true"></i>
 					</a>
 					{{/if}}
 					<span class="stonetop-npc-prose">{{system.attributes.damage.value}}</span>
@@ -292,7 +292,7 @@
 									       data-field="system.rollFormula" value="{{system.rollFormula}}"
 									       title='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
 									<a class="stonetop-npc-delete-move" title='{{localize "stonetop.npc.deleteMove"}}'>
-										<i class="fas fa-trash"></i>
+										<i class="fas fa-trash" aria-hidden="true"></i>
 									</a>
 								</div>
 								<prose-mirror class="stonetop-npc-rich-editor stonetop-npc-move-editor stonetop-npc-move-field"
@@ -301,7 +301,7 @@
 								<div class="stonetop-npc-move-head">
 									{{#if system.rollFormula}}
 									<a class="stonetop-npc-move-roll" title="Roll {{system.rollFormula}}">
-										<i class="fas fa-dice-d6"></i>
+										<i class="fas fa-dice-d6" aria-hidden="true"></i>
 									</a>
 									{{/if}}
 									<span class="stonetop-npc-move-name">{{this.name}}</span>
@@ -318,7 +318,7 @@
 					</ul>
 					{{#if stonetop.editMode}}
 					<div class="stonetop-npc-add-controls">
-						<a class="stonetop-npc-add-move"><i class="fas fa-plus"></i> {{localize "stonetop.npc.addMove"}}</a>
+						<a class="stonetop-npc-add-move"><i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.npc.addMove"}}</a>
 					</div>
 					{{/if}}
 				</div>

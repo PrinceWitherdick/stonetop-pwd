@@ -13,7 +13,7 @@
         {{#each sections}}
         <li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
           <button type="button" class="stonetop-guide-toc-btn stonetop-welcome-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
-            <i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+            <i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
             <span class="stonetop-guide-toc-text" data-label="{{this.title}}">{{this.title}}</span>
           </button>
         </li>
@@ -26,7 +26,7 @@
       {{!-- Banner: the active step's icon + title + count (updated in JS on tab switch,
             so panels never re-render and keep their in-progress state). --}}
       <div class="stonetop-guide-banner stonetop-welcome-banner">
-        <i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-welcome-banner-icon"></i>
+        <i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-welcome-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-welcome-banner-titlewrap">
             <span class="stonetop-guide-banner-title stonetop-welcome-banner-title">{{active.title}}</span>
@@ -52,14 +52,14 @@
         <p class="stonetop-welcome-newbie">
           Never run a game in Foundry before?
           <button type="button" class="stonetop-welcome-textlink stonetop-welcome-textlink--inline" data-action="foundry-basics">
-            <i class="fas fa-circle-question"></i> New to Foundry?
+            <i class="fas fa-circle-question" aria-hidden="true"></i> New to Foundry?
           </button>
         </p>
 
         <div class="stonetop-welcome-outro">
           <p>Not sure where to start? Open the <strong>Setting Overview</strong> and read it through together: the rest of the session grows from there. You can reopen this guide any time from the <span class="stonetop-welcome-springicon-wrap stonetop-welcome-springicon-wrap--signpost"><img class="stonetop-welcome-springicon" src="systems/stonetop-pwd/assets/icons/macros/direction-signs.svg" alt=""></span> <em>signpost</em> icon in your hotbar below.</p>
           <button type="button" class="stonetop-welcome-action" data-action="setting-overview">
-            <i class="fas fa-book-open"></i> Open Setting Overview
+            <i class="fas fa-book-open" aria-hidden="true"></i> Open Setting Overview
           </button>
         </div>
       </section>
@@ -71,14 +71,14 @@
         <p>While a book is open, the importer also offers to <strong>keep a copy of it in this world</strong>, so you can read it here as well: Book I and Book II from the GM Toolkit, and Book I from your players&rsquo; character sheets. It is a tick-box beside each book, ticked to begin with, so supplying a PDF once is enough for both. Untick it if you came for the art alone. The copy stays on your own Foundry; nothing is sent anywhere.</p>
         {{#if bookArtImported}}
           <div class="stonetop-welcome-notice stonetop-welcome-notice--done">
-            <i class="fas fa-circle-check"></i>
+            <i class="fas fa-circle-check" aria-hidden="true"></i>
             <div class="stonetop-welcome-notice-body">
               <span><strong>Already done: nothing to do here.</strong> Your imported art is kept outside the world, so this world found it and wired it in by itself. You do <strong>not</strong> need your PDFs again. Re-run the import below only if you want art that a newer version of Stonetop added.</span>
             </div>
           </div>
         {{/if}}
         <button type="button" class="stonetop-welcome-action" data-action="import-book-art">
-          <i class="fas fa-images"></i> {{#if bookArtImported}}Import Book Art Again{{else}}Import Book Art{{/if}}
+          <i class="fas fa-images" aria-hidden="true"></i> {{#if bookArtImported}}Import Book Art Again{{else}}Import Book Art{{/if}}
         </button>
         {{!-- Shown only when there is something to build. A newer version of Stonetop can add
               pictures that are derivable from art already on disk — individual faces cut out of
@@ -87,11 +87,11 @@
               because that card is easy to miss and never comes back. --}}
         {{#if rebuildableArt}}
         <button type="button" class="stonetop-welcome-action" data-action="rebuild-portraits"{{#if rebuilding}} disabled{{/if}}>
-          <i class="fas fa-crop-simple"></i> Build {{this.rebuildableArt}} more portraits from art you already have
+          <i class="fas fa-crop-simple" aria-hidden="true"></i> Build {{this.rebuildableArt}} more portraits from art you already have
         </button>
         {{/if}}
         <div class="stonetop-welcome-notice stonetop-welcome-notice--info">
-          <i class="fas fa-circle-info"></i>
+          <i class="fas fa-circle-info" aria-hidden="true"></i>
           <div class="stonetop-welcome-notice-body">
             <span>You'll be asked for your <strong>Book I</strong> and/or <strong>Book II</strong> &ldquo;spreads&rdquo; PDFs (provide either or both), and optionally the free <strong>GM playbook</strong> PDF, which holds the sharpest copies of the three regional maps and the only copies of the core-loop and flow-of-play diagrams. It's best to run this <strong>before your players join</strong> for the first session, and to <strong>close any journal you're editing</strong> first so your in-progress edits don't collide with the art (it only adds pictures; it never overwrites your or your players' text). You can re-run it any time from the <strong>Import Book Art</strong> macro in your Macro Directory.</span>
           </div>
@@ -104,10 +104,10 @@
         <p>If someone at your table wants to play a playbook that isn't in the books, such as a community or homebrew one, add it to this world <strong>before your players make their characters</strong>, so it is waiting in the playbook picker for them.</p>
         <p>Have the playbook as a PDF? One made with the <em>community Stonetop playbook template</em> can be read in: you check each piece that was read, answer anything it wasn't sure of, then finish it in the <strong>Playbook Builder</strong>. Without a PDF, or with one that is only pictures of text, type it into the builder yourself. Someone else's playbook file (from <em>Export Playbook File</em> on a playbook's right-click menu in the Items sidebar) loads with <strong>Read a PDF or playbook file</strong> in the builder.</p>
         <button type="button" class="stonetop-welcome-action" data-action="homebrew-playbook">
-          <i class="fas fa-book"></i> Add a Playbook
+          <i class="fas fa-book" aria-hidden="true"></i> Add a Playbook
         </button>
         <div class="stonetop-welcome-notice stonetop-welcome-notice--info">
-          <i class="fas fa-circle-info"></i>
+          <i class="fas fa-circle-info" aria-hidden="true"></i>
           <div class="stonetop-welcome-notice-body">
             <span>Players see a playbook once you save it; to keep it to yourself, close the <strong>eye</strong> at the top of the builder. Every playbook you save is kept in your <strong>playbook library</strong> too, so your other worlds pick it up by themselves. You can add more later with the Items sidebar's <strong>Create Item</strong> button, under <strong>Homebrew Playbook</strong>, and reopen one in the builder from its right-click menu there.</span>
           </div>
@@ -118,7 +118,7 @@
       <section class="stonetop-welcome-section" data-tab="setting"{{#unless (eq activeTab "setting")}} hidden{{/unless}}>
         <p>Open the Setting Overview together and give everyone 10&ndash;15 minutes with it, then field questions. Some things (like &ldquo;where did the Forest Folk go?&rdquo;) are mysteries to discover in play.</p>
         <button type="button" class="stonetop-welcome-action" data-action="setting-overview">
-          <i class="fas fa-book-open"></i> Open Setting Overview
+          <i class="fas fa-book-open" aria-hidden="true"></i> Open Setting Overview
         </button>
       </section>
 
@@ -133,11 +133,11 @@
 
         {{#if noPlayers}}
         <div class="stonetop-welcome-notice stonetop-welcome-notice--warn">
-          <i class="fas fa-exclamation-triangle"></i>
+          <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
           <div class="stonetop-welcome-notice-body">
             <span>No players have joined this world yet. Add them in Foundry's <strong>Configure Players</strong> screen.</span>
             <button type="button" class="stonetop-welcome-action" data-action="configure-players" title="Opens Foundry's player management page (you'll leave the game and can return when you're done)">
-              <i class="fas fa-users-cog"></i> Configure Players
+              <i class="fas fa-users-cog" aria-hidden="true"></i> Configure Players
             </button>
           </div>
         </div>
@@ -160,7 +160,7 @@
                   asks whether the new character joins theirs or replaces it, and only the
                   second answer deletes anything. --}}
             <button type="button" class="stonetop-welcome-create" data-user-id="{{this.id}}"{{#if creating}} disabled{{/if}}>
-              <i class="fas fa-user-plus"></i> <span class="stonetop-welcome-create-label">{{#if characters.length}}Another Character{{else}}Create Character{{/if}}</span>
+              <i class="fas fa-user-plus" aria-hidden="true"></i> <span class="stonetop-welcome-create-label">{{#if characters.length}}Another Character{{else}}Create Character{{/if}}</span>
             </button>
           </li>
           {{/each}}
@@ -172,10 +172,10 @@
       <section class="stonetop-welcome-section" data-tab="introduce"{{#unless (eq activeTab "introduce")}} hidden{{/unless}}>
         <p>Once the sheets are built, go around the table: introduce yourselves, add details, and ask &amp; answer questions about each other and Stonetop. The guided Introductions walk you through it round by round, ending as you add each character's home to the steading and <em>let spring burst forth</em>.</p>
         <button type="button" class="stonetop-welcome-action" data-action="introductions">
-          <i class="fas fa-users"></i> Start Introductions
+          <i class="fas fa-users" aria-hidden="true"></i> Start Introductions
         </button>
         <div class="stonetop-welcome-notice stonetop-welcome-notice--info">
-          <i class="fas fa-feather"></i>
+          <i class="fas fa-feather" aria-hidden="true"></i>
           <div class="stonetop-welcome-notice-body">
             <span>The GM records each answer along the way, here and in the <em>Let Spring Burst Forth</em> walkthrough, and finishing each compiles them into a <strong>Player Introductions</strong> journal, kept in a folder named <strong>The Chronicle</strong> and readable by the whole table, so you can look back on them all campaign long.</span>
           </div>
@@ -186,11 +186,11 @@
       <section class="stonetop-welcome-section" data-tab="spring"{{#unless (eq activeTab "spring")}} hidden{{/unless}}>
         <p>Once the Introductions wrap up with <em>let spring burst forth</em>, walk through <strong>Let Spring Burst Forth</strong>: the most hopeful character makes the season's first <strong>Seasons Change</strong> move, and its result sets up your opening hook.</p>
         <button type="button" class="stonetop-welcome-action" data-action="spring-burst">
-          <i class="fas fa-seedling"></i> Walk Through Let Spring Burst Forth
+          <i class="fas fa-seedling" aria-hidden="true"></i> Walk Through Let Spring Burst Forth
         </button>
         <p>Resist the urge to leap straight into adventure: take time to mull over everything your players gave you, and prepare the first expedition.</p>
         <div class="stonetop-welcome-notice stonetop-welcome-notice--info">
-          <i class="fas fa-rotate-right"></i>
+          <i class="fas fa-rotate-right" aria-hidden="true"></i>
           <div class="stonetop-welcome-notice-body">
             <span>Every season after this one, make the <strong>Seasons Change</strong> move by clicking the season in the bar across the top of the screen and choosing <em>Next Season</em>: it walks you through the roll, the seasonal gains, and the season's bookkeeping.</span>
           </div>

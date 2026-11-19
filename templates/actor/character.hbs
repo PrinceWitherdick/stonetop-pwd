@@ -7,7 +7,7 @@
 		<div class="stonetop-no-playbook-state">
 			{{#if editable}}
 			<button type="button" class="stonetop-create-character-btn">
-				<i class="fas fa-user-plus"></i>
+				<i class="fas fa-user-plus" aria-hidden="true"></i>
 				{{localize "stonetop.newCharacter.createButtonLabel"}}
 			</button>
 			{{/if}}
@@ -45,13 +45,13 @@
 				<ul class="stonetop-wound-list stonetop-wound-list--inline">
 					{{#each stonetop.woundsView.active}}
 					<li class="stonetop-wound stonetop-wound--{{this.status}}{{#if this.isDeathsDoor}} is-deaths-door{{/if}}" data-wound-id="{{this.id}}">
-						<span class="stonetop-wound-glyph" data-tooltip="{{this.statusLabel}}"><i class="fas {{this.glyph}}"></i></span>
+						<span class="stonetop-wound-glyph" data-tooltip="{{this.statusLabel}}"><i class="fas {{this.glyph}}" aria-hidden="true"></i></span>
 						<span class="stonetop-wound-text" data-tooltip="{{this.tooltip}}">{{#if this.isDeathsDoor}}<i class="fas fa-skull stonetop-wound-dd" data-tooltip="Death's Door mark"></i> {{/if}}{{#if this.text}}{{this.text}}{{else}}<em class="stonetop-wound-empty">(describe the wound)</em>{{/if}}</span>
 						{{#if ../stonetop.woundsView.canEdit}}
 						<span class="stonetop-wound-actions">
-							{{#if (and ../stonetop.woundsView.canTend (eq this.status "problematic"))}}<button type="button" class="stonetop-wound-tend" data-tooltip="Tend (Recover)"><i class="fas fa-hand-holding-heart"></i></button>{{/if}}
-							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit"><i class="fas fa-pen"></i></button>
-							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove"><i class="fas fa-trash"></i></button>
+							{{#if (and ../stonetop.woundsView.canTend (eq this.status "problematic"))}}<button type="button" class="stonetop-wound-tend" data-tooltip="Tend (Recover)"><i class="fas fa-hand-holding-heart" aria-hidden="true"></i></button>{{/if}}
+							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit"><i class="fas fa-pencil" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
 						</span>
 						{{/if}}
 					</li>
@@ -66,12 +66,12 @@
 				<ul class="stonetop-wound-list stonetop-wound-list--inline stonetop-wound-list--scars">
 					{{#each stonetop.woundsView.scars}}
 					<li class="stonetop-wound stonetop-wound--scar{{#if this.isDeathsDoor}} is-deaths-door{{/if}}" data-wound-id="{{this.id}}">
-						<span class="stonetop-wound-glyph"><i class="fas fa-heart-crack"></i></span>
-						<span class="stonetop-wound-text" data-tooltip="{{this.tooltip}}">{{#if this.isDeathsDoor}}<i class="fas fa-skull stonetop-wound-dd"></i> {{/if}}{{this.text}}</span>
+						<span class="stonetop-wound-glyph"><i class="fas fa-heart-crack" aria-hidden="true"></i></span>
+						<span class="stonetop-wound-text" data-tooltip="{{this.tooltip}}">{{#if this.isDeathsDoor}}<i class="fas fa-skull stonetop-wound-dd" aria-hidden="true"></i> {{/if}}{{this.text}}</span>
 						{{#if ../stonetop.woundsView.canEdit}}
 						<span class="stonetop-wound-actions">
-							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit"><i class="fas fa-pen"></i></button>
-							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove"><i class="fas fa-trash"></i></button>
+							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit"><i class="fas fa-pencil" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
 						</span>
 						{{/if}}
 					</li>
@@ -157,7 +157,7 @@
 					<button type="button" class="stonetop-sidebar-toggle"
 					        aria-expanded="{{#if stonetop.sidebarCollapsed}}false{{else}}true{{/if}}"
 					        aria-label="{{#if stonetop.sidebarCollapsed}}Expand moves sidebar{{else}}Collapse moves sidebar{{/if}}">
-						<i class="fas fa-chevron-right"></i>
+						<i class="fas fa-chevron-right" aria-hidden="true"></i>
 						<span class="stonetop-sidebar-toggle-label" aria-hidden="true">{{localize "stonetop.character.moves.basicMoves"}}</span>
 					</button>
 					<div class="stonetop-sidebar-body">

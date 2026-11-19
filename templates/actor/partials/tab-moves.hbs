@@ -53,10 +53,10 @@
 						{{/if}}
 						{{#if @root.stonetop.canAuthorLoveLetters}}
 						<a class="stonetop-love-letter-edit" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.editMove'}}">
-							<i class="fas fa-pen"></i>
+							<i class="fas fa-pencil" aria-hidden="true"></i>
 						</a>
 						<a class="stonetop-love-letter-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.deleteMove'}}">
-							<i class="fas fa-trash"></i>
+							<i class="fas fa-trash" aria-hidden="true"></i>
 						</a>
 						{{/if}}
 					</div>
@@ -95,7 +95,7 @@
 		{{#if stonetop.movelist.movesIncomplete}}
 		<div class="stonetop-details-onboarding-actions">
 			<button type="button" class="stonetop-choose-moves-btn" data-onboarding-start="moves">
-				<i class="fas fa-question-circle" aria-hidden="true"></i>
+				<i class="fas fa-circle-question" aria-hidden="true"></i>
 				{{localize "stonetop.character.moves.chooseStartingMoves"}}
 			</button>
 		</div>
@@ -135,7 +135,7 @@
 			        data-overage-key="{{stonetop.movelist.levelMovesOverageKey}}"
 			        aria-label="{{localize 'stonetop.character.moves.dismissLevelMovesOverLimit'}}"
 			        title="{{localize 'stonetop.character.moves.dismissLevelMovesOverLimit'}}">
-				<i class="fas fa-times" aria-hidden="true"></i>
+				<i class="fas fa-xmark" aria-hidden="true"></i>
 			</button>
 		</div>
 		{{/if}}
@@ -193,7 +193,7 @@
 								{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 								{{#if @root.stonetop.movesEdit}}
 								<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
-									<i class="fas fa-trash"></i>
+									<i class="fas fa-trash" aria-hidden="true"></i>
 								</a>
 								{{/if}}
 							</div>
@@ -253,12 +253,12 @@
 							{{/if}}
 							{{#if (and custom @root.stonetop.movesEdit @root.stonetop.canAuthorCustomMoves)}}
 							<a class="stonetop-custom-move-edit" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.custom.editMove'}}">
-								<i class="fas fa-pen"></i>
+								<i class="fas fa-pencil" aria-hidden="true"></i>
 							</a>
 							{{/if}}
 							{{#if (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}
 							<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
-								<i class="fas fa-trash"></i>
+								<i class="fas fa-trash" aria-hidden="true"></i>
 							</a>
 							{{/if}}
 						</div>

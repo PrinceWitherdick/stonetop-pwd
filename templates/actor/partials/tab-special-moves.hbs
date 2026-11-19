@@ -8,7 +8,7 @@
 			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.burnBrightly.title"}}</h3>
 			<div class="stonetop-special-move-summary">{{{moveBody (localize "stonetop.specialMoves.burnBrightly.description")}}}</div>
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas fa-comment-dots"></i>
+				<i class="fas fa-comment-dots" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.burnBrightly.promptNote"}}
 			</p>
 		</div>
@@ -21,14 +21,14 @@
 			    wins over the "which move do I trigger" hint, which only matters while they're up. }}
 			{{#with stonetop.deathsDoor.hint}}
 			<p class="stonetop-special-move-locked-hint{{#if isState}} stonetop-deathsdoor-state{{/if}}">
-				<i class="fas {{this.icon}}"></i>
+				<i class="fas {{this.icon}}" aria-hidden="true"></i>
 				{{this.text}}
 			</p>
 			{{/with}}
 
 			{{#with stonetop.deathsDoor.action}}
 			<button type="button" class="{{this.cls}}" {{#if disabled}}disabled{{/if}}>
-				<i class="fas {{this.icon}}"></i>
+				<i class="fas {{this.icon}}" aria-hidden="true"></i>
 				{{this.label}}
 			</button>
 			{{/with}}
@@ -37,7 +37,7 @@
 			    debility still unmarked. See hardToKillTrade. }}
 			{{#if stonetop.deathsDoor.hardToKillTrade}}
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas fa-shield-heart"></i>
+				<i class="fas fa-shield-heart" aria-hidden="true"></i>
 				{{{localize "stonetop.specialMoves.deathsDoor.result.debilityAsk"}}}
 			</p>
 			{{#each stonetop.deathsDoor.hardToKillTrade}}
@@ -53,7 +53,7 @@
 			{{#if stonetop.deathsDoor.clearFate}}
 			<button type="button" class="stonetop-deathsdoor-clear-btn"
 			        data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.clearFateHint"}}">
-				<i class="fas fa-rotate-left"></i>
+				<i class="fas fa-rotate-left" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.deathsDoor.clearFate"}}
 			</button>
 			{{/if}}
@@ -63,7 +63,7 @@
 			{{#if stonetop.deathsDoor.openPostDeath}}
 			<button type="button" class="stonetop-deathsdoor-postdeath-btn"
 			        data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.postDeathTabHint"}}">
-				<i class="fas fa-scale-unbalanced"></i>
+				<i class="fas fa-scale-unbalanced" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.deathsDoor.postDeathTab"}}
 			</button>
 			{{/if}}
@@ -75,13 +75,13 @@
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.recover.summary"}}}</p>
 			{{#if stonetop.recover.hint}}
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas {{stonetop.recover.hint.icon}}"></i>
+				<i class="fas {{stonetop.recover.hint.icon}}" aria-hidden="true"></i>
 				{{stonetop.recover.hint.text}}
 			</p>
 			{{/if}}
 			<button type="button" class="stonetop-recover-open-btn"
 				{{#unless stonetop.recover.canOpen}}disabled{{/unless}}>
-				<i class="fas fa-heart-circle-plus"></i>
+				<i class="fas fa-heart-circle-plus" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.recover.button"}}
 			</button>
 		</div>
@@ -91,18 +91,18 @@
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.levelUp.summary"}}}</p>
 			{{#if stonetop.levelUpOutOfPlay}}
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas fa-skull"></i>
+				<i class="fas fa-skull" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.levelUp.outOfPlayHint"}}
 			</p>
 			{{else}}{{#unless stonetop.canLevelUp}}
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas fa-lock"></i>
+				<i class="fas fa-lock" aria-hidden="true"></i>
 				{{{localize "stonetop.specialMoves.levelUp.lockedHint"}}}
 			</p>
 			{{/unless}}{{/if}}
 			<button type="button" class="stonetop-levelup-open-btn"
 				{{#unless stonetop.levelUpCanOpen}}disabled{{/unless}}>
-				<i class="fas fa-arrow-circle-up"></i>
+				<i class="fas fa-arrow-circle-up" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.levelUp.button"}}
 			</button>
 		</div>
@@ -112,13 +112,13 @@
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.convalesce.summary"}}}</p>
 			{{#if stonetop.convalesce.hint}}
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas {{stonetop.convalesce.hint.icon}}"></i>
+				<i class="fas {{stonetop.convalesce.hint.icon}}" aria-hidden="true"></i>
 				{{stonetop.convalesce.hint.text}}
 			</p>
 			{{/if}}
 			<button type="button" class="stonetop-convalesce-open-btn"
 				{{#unless stonetop.convalesce.canConvalesce}}disabled{{/unless}}>
-				<i class="fas fa-bed"></i>
+				<i class="fas fa-bed" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.convalesce.button"}}
 			</button>
 		</div>
@@ -130,7 +130,7 @@
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.bolster.summary"}}}</p>
 			{{#if stonetop.bolster.hint}}
 			<p class="stonetop-special-move-locked-hint">
-				<i class="fas fa-hourglass-half"></i>
+				<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 				{{stonetop.bolster.hint}}
 			</p>
 			{{/if}}
@@ -141,18 +141,18 @@
 			<div class="stonetop-bolster-held-actions">
 				<button type="button" class="stonetop-bolster-edit-btn"
 				        data-tooltip="{{localize "stonetop.specialMoves.bolster.editHint"}}">
-					<i class="fas fa-pen"></i>
+					<i class="fas fa-pencil" aria-hidden="true"></i>
 					{{localize "stonetop.specialMoves.bolster.editButton"}}
 				</button>
 				<button type="button" class="stonetop-bolster-drop-btn"
 				        data-tooltip="{{localize "stonetop.specialMoves.bolster.dropHint"}}">
-					<i class="fas fa-xmark"></i>
+					<i class="fas fa-xmark" aria-hidden="true"></i>
 					{{localize "stonetop.specialMoves.bolster.dropButton"}}
 				</button>
 			</div>
 			{{/if}}
 			<button type="button" class="stonetop-bolster-open-btn">
-				<i class="fas fa-hourglass-half"></i>
+				<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.bolster.button"}}
 			</button>
 		</div>
@@ -163,7 +163,7 @@
 			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.retire.title"}}</h3>
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.retire.summary"}}}</p>
 			<button type="button" class="stonetop-retire-open-btn">
-				<i class="fas fa-door-open"></i>
+				<i class="fas fa-door-open" aria-hidden="true"></i>
 				{{localize "stonetop.specialMoves.retire.button"}}
 			</button>
 		</div>

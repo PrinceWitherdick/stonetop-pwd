@@ -35,14 +35,14 @@
 	<button type="button" class="stonetop-inv-harvest" data-name="{{../name}}" data-formula="{{this.formula}}"
 	        data-roll="{{#if isRoll}}1{{else}}0{{/if}}"
 	        title="{{#if isRoll}}Roll {{this.formula}} uses of provisions{{else}}Take {{this.formula}} uses of provisions{{/if}}">
-		<i class="fas {{#if isRoll}}fa-dice-d6{{else}}fa-basket-shopping{{/if}}"></i>
+		<i class="fas {{#if isRoll}}fa-dice-d6{{else}}fa-basket-shopping{{/if}}" aria-hidden="true"></i>
 	</button>
 	{{/with}}{{/if}}
 	{{> "stonetop.inv-artifact" deletable=deletable}}
 	{{#if (and deletable @root.stonetop.editMode)}}
-	<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-times"></i></a>
+	<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 	{{/if}}
 	{{#if isAddedSpecial}}
-	<a class="stonetop-inv-remove-special" data-slug="{{this.slug}}" title="Remove special item"><i class="fas fa-times"></i></a>
+	<a class="stonetop-inv-remove-special" data-slug="{{this.slug}}" title="Remove special item"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 	{{/if}}
 </div>

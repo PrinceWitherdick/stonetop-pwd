@@ -3,7 +3,7 @@
   <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+      <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
         <div class="stonetop-guide-banner-sub">Let spring burst forth</div>
@@ -29,7 +29,7 @@
     {{#if showRoll}}
     <div class="stonetop-spring-roll-wrap">
       <button type="button" class="stonetop-spring-ask-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-comment-dots"></i> Ask the most hopeful to roll
+        <i class="fas fa-comment-dots" aria-hidden="true"></i> Ask the most hopeful to roll
       </button>
     </div>
     {{/if}}
@@ -68,7 +68,7 @@
     <div class="stonetop-spring-qa-wrap">
       {{#if (eq qa.kind "perPc")}}
         {{#if qa.empty}}
-        <p class="stonetop-spring-qa-empty"><i class="fas fa-info-circle"></i> {{qa.empty}}</p>
+        <p class="stonetop-spring-qa-empty"><i class="fas fa-circle-info" aria-hidden="true"></i> {{qa.empty}}</p>
         {{else}}
         <ul class="stonetop-spring-qa-list">
           {{#each qa.rows}}

@@ -10,8 +10,8 @@
 	{{#each rows}}
 	<div class="threat-list-row stonetop-field-btns" data-index="{{this.index}}">
 		<input type="text" class="threat-list-text" data-field="value" value="{{this.value}}" placeholder="{{../placeholder}}">
-		<button type="button" class="threat-list-remove" data-list="{{../key}}" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+		<button type="button" class="threat-list-remove" data-list="{{../key}}" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 	</div>
 	{{/each}}
-	<button type="button" class="threat-list-add" data-list="{{this.key}}"{{#if this.menu}} aria-haspopup="menu" aria-expanded="false"{{/if}}><i class="fas fa-plus"></i> {{this.addLabel}}</button>
+	<button type="button" class="threat-list-add" data-list="{{this.key}}"{{#if this.menu}} aria-haspopup="menu" aria-expanded="false"{{/if}}><i class="fas fa-plus" aria-hidden="true"></i> {{this.addLabel}}</button>
 </div>

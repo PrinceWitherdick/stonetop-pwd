@@ -3,10 +3,10 @@
       only real difference is the textarea below it. Reads `capture` + `currentPc` from
       the enclosing context. --}}
 <div class="stonetop-intros-capture-head">
-  <label class="stonetop-intros-capture-label"><i class="fas fa-feather"></i> {{#if capture.coEdit}}Writing with {{currentPc.name}}{{else}}Record for the Chronicle{{/if}}</label>
+  <label class="stonetop-intros-capture-label"><i class="fas fa-feather" aria-hidden="true"></i> {{#if capture.coEdit}}Writing with {{currentPc.name}}{{else}}Record for the Chronicle{{/if}}</label>
   <span class="stonetop-intros-save-status" data-state="{{capture.saveState}}" role="status" aria-live="polite">
-    <span class="stonetop-intros-save-idle"><i class="fas fa-cloud-arrow-up"></i> Autosaves</span>
-    <span class="stonetop-intros-save-saving"><i class="fas fa-arrows-rotate fa-spin"></i> Saving&hellip;</span>
-    <span class="stonetop-intros-save-saved"><i class="fas fa-circle-check"></i> Saved</span>
+    <span class="stonetop-intros-save-idle"><i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> Autosaves</span>
+    <span class="stonetop-intros-save-saving"><i class="fas fa-arrows-rotate fa-spin" aria-hidden="true"></i> Saving&hellip;</span>
+    <span class="stonetop-intros-save-saved"><i class="fas fa-circle-check" aria-hidden="true"></i> Saved</span>
   </span>
 </div>

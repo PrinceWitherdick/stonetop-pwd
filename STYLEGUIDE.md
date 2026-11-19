@@ -82,6 +82,7 @@ palette for free and a rule that spells a colour out follows none.
 | `--st-text-muted` | `#777` | Captions, hints |
 | `--st-text-faint` | `#999` | Disabled, empty states |
 | `--st-quiet-ink` | `slategrey` | The quiet slate label: a step title, a section caption |
+| `--st-slate-rule` | `slategrey` | Slate as an edge: an inline button's border, the tab rail's frame, a selected card's rim |
 | `--st-heading-ink`, `--st-danger-ink` | `#2f2a24`, `#a02020` | Dialog date headings; a destructive control's ink and rule |
 
 No other greys for text. `#666`, `#888`, `#aaa` and friends were folded into this ramp.
@@ -97,7 +98,8 @@ background: rgb(var(--st-paper-rgb) / 0.7);    /* a field's well */
 ```
 
 On paper `--st-ink-rgb` is `0 0 0` and `--st-paper-rgb` is `255 255 255`, so this is the same
-pixel; the dark pages swap them. Common strengths: fills 0.02–0.06, hairlines 0.08–0.15, firmer
+pixel; the dark pages swap them. A translucent **slate** (under a selected option, a lane, a pip)
+is `rgb(var(--st-slate-rgb) / a)` the same way. Common strengths: fills 0.02–0.06, hairlines 0.08–0.15, firmer
 rules 0.18–0.25. **Shadows stay literal black** and do not use the channels.
 
 ### The semantic families
@@ -157,6 +159,7 @@ or graphical mark 3:1.
 |---|---|---|
 | `--font-stonetop` | The reader's "Sheet Font": **Signika** (default), Libre Caslon Text, or IM Fell English | Everything: body, labels, buttons, fields |
 | `--font-avara` | Avara | Display only: the sheet's title and name, the steading's name, logos, a threat's name |
+| `--font-fell` | IM Fell English, then the sheet font | Labels on the prop cards only: a threat's type and doom, a hazard's advance, a site's foundation |
 
 Always write `font-family: var(--font-stonetop)`. Never name a face in a rule (the font picker's
 own preview options are the exception), and never use `--font-primary`, which Foundry redefines.
@@ -236,8 +239,9 @@ There are no spacing tokens. Use the scale the stylesheet already keeps:
 ### Stacking
 
 Foundry's ladder is window 100–9999, tooltip 9999, notification 99999. Inside a component use
-single digits. For something that must sit above every window use `--st-z-above-windows` (9998)
-rather than a new number.
+single digits. For something that must sit above every window use `--st-z-above-windows` (9998);
+for a hover pop-over opened from inside a window (a tooltip, a preview, an autocomplete list) use
+`--st-z-popover`. Never a four-digit number of your own.
 
 ### Motion
 
@@ -245,7 +249,7 @@ rather than a new number.
   `transition: background-color 0.15s, border-color 0.15s, color 0.15s`. Never `transition: all`
   and never a metric on a button — core's `transition: all 0.5s` on window buttons makes a resizing
   button flicker under the pointer.
-- Durations: **0.15s** for a colour change, **0.12s** for a hover reveal, `--st-popout-fade`
+- Durations, written in seconds: **0.15s** for a colour change, **0.12s** for a hover reveal, `--st-popout-fade`
   (250ms) for a pop-out tile, `--st-edit-reveal-delay` (reader's setting, default 1s) before an
   edit pencil fades in.
 - Every animation needs both exits: the `.stonetop-reduce-motion` setting class (which zeroes
@@ -346,7 +350,7 @@ Four skins. Pick one; do not restate its colours in a new rule.
 |---|---|---|---|
 | **Primary** (slate solid) | `.stonetop-cta`; `.stonetop-guide-btn--primary` in a guide's nav; any button in `.stonetop.dialog .dialog-buttons` | `--st-btn-primary-*`, weight 600, `--st-radius-sm`, `padding: 4px 14px`, min-height 32px | The one thing the window is for |
 | **Secondary** (paper outline) | `.stonetop-guide-nav button`, `.stonetop-cf-mini-btn`, `.stonetop-camp-inline-btn` | `1px solid var(--color-border-dark)`, fill `--stonetop-bg`, hover `--st-on-dark-hover` | Back, Cancel, a neutral action beside a primary |
-| **Inline** (slate outline, small) | `.stonetop-inline-btn` | transparent, slate border, `--st-quiet-ink`, `--st-fs-xs`, `padding: 2px 8px` | An action inside a card or row (Spend, Pay cost) |
+| **Inline** (slate outline, small) | `.stonetop-inline-btn` | transparent, `--st-slate-rule` border, `--st-quiet-ink`, `--st-fs-xs`, `padding: 2px 8px` | An action inside a card or row (Spend, Pay cost) |
 | **Add** (dashed) | `.steading-list-add` and siblings; `.stonetop-add-chip` for the pill form | dashed border, transparent | Adding an entry to a list |
 
 - **Destructive**: `.stonetop-dialog-btn--danger` on a dialog's confirm, `.stonetop-inline-btn--danger`
@@ -433,9 +437,9 @@ The glyph is `fa-pencil`.
 | Hover, on a paper button or row | `--st-on-dark-hover` / `--st-on-dark-raised` fallbacks, or a 6% ink wash |
 | Selected (one of a set: tab, filter, segment) | `.is-active` — slate fill, `--st-btn-primary-text` |
 | Chosen (an option you have taken) | `.is-selected` / `.is-checked` — the green family, or a slate border |
-| Disabled button | `opacity: 0.4; cursor: not-allowed`; a disabled primary also drops its slate fill |
-| Disabled check or mark | `opacity: 0.35` |
-| Focus | `outline: 2px solid var(--st-btn-primary-border); outline-offset: 2px` on `:focus-visible` (text fields keep the glow instead) |
+| Disabled control or option | `opacity: 0.4`, and `cursor: not-allowed` on a button; a disabled primary also drops its slate fill. A control that is locked but must still read keeps `opacity: 1`. |
+| Disabled check or mark | `opacity: 0.35` (the master skin's) |
+| Focus | `outline: 2px solid var(--st-btn-primary-border); outline-offset: 2px` on `:focus-visible` (text fields keep the glow instead). Never the primary *fill* token: it is darker than the page on Lamplit, and the ring disappears. An inset ring (`outline-offset: -2px`) is right inside a container that clips. |
 
 ---
 
@@ -606,7 +610,8 @@ What that means for a new component:
 | Test | Holds |
 |---|---|
 | `font-floor` | No text under 0.95× body; exemptions by exact selector |
-| `token-literals` | Washes on the ink channel; rem sizes scaled; 3/4/6px radii and bare slate on tokens |
+| `token-literals` | Washes on the ink and slate channels; rem sizes scaled; radii, slate edges and pop-over rungs on tokens; one disabled opacity; focus rings the dark pages can see |
+| `templates/icon-conventions` | `fas`, current glyph names, the pencil for edit, `aria-hidden` on a bare icon |
 | `dark-mode` | Lamplit and Slate contrast; no near-black ink or white well left for the dark page; lifts have fallbacks |
 | `high-contrast` | 7:1 inks; block sits last; no bare `slategrey` ink or fill; core names on window roots |
 | `past-death-inks` | Black-paper sheets re-declare the inks they need |
@@ -624,75 +629,52 @@ than from a comment, exempt by exact selector, and include a check that the scan
 
 ## 14. Known gaps
 
-From the audit of 2026-11-19 (system 1.8.5). Each is a place the stylesheet does not yet follow
-this guide. They are listed rather than fixed because fixing them changes a pixel or needs a design
-decision. Counts are approximate; delete an entry when it is done.
+What is left from the audit of 2026-11-19 (system 1.8.5), after two passes of fixes. Each is a
+place the system does not yet follow this guide, left because it is a refactor that wants checking
+in a live world, or a choice between two looks that is a design call. Counts are approximate;
+delete an entry when it is done.
 
 **Colour**
 
-1. **Slate borders are still literal** — about 57 `border: … slategrey` (including
-   `.stonetop-inline-btn` and the tab rail). They need a rule token of their own
-   (`--st-slate-rule`), then the bare-slate guard in `high-contrast.test.js` can cover borders.
-2. **Slate washes are spelled three ways** — `rgba(100, 116, 139, a)` ×44 (a bluer slate,
-   `#64748b`; mostly character creation and the people gallery), `rgba(112, 128, 144, a)` ×12 and
-   `rgba(106, 120, 128, a)` ×6, beside the tokened `--st-slate-hover-bg`. None follow the dark
-   pages, where hover washes are meant to be bone.
-3. **Selected has no single fill** — `.is-selected` is green in one place, slate in another, gold
-   in a third.
-4. **Two off-family reds** — `.stonetop-pdi-remove--danger` (solid `#a02020`, white ink) and
-   `.stonetop-season-btn--warn` (hand-mixed `rgba(140, 0, 0, 0.45)`).
-5. **The warm hover** (`--st-warm-hover-bg`) is documented as retired from hovers but five rules
-   still hover with it.
-6. **Four washes kept as literal black** on grounds that don't turn with the page (journal link
-   hovers, a picture well, the journey's no-map panel). Listed in `token-literals.test.js`.
+1. **Selected has no single fill.** `.is-selected` is green in one window, a slate rim in another
+   and gold in a third. Section 7 describes both green and slate as allowed; choosing one means
+   repainting character creation or the foundry-style forms.
+2. **Three hand-mixed reds** remain as borders (`rgba(140, 0, 0, 0.35–0.4)`) beside the
+   `--st-red-*` family.
+3. **`--st-slate-rule` and `--st-slate-rgb` are not re-pointed by any palette.** They render as
+   they always did. On Lamplit and Slate the hover wash token goes to bone while these stay slate;
+   whether they should follow is a look to judge on screen, not in a diff.
+4. **Four washes are literal black on purpose**, on grounds that don't turn with the page. Listed
+   in `token-literals.test.js`.
 
 **Type**
 
-7. **Threat, site and hazard cards name `"IM Fell English"` directly** for their labels (five
-   rules) rather than through a token.
-8. **The classic tab strip and chat titles use core's `--font-size-16`**, which does not follow
-   the Sheet Text Size.
-
-**Shape, stacking, motion**
-
-9. **Off-scale radii** — `5px` in eight rules (segmented picker, tab-rail item, wound builder,
-   threat editor), which is neither `--st-radius` nor `--st-radius-lg`.
-10. **`--st-radius-pill` is read in three places and never declared**, with fallbacks that disagree
-    (`999px` twice, `20px` once).
-11. **Six pop-overs use `z-index: 10000`** and one `9999`, above the named
-    `--st-z-above-windows` rung and level with or above core's tooltips.
-12. **Quick transitions use four spellings** — `0.15s` ×133, `0.12s` ×77, `120ms` ×29, `0.1s` ×36.
-13. **Three animations have no `prefers-reduced-motion` rule** (`steading-section-toggle-fade`,
-    `stonetop-arcana-pop-in`, `stonetop-people-preview-in`); only the Reduce Motion setting stops
-    them. The ~190 colour transitions are likewise covered by the setting alone.
+5. **The classic tab strip sizes its labels from core's `--font-size-16`** inside a container-fit
+   `clamp()`, so it does not follow the Sheet Text Size. Scaling it risks overflowing the strip.
 
 **Controls**
 
-14. **The primary fill is restated in roughly 45 per-window rules** instead of wearing
-    `.stonetop-cta`, with small differences in padding and radius.
-15. **The dashed add button has two skins** — light grey (`--color-border-light`) on the sheets,
-    slate (`--st-btn-primary-border`) in the foundry-style forms, threat lists and wound builder.
-16. **Disabled opacity has nine values** across 53 rules (0.3–0.65); cursor is `default` in 37 and
-    `not-allowed` in 14.
-17. **Focus rings vary** — 2px solid in three different slate tokens, offsets of 2px, 1px and -2px.
-18. **The field "well" is written out three times** (`.stonetop-themed`, `.stonetop-cf-input`, the
-    struggle window).
-19. **No shared class for a quiet icon-only button**; five windows each draw their own.
+6. **The primary fill is restated in roughly 45 per-window rules** instead of wearing
+   `.stonetop-cta`, with small differences in padding and radius. Folding them in changes each
+   button's box and needs every one looked at.
+7. **The field "well" is written out three times** (`.stonetop-themed`, `.stonetop-cf-input`, the
+   struggle window).
+8. **No shared class for a quiet icon-only button**; five windows each draw their own.
+9. **Focus-ring offsets vary** (2px, 1px, -2px). The colour is one token now; the offsets depend
+   on each control's surroundings.
 
 **Markup**
 
-20. **Icon class style is mixed** — `fas` ×1100, `fa-solid` ×80 (fight tab, settlement sheet, time
-    banner).
-21. **Edit has two glyphs** — `fa-pencil` on the 19 hover pencils (`.stonetop-section-edit`) and
-    `fa-pen` on some 24 other edit controls (wounds, plans, threats, sites, hazards). A handful of
-    v5 aliases remain (`fa-times` ×39, `fa-edit`, `fa-save`, `fa-undo`, `fa-info-circle`,
-    `fa-question-circle`). `fa-dice-d20` appears 24 times in a d6 game.
-22. **About two thirds of template icons lack `aria-hidden="true"`** (275 of 813 have it), and half
-    of the icon-only buttons have no `aria-label`.
-23. **Tooltips are split** — `data-tooltip` ×436, native `title` ×250. Native titles ignore the
-    palette and the text size.
+10. **Icons built in JS** follow the template rules only by habit: about 300 `<i>` strings in
+    `module/` have no `aria-hidden`, and `fa-solid` remains where a class string is handed to a
+    Foundry API (header controls, context menus), which is core's own spelling.
+11. **Half of the icon-only buttons have no `aria-label`.**
+12. **Tooltips are split** — `data-tooltip` ×436, native `title` ×250 in templates, and more in
+    JS, some of which code updates by writing `.title`. Native titles ignore the palette and the
+    text size. Converting needs the JS that sets them moved over in the same change.
 
 **Naming**
 
-24. **Legacy prefixes** — `cm-`, `wd-`, `ct-`, `asm-`, `st-treasure-`, and BEM `threat-card__edge`
-    style names in the threat, site, hazard, monster-builder and wound-builder blocks.
+13. **Legacy prefixes** — `cm-`, `wd-`, `ct-`, `asm-`, `st-treasure-`, and BEM
+    `threat-card__edge` style names in the threat, site, hazard, monster-builder and wound-builder
+    blocks. Renaming them touches templates, JS and tests for no visible change.

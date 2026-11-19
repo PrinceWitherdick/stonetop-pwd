@@ -2218,7 +2218,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			buttons.unshift({
 				label:   game.i18n.localize("stonetop.onboarding.saveButton"),
 				class:   "stonetop-onboarding-save-header",
-				icon:    "fas fa-save",
+				icon:    "fas fa-floppy-disk",
 				onclick: () => this._saveProgress(),
 			});
 		}

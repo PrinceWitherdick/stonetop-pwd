@@ -121,7 +121,7 @@ async function hazardTargets(page, kind, d) {
 		buttonLabel: localize(`${KEY}.${death ? "pickDeath" : "pickRoll"}`),
 		formatLabel: () => localize(`${KEY}.${death ? "pickDeath" : "pickRoll"}`),
 		formatManyLabel: count => format(`${KEY}.${death ? "pickDeathMany" : "pickRollMany"}`, { count }),
-		icon: death ? "fa-skull" : "fa-dice-d20",
+		icon: death ? "fa-skull" : "fa-dice-d6",
 		multiple: true,
 		selected: [],
 	});

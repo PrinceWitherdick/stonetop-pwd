@@ -21,6 +21,11 @@ import { readCss } from "../fakes/css.js";
 // Every one of the conversions rendered identically on paper at the default size, which is why they
 // could be made in one pass, and why nothing but a guard will keep them made.
 //
+// A SECOND PASS, the same day, took the guide's own recommendations for what the first had only
+// listed, and the blocks from "a slate edge" down hold those: slate borders and slate washes on
+// their tokens, pop-overs on one named rung, a focus ring in a colour the dark pages can see, one
+// opacity for a disabled control, and the three quick durations down to two.
+//
 // WHAT MAY STAY A LITERAL is listed by exact selector, with the reason. Never by pattern.
 
 const CSS = readCss();
@@ -104,5 +109,69 @@ describe("the slate on a native control", () => {
 		const bare = PAPER.filter(([, body]) => values(body, "background(?:-image)?")
 			.some(v => /gradient\([^;]*(?<![-\w])slategr[ae]y/.test(v.replace(/var\([^()]*\)/g, ""))));
 		expect(bare.map(([sel]) => sel)).toEqual([]);
+	});
+});
+
+describe("a slate edge", () => {
+	// The half of the bare-slate guard that tests/styles/high-contrast.test.js said it could not
+	// yet hold: 57 borders were literal and "want a rule token of their own". They have it.
+	it("reads --st-slate-rule", () => {
+		const bare = PAPER.filter(([, body]) => values(body, "(?:border|outline)[a-z-]*")
+			.some(v => /(?<![-\w])slategr[ae]y(?![-\w])/.test(v.replace(/var\([^()]*\)/g, ""))));
+		expect(bare.map(([sel]) => sel)).toEqual([]);
+	});
+
+	it("is slategrey still, so no border moved", () => {
+		expect(CSS).toMatch(/--st-slate-rule:\s*slategrey;/);
+	});
+});
+
+describe("a slate wash", () => {
+	// Three spellings of one colour (100/116/139, 112/128/144, 106/120/128) across sixty rules.
+	const SLATE = /rgba?\(\s*(?:100[\s,]+116[\s,]+139|112[\s,]+128[\s,]+144|106[\s,]+120[\s,]+128)\s*[,/]/;
+	it("is a wash of the slate channel", () => {
+		const bare = PAPER.filter(([, body]) => SLATE.test(body.replace(/--[a-z0-9-]+\s*:[^;]*;/g, "")));
+		expect(bare.map(([sel]) => sel)).toEqual([]);
+	});
+
+	it("has one channel to read", () => {
+		expect(CSS).toMatch(/--st-slate-rgb:\s*\d+ \d+ \d+;/);
+	});
+});
+
+describe("a pop-over's rung", () => {
+	it("is --st-z-popover, not a number of its own", () => {
+		const own = PAPER.flatMap(([sel, body]) => values(body, "z-index").filter(v => /^\d{4,}$/.test(v)).map(v => `${sel} { z-index: ${v} }`));
+		expect(own).toEqual([]);
+	});
+});
+
+describe("a focus ring", () => {
+	// --st-btn-primary-bg is near-black on the dark pages, darker than the page itself, so a ring
+	// drawn in it was a ring nobody could see. The border token is the one that stays an edge.
+	it("is never drawn in the primary FILL", () => {
+		const lost = ALL.filter(([sel, body]) => /:focus/.test(sel)
+			&& values(body, "outline").some(v => /var\(--st-btn-primary-bg\s*[,)]/.test(v)));
+		expect(lost.map(([sel]) => sel)).toEqual([]);
+	});
+});
+
+describe("a disabled control", () => {
+	// Nine opacities across fifty rules. One now, and the checks' own 0.35 (the master skin's).
+	// `opacity: 1` is a control that is locked but must still READ, and is left alone.
+	const CHECKS = /stonetop-check:disabled|stonetop-inv-diamond:disabled/;
+	it("is dimmed to 0.4", () => {
+		const odd = PAPER.filter(([sel]) => /:disabled|\[disabled\]|\.is-disabled/.test(sel) && !CHECKS.test(sel))
+			.flatMap(([sel, body]) => values(body, "opacity").filter(v => !/^(0\.4|1|0)$/.test(v)).map(v => `${sel} { opacity: ${v} }`));
+		expect(odd).toEqual([]);
+	});
+});
+
+describe("a quick transition", () => {
+	it("is 0.15s or 0.12s, written in seconds", () => {
+		const odd = ALL.flatMap(([sel, body]) => values(body, "transition(?:-duration)?")
+			.filter(v => /\b\d+ms\b/.test(v.replace(/var\([^()]*\)/g, "")) && !/\b(?:250|200)ms\b/.test(v) || /(?<![\d.])0?\.1s\b/.test(v))
+			.map(v => `${sel} { transition: ${v} }`));
+		expect(odd).toEqual([]);
 	});
 });
