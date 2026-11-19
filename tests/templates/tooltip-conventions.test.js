@@ -14,12 +14,11 @@ import { openingTags, templateSources } from "../fakes/hbs.js";
 //
 // CONVERTED A WINDOW AT A TIME, because a tooltip that code rewrites has to be moved in the same
 // change as the code that rewrites it (the fold caret's, the header's edit switch). The character
-// sheet and every partial it draws went first, 2026-11-19. PENDING is what is left, by exact
+// sheet and every partial it draws went first, 2026-11-19, the NPC and monster sheets after it.
+// PENDING is what is left, by exact
 // path: take a template off it when its titles are gone, and nothing new may be added to it.
 
 const PENDING = new Set([
-	"templates/actor/monster.hbs",
-	"templates/actor/npc.hbs",
 	"templates/actor/partials/bestiary-line-list.hbs",
 	"templates/actor/partials/steading-tab-neighbors.hbs",
 	"templates/actor/partials/steading-tab-overview.hbs",

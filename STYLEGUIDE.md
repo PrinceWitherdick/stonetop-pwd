@@ -674,11 +674,10 @@ delete an entry when it is done.
 
 **Markup**
 
-10. **Native `title` tooltips remain in 23 templates** (92 of them: the NPC and monster sheets,
-    the bestiary pages, Death's Door, the people gallery, the steading's Neighbors tab and a dozen
-    dialogs), and in a handful of markup strings and `.title =` writes in JS (the attack flow's
-    19, the ledger window, the book reader). The character sheet and every partial it draws are
-    done. The list is `PENDING` in `tests/templates/tooltip-conventions.test.js`; convert a window
+10. **Native `title` tooltips remain in 21 templates** (69 of them: the bestiary pages, Death's
+    Door, the people gallery, the steading's Neighbors tab and a dozen dialogs), and in a handful
+    of markup strings and `.title =` writes in JS (the attack flow's 19, the ledger window, the
+    book reader). The character, NPC and monster sheets and every partial they draw are done. The list is `PENDING` in `tests/templates/tooltip-conventions.test.js`; convert a window
     and the code that rewrites its tooltips in one change, then take it off the list.
 11. **About 195 `data-tooltip` attributes print a value from data**, which core draws as HTML.
     Most print strings the system builds. Any that can carry text a player typed should be

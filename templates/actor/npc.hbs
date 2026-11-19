@@ -12,18 +12,18 @@
 			      could only ever reach the raw file browser. --}}
 			<span class="stonetop-portrait-slot">
 				{{#if stonetop.editMode}}
-				<span class="stonetop-portrait stonetop-npc-portrait stonetop-portrait-box" title="{{actor.name}}">
+				<span class="stonetop-portrait stonetop-npc-portrait stonetop-portrait-box" data-tooltip-text="{{actor.name}}">
 					<img class="stonetop-npc-portrait-img" src="{{stonetop.editImg}}"
 					     alt="{{actor.name}}"{{#if stonetop.portraitImgStyle}} style="{{stonetop.portraitImgStyle}}"{{/if}}>
 				</span>
 				{{else}}
 				{{#if stonetop.hasPortrait}}
-				<span class="stonetop-portrait stonetop-npc-portrait stonetop-portrait-box" title="{{actor.name}}">
+				<span class="stonetop-portrait stonetop-npc-portrait stonetop-portrait-box" data-tooltip-text="{{actor.name}}">
 					<img class="stonetop-npc-portrait-img" src="{{stonetop.portraitImg}}"
 					     alt="{{actor.name}}"{{#if stonetop.portraitImgStyle}} style="{{stonetop.portraitImgStyle}}"{{/if}}>
 				</span>
 				{{else}}
-				<span class="stonetop-portrait stonetop-npc-portrait-placeholder" title="{{actor.name}}">
+				<span class="stonetop-portrait stonetop-npc-portrait-placeholder" data-tooltip-text="{{actor.name}}">
 					<i class="fas fa-user" aria-hidden="true"></i>
 				</span>
 				{{/if}}
@@ -41,7 +41,7 @@
 						<input class="input--title stonetop-name-field" name="name" type="text"
 						       value="{{actor.name}}" placeholder='{{localize "stonetop.npc.namePlaceholder"}}'>
 						<select class="stonetop-npc-status-select" name="system.status"
-						        title='{{localize "stonetop.npc.status"}}' aria-label='{{localize "stonetop.npc.status"}}'>
+						        data-tooltip='{{localize "stonetop.npc.status"}}' aria-label='{{localize "stonetop.npc.status"}}'>
 							{{#each stonetop.statusOptions}}
 							<option value="{{this.value}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>
 							{{/each}}
@@ -227,10 +227,10 @@
 					       value="{{system.attributes.damage.value}}" placeholder="knife 1d6 (hand)">
 					<input class="stonetop-npc-stat-input stonetop-npc-damage-formula-input" type="text"
 					       name="system.attributes.damage.rollFormula" value="{{system.attributes.damage.rollFormula}}"
-					       title='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
+					       data-tooltip='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
 					{{else}}
 					{{#if system.attributes.damage.rollFormula}}
-					<a class="stonetop-npc-damage-roll" title="Roll damage ({{system.attributes.damage.rollFormula}})" aria-label="Roll damage ({{system.attributes.damage.rollFormula}})">
+					<a class="stonetop-npc-damage-roll" data-tooltip-text="Roll damage ({{system.attributes.damage.rollFormula}})" aria-label="Roll damage ({{system.attributes.damage.rollFormula}})">
 						<i class="fas fa-dice-d6" aria-hidden="true"></i>
 					</a>
 					{{/if}}
@@ -290,8 +290,8 @@
 									       placeholder='{{localize "stonetop.npc.moveNamePlaceholder"}}'>
 									<input class="stonetop-npc-move-formula-input stonetop-npc-move-field" type="text"
 									       data-field="system.rollFormula" value="{{system.rollFormula}}"
-									       title='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
-									<a class="stonetop-npc-delete-move" title='{{localize "stonetop.npc.deleteMove"}}' aria-label='{{localize "stonetop.npc.deleteMove"}}'>
+									       data-tooltip='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
+									<a class="stonetop-npc-delete-move" data-tooltip='{{localize "stonetop.npc.deleteMove"}}' aria-label='{{localize "stonetop.npc.deleteMove"}}'>
 										<i class="fas fa-trash" aria-hidden="true"></i>
 									</a>
 								</div>
@@ -300,7 +300,7 @@
 								{{else}}
 								<div class="stonetop-npc-move-head">
 									{{#if system.rollFormula}}
-									<a class="stonetop-npc-move-roll" title="Roll {{system.rollFormula}}" aria-label="Roll {{system.rollFormula}}">
+									<a class="stonetop-npc-move-roll" data-tooltip-text="Roll {{system.rollFormula}}" aria-label="Roll {{system.rollFormula}}">
 										<i class="fas fa-dice-d6" aria-hidden="true"></i>
 									</a>
 									{{/if}}
