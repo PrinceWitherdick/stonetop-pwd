@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { _ensureHotbarMacro } from "../../module/hooks/Ready.js";
+import { _ensureHotbarMacro, _ensureSystemMacros } from "../../module/hooks/Ready.js";
+import { SYSTEM_ID } from "../../module/system-id.js";
 
 // The GM's macro pass finds each system macro by name AND command, the same match the re-snap and
 // the player pass use. Found by name alone, a GM's own macro that happened to be called "Die of
@@ -37,16 +38,24 @@ afterEach(() => {
 });
 
 function world(macros) {
-	const list = [...macros];
+	const list = Object.assign([...macros], { get: id => list.find(m => m.id === id) });
 	const user = {
 		hotbar: {},
-		async assignHotbarMacro(m, slot) { user.hotbar[slot] = m.id; },
+		toObject() { return { hotbar: { ...user.hotbar } }; },
+		async update() {},
+		async assignHotbarMacro(m, slot) { if (m) user.hotbar[slot] = m.id; else delete user.hotbar[slot]; },
 	};
 	let n = 0;
 	global.Macro = {
 		create: vi.fn(async data => { const doc = macroDoc(`new${++n}`, data); list.push(doc); return doc; }),
+		deleteDocuments: vi.fn(async () => {}),
 	};
-	global.game = { ...priorGame, macros: list, user };
+	// Past every re-snap, and no compendium or script file to seed the two directory macros from.
+	const stored = { systemHotbarLayoutVersion: 999 };
+	global.game = {
+		...priorGame, macros: list, user, folders: [], packs: { get: () => undefined },
+		settings: { get: (scope, key) => (scope === SYSTEM_ID ? stored[key] : undefined), set: async () => {} },
+	};
 	return list;
 }
 
@@ -73,5 +82,29 @@ describe("_ensureHotbarMacro", () => {
 		expect(ours.ownership.default).toBe(2);
 		expect(global.Macro.create).not.toHaveBeenCalled();
 		expect(global.game.user.hotbar).toEqual({ 4: "ours" });
+	});
+});
+
+describe("_ensureSystemMacros", () => {
+	let priorFetch;
+	beforeEach(() => { priorFetch = global.fetch; global.fetch = vi.fn(async () => ({ ok: false })); });
+	afterEach(() => { global.fetch = priorFetch; });
+
+	// One macro that will not create must not leave every macro after it off the bar.
+	it("places the rest when one macro fails to create", async () => {
+		world([]);
+		const create = global.Macro.create;
+		global.Macro.create = vi.fn(async data => {
+			if (data.name === "Run an Expedition") throw new Error("create refused");
+			return create(data);
+		});
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		await _ensureSystemMacros();
+		spy.mockRestore();
+
+		const names = global.game.macros.map(m => m.name);
+		expect(names).not.toContain("Run an Expedition");
+		expect(names).toEqual(expect.arrayContaining(["Welcome to Stonetop", "Die of Fate", "The Chronicle", "End of Session"]));
+		expect(Object.values(global.game.user.hotbar)).toHaveLength(names.length);
 	});
 });
