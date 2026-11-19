@@ -54,7 +54,7 @@ import {readCurrentSeason, recordCurrentSeason, currentSeasonView, readCurrentYe
 import {readCurrentWeather, currentWeatherView} from "../../seasons/current-weather.js";
 import {openSeasonPicker} from "../../seasons/season-picker.js";
 import {SEASONAL_GAINS} from "../../dialogs/spring-burst-data.js";
-import {applySeasonalGains, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
+import {applySeasonalGains, MECHANICAL_GAIN_KEYS, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
 import {contentGuidelinesView, plansView, wireSteadingNotesTab} from "./steading-plans.js";
 import {editSteadingPlan} from "./SteadingPlanDialog.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
@@ -1847,8 +1847,8 @@ export function createStonetopSteadingSheetClass(Base) {
 		}
 
 		// Read the season dialog's ticked gains + notes off the DOM (the Chronicle step's
-		// "Record the season" button), apply the two gains with a mechanical effect
-		// (Population boom, Unexpected bounty), record this season into the chosen `year`'s
+		// "Record the season" button), apply the three gains with a mechanical effect
+		// (Population boom, Unexpected bounty, Tor's blessing), record this season into the chosen `year`'s
 		// page of the "Seasons Change" Chronicle journal (with the net Surplus change since the
 		// dialog opened), then open it. Completing a Winter advances the steading's current
 		// year so the next picker defaults to the new one. GM-only.
@@ -2026,10 +2026,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			</div>`;
 
 			// Seasonal gains as a checklist the GM ticks (recorded into the Seasons Change
-			// journal by the Chronicle step's "Record the season"). The two with a mechanical
-			// effect — Population boom (+1 Population) and Unexpected bounty (+1 Surplus) — are
-			// applied by that same button when ticked rather than via their own buttons; it
-			// relabels to say so. Gain copy comes from the shared SEASONAL_GAINS so the dialog
+			// journal by the Chronicle step's "Record the season"). The three with a mechanical
+			// effect (seasonal-gains.js#MECHANICAL_GAIN_KEYS: Population boom, Unexpected bounty,
+			// Tor's blessing) are applied by that same button when ticked rather than via their
+			// own buttons; it relabels to say so. Gain copy comes from the shared SEASONAL_GAINS so the dialog
 			// and Chronicle stay in lockstep.
 			const gainsRef = `<div class="stonetop-season-gains">
 				<p class="stonetop-season-gains-label">Seasonal gains <span class="stonetop-season-gains-hint">(tick what they pick)</span></p>
@@ -2775,14 +2775,16 @@ export function createStonetopSteadingSheetClass(Base) {
 					}
 
 					// The close-out, on the Chronicle step: applies any ticked mechanical gains
-					// (Population boom, Unexpected bounty), files the Chronicle page, stamps the
-					// season on the clock, then closes. Relabelled to name the gains it is about
-					// to write, so the click says what it does.
+					// (MECHANICAL_GAIN_KEYS: Population boom, Unexpected bounty, Tor's blessing),
+					// files the Chronicle page, stamps the season on the clock, then closes.
+					// Relabelled to name the gains it is about to write, so the click says what it
+					// does. Off the same list seasonalGainChanges applies, so a ticked Tor's
+					// blessing (written by this click too) relabels it as the other two do.
 					const recordBtn = root.querySelector("[data-action='record-season']");
 					const refreshRecordLabel = () => {
 						if (!recordBtn) return;
-						const willApply = !!root.querySelector(".stonetop-season-gain-check[data-gain-key='population']:checked")
-							|| !!root.querySelector(".stonetop-season-gain-check[data-gain-key='bounty']:checked");
+						const willApply = MECHANICAL_GAIN_KEYS.some(key =>
+							root.querySelector(`.stonetop-season-gain-check[data-gain-key='${key}']:checked`));
 						recordBtn.innerHTML = `<i class="fas fa-book"></i> ${willApply
 							? "Apply those gains, record the season &amp; close"
 							: "Record the season &amp; close"}`;

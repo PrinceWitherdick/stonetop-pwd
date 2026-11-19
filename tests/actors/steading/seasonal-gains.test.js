@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { StonetopSteading } from "../../../module/actors/steading/StonetopSteading.js";
-import { seasonalGainChanges, applySeasonalGains, SEASONAL_GAINS_MOVE } from "../../../module/actors/steading/seasonal-gains.js";
+import { seasonalGainChanges, applySeasonalGains, SEASONAL_GAINS_MOVE, MECHANICAL_GAIN_KEYS } from "../../../module/actors/steading/seasonal-gains.js";
+import { SEASONAL_GAINS } from "../../../module/dialogs/spring-burst-data.js";
 import { applySpringBurstGains, SPRING_BURST_GAINS_STEP } from "../../../module/dialogs/SpringBurstDialog.js";
 import { CURRENT_SEASON_KEY } from "../../../module/seasons/current-season.js";
 import { STONETOP_SCOPE } from "../../../module/actors/character/StonetopFlags.js";
@@ -71,6 +72,29 @@ describe("the seasonal gains' changes", () => {
 		expect(gains.system).toEqual({});
 		expect(gains.flags).toEqual({});
 		expect(gains.surplus).toBe(2);
+	});
+});
+
+// The Seasons Change window's close-out says "Apply those gains" off MECHANICAL_GAIN_KEYS. It used
+// to ask only Population boom and Unexpected bounty, though Tor's blessing is written by the same
+// click, so the list has to be exactly the gains that change something.
+describe("the gains that change the sheet", () => {
+	it("are exactly the ones seasonalGainChanges writes anything for", () => {
+		const writes = key => {
+			const gains = seasonalGainChanges(steadingActor({ population: 0, surplus: 2 }).typedActor, [key], { year: 1, seasonId: "spring" });
+			return Object.keys(gains.system).length + Object.keys(gains.flags).length > 0;
+		};
+		expect(new Set(SEASONAL_GAINS.map(g => g.key).filter(writes))).toEqual(new Set(MECHANICAL_GAIN_KEYS));
+		expect(MECHANICAL_GAIN_KEYS).toContain("tor");
+	});
+
+	it("are what relabels the window's close-out", () => {
+		const sheet = readRepo("module/actors/steading/StonetopSteadingSheet.js");
+		const at = sheet.indexOf("const refreshRecordLabel = () => {");
+		expect(at).toBeGreaterThan(-1);
+		const body = sheet.slice(at, sheet.indexOf("};", at));
+		expect(body).toContain("MECHANICAL_GAIN_KEYS.some(");
+		expect(body).not.toContain("data-gain-key='population']");
 	});
 });
 
