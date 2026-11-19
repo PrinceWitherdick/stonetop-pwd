@@ -191,6 +191,9 @@ export function refreshUpkeepAfford({ payBtn, shortNote }, affordable) {
 	if (shortNote) shortNote.hidden = affordable;
 }
 
+/** The Well-Trained Militia's tactics note's lead-in, by whether the drills can be paid for now. */
+export const militiaLead = affordable => (affordable ? "Or skip" : "No Surplus for the drills");
+
 /** Any improvement question (improvementQuestions) as its control: a tick, a pick, or a count. */
 export function improvementQuestionHtml(q) {
 	if (q.type === "select") {
@@ -2163,13 +2166,15 @@ export function createStonetopSteadingSheetClass(Base) {
 					icon: "fa-bullseye",
 					name: "Well-Trained Militia",
 					sentence: "wants <strong>1 Surplus</strong> and a week of drills this summer, or it loses its training in 1 tactic.",
-					body: `${surplus >= 1 ? `<div class="stonetop-season-actions">
-						<button class="stonetop-season-btn" data-action="drill-militia">
+					// Drawn but hidden when short, as the upkeeps' Pay is: Surplus found in this same
+					// window offers the drill without a reopen (the militia wiring's live refresher).
+					body: `<div class="stonetop-season-actions"${surplus >= 1 ? "" : " hidden"}>
+						<button class="stonetop-season-btn" data-action="drill-militia"${surplus >= 1 ? "" : " hidden"}>
 							<i class="fas fa-bullseye"></i> Drill this summer (1 Surplus)
 						</button>
-					</div>` : ""}
+					</div>
 					${tactics.length
-						? `<p class="stonetop-season-note"><em>${surplus >= 1 ? "Or skip" : "No Surplus for the drills"}: the militia forgets one of these. Click the one it loses.</em></p>
+						? `<p class="stonetop-season-note"><em><span data-militia-lead>${militiaLead(surplus >= 1)}</span>: the militia forgets one of these. Click the one it loses.</em></p>
 							<ol class="stonetop-disaster-choices">
 								${tactics.map(t => `<li class="stonetop-disaster-choice" data-tactic="${t.index}">
 									<span class="stonetop-disaster-choice-label">${_esc(String(t.label).split(":")[0])}</span>
@@ -3019,26 +3024,49 @@ export function createStonetopSteadingSheetClass(Base) {
 					// second tactic after paying.
 					const drillMilitiaBtn = root.querySelector("[data-action='drill-militia']");
 					const tacticEls = Array.from(root.querySelectorAll("[data-tactic]"));
+					// True from a click until its write lands or is given back, as an upkeep's is, so a
+					// stats update mid-write cannot hand the drill back before the step is closed.
+					let militiaBusy = false;
 					const settleMilitia = () => {
+						militiaBusy = true;
 						if (drillMilitiaBtn) drillMilitiaBtn.disabled = true;
 						tacticEls.forEach(el => el.classList.add("is-disabled"));
 					};
 					// Asked of the STEADING rather than of the button, for the watch's reason: with
-					// no Surplus the drill button is never rendered at all.
+					// no Surplus the drill button is hidden, and its state says nothing about whether
+					// the summer is done.
 					if (this._stonetopSteading.seasonStepApplied(MILITIA_SEASON_STEP, year, seasonId)) {
 						this._disableIfSeasonStepDone(drillMilitiaBtn, MILITIA_SEASON_STEP, year, seasonId);
 						settleMilitia();
 					}
+
+					// The window is drawn off the Surplus it opened with; a harvest or a yield taken here
+					// since may have raised it (or a spend lowered it), so whether the drill is offered
+					// follows the LIVE figure, while the summer's question is still open and nothing is
+					// in flight. The tactics note's lead-in follows it too.
+					const drillActions = drillMilitiaBtn?.closest(".stonetop-season-actions") ?? null;
+					const militiaLeadEl = root.querySelector("[data-militia-lead]");
+					liveRefreshers.push(() => {
+						if (!drillMilitiaBtn || militiaBusy
+							|| this._stonetopSteading.seasonStepApplied(MILITIA_SEASON_STEP, year, seasonId)) return;
+						const affordable = this._stonetopSteading.getStatValue("surplus") >= 1;
+						refreshUpkeepAfford({ payBtn: drillMilitiaBtn, shortNote: null }, affordable);
+						if (drillActions) drillActions.hidden = !affordable;
+						if (militiaLeadEl) militiaLeadEl.textContent = militiaLead(affordable);
+					});
+
 					this._wireSurplusUpkeep(drillMilitiaBtn, {
 						step: MILITIA_SEASON_STEP, year, seasonId, seasonsMove,
 						lock: settleMilitia,
 						// A militia that cannot be paid for must still be able to forget a tactic,
 						// so the drill button stays down and only the tactics come back.
 						shortUnlock: () => {
+							militiaBusy = false;
 							drillMilitiaBtn.disabled = true;
 							tacticEls.forEach(el => el.classList.remove("is-disabled"));
 						},
 						unlock: () => {
+							militiaBusy = false;
 							drillMilitiaBtn.disabled = false;
 							tacticEls.forEach(el => el.classList.remove("is-disabled"));
 						},
@@ -3059,6 +3087,7 @@ export function createStonetopSteadingSheetClass(Base) {
 								this.render(false);
 								if (!result?.summary?.length) ui.notifications.info("The militia forgets a tactic.");
 							} catch (err) {
+								militiaBusy = false;
 								tacticEls.forEach(t => t.classList.remove("is-disabled"));
 								if (drillMilitiaBtn) drillMilitiaBtn.disabled = false;
 								throw err;

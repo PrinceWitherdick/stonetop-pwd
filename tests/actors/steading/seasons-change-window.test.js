@@ -15,7 +15,7 @@ vi.mock("../../../module/seasons/current-season.js", async importOriginal => ({
 	...(await importOriginal()), recordCurrentSeason,
 }));
 
-const { createStonetopSteadingSheetClass, refreshUpkeepAfford } = await import("../../../module/actors/steading/StonetopSteadingSheet.js");
+const { createStonetopSteadingSheetClass, refreshUpkeepAfford, militiaLead } = await import("../../../module/actors/steading/StonetopSteadingSheet.js");
 const { readRepo, readCss, declarations } = await import("../../fakes/css.js");
 
 const SHEET = readRepo("module/actors/steading/StonetopSteadingSheet.js");
@@ -163,5 +163,43 @@ describe("refreshUpkeepAfford", () => {
 		const payBtn = { hidden: true, disabled: false };
 		refreshUpkeepAfford({ payBtn, shortNote: null }, true);
 		expect(payBtn.hidden).toBe(false);
+	});
+});
+
+// The Well-Trained Militia's drill, the same way: drawn but hidden when short, and offered as the
+// live Surplus rises, with the tactics note's lead-in swapped to match.
+describe("the Well-Trained Militia's drill in the Seasons Change window", () => {
+	const militia = () => {
+		const at = SHEET.indexOf("// The militia's summer.");
+		expect(at).toBeGreaterThan(-1);
+		return SHEET.slice(at, SHEET.indexOf("// A Surplus roll button:", at));
+	};
+
+	it("is drawn either way, hidden with its actions row while short", () => {
+		const at = SHEET.indexOf("const militiaBlock = drillsDue");
+		expect(at).toBeGreaterThan(-1);
+		const block = SHEET.slice(at, SHEET.indexOf(`: "";`, at));
+		expect(block).toContain(`<div class="stonetop-season-actions"\${surplus >= 1 ? "" : " hidden"}>`);
+		expect(block).toContain(`data-action="drill-militia"\${surplus >= 1 ? "" : " hidden"}>`);
+		expect(block).toContain("<span data-militia-lead>${militiaLead(surplus >= 1)}</span>");
+		expect(block).not.toContain(`\${surplus >= 1 ? \`<div`);
+	});
+
+	it("leads its tactics note by whether the drills can be paid for", () => {
+		expect(militiaLead(true)).toBe("Or skip");
+		expect(militiaLead(false)).toBe("No Surplus for the drills");
+	});
+
+	it("is refreshed from the window's stats hook, unless settled or in flight", () => {
+		const body = militia();
+		expect(body).toMatch(/liveRefreshers\.push\(\(\) => \{\s*if \(!drillMilitiaBtn \|\| militiaBusy\s*\|\| this\._stonetopSteading\.seasonStepApplied\(MILITIA_SEASON_STEP, year, seasonId\)\) return;/);
+		expect(body).toContain("refreshUpkeepAfford({ payBtn: drillMilitiaBtn, shortNote: null }, affordable);");
+		expect(body).toContain("drillActions.hidden = !affordable;");
+		expect(body).toContain("militiaLeadEl.textContent = militiaLead(affordable);");
+		// Raised by the settle, lowered by every give-back: the short one, the throw's, the tactic's.
+		expect(body).toMatch(/const settleMilitia = \(\) => \{\s*militiaBusy = true;/);
+		expect(body).toMatch(/shortUnlock: \(\) => \{\s*militiaBusy = false;/);
+		expect(body).toMatch(/unlock: \(\) => \{\s*militiaBusy = false;/);
+		expect(body).toMatch(/catch \(err\) \{\s*militiaBusy = false;/);
 	});
 });
