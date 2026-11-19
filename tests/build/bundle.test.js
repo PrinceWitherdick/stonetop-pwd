@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, buildBundle, precompileTemplates } from "../../scripts/bundle.js";
+import * as esbuild from "esbuild";
+import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, STYLES_ENTRY, STYLES_OUTFILE, buildBundle, buildStyles, precompileTemplates, stripCssComments } from "../../scripts/bundle.js";
 import { RELMAP_WINDOW_CLASS } from "../../module/utils/window-restore.js";
 
 /**
@@ -128,5 +129,68 @@ describe("where a checkout and a release load the system from", () => {
 
 		expect(step(yml, "Verify the checkout before it is zipped")).toContain("m.esmodules");
 		expect(step(yml, "Verify the zip that will ship")).toContain("m.esmodules");
+	});
+
+	it("a checkout loads the commented stylesheet and a release loads the stripped one", () => {
+		// Failing after trying the build locally? Put system.json back before committing.
+		expect(JSON.parse(read("system.json")).styles).toEqual([STYLES_ENTRY]);
+
+		const yml = read(".github/workflows/release.yml");
+		expect(step(yml, "Patch manifest")).toContain(`m.styles = ['${STYLES_OUTFILE}']`);
+		expect(step(yml, "Create zip")).toContain(" styles/ ");
+		expect(step(yml, "Verify the checkout before it is zipped")).toContain("m.styles");
+		expect(step(yml, "Verify the zip that will ship")).toContain("m.styles");
+	});
+
+	it("keeps the stripped stylesheet at the depth its ../assets URLs resolve from", () => {
+		expect(path.dirname(STYLES_OUTFILE).split("/")).toHaveLength(path.dirname(STYLES_ENTRY).split("/").length);
+	});
+});
+
+describe("stripCssComments", () => {
+	it.each([
+		["a whole-line comment, line and all", "a{}\n/* note */\nb{}", "a{}\nb{}"],
+		["a comment spanning lines", "a{}\n  /* one\n     two */\nb{}", "a{}\nb{}"],
+		["a comment after a declaration, with the space before it", "a{color:red; /* why */\n}", "a{color:red;\n}"],
+		["a comment between values, keeping their spaces", "a{margin:0 /* x */ 1px}", "a{margin:0  1px}"],
+		["a comment left open at the end of the file", "a{}\n/* never closed", "a{}\n"],
+	])("removes %s", (_name, input, expected) => {
+		expect(stripCssComments(input)).toBe(expected);
+	});
+
+	it.each([
+		["a double-quoted string", `a{content:"/* not a comment */"}`],
+		["a single-quoted string", `a{content:'/* not a comment */'}`],
+		["a string with an escaped quote", String.raw`a{content:"\"/* kept */"}`],
+		["an unquoted url", "a{background:url(/x/*y*/z.webp)}"],
+		["an escaped slash", String.raw`.a\/*b{color:red}`],
+	])("leaves %s alone", (_name, css) => {
+		expect(stripCssComments(css)).toBe(css);
+	});
+
+	it("is not misled by an apostrophe inside a comment", () => {
+		expect(stripCssComments("a{}\n/* don't */\nb{content:'x'}")).toBe("a{}\nb{content:'x'}");
+	});
+
+	it("keeps two tokens apart when a comment was all that separated them", () => {
+		expect(stripCssComments("a{margin:1/* x */px}")).toBe("a{margin:1/**/px}");
+	});
+});
+
+describe("the release stylesheet", () => {
+	const source = read(STYLES_ENTRY);
+	const { css, bytes } = buildStyles({ write: false });
+
+	it("drops the comments, which are over half the source", () => {
+		expect(bytes).toBeLessThan(Buffer.byteLength(source) * 0.6);
+		expect(css.replace(/\/\*\*\//g, "")).not.toContain("/*");
+	});
+
+	it("means exactly what the source means", async () => {
+		// esbuild's parser is independent of the scanner under test: both must reduce to the same rules.
+		const parsed = async (text) => (await esbuild.transform(text, {
+			loader: "css", minify: true, legalComments: "none", logLevel: "silent",
+		})).code;
+		expect(await parsed(css) === await parsed(source)).toBe(true);
 	});
 });
