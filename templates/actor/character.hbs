@@ -49,9 +49,9 @@
 						<span class="stonetop-wound-text" data-tooltip="{{this.tooltip}}">{{#if this.isDeathsDoor}}<i class="fas fa-skull stonetop-wound-dd" data-tooltip="Death's Door mark"></i> {{/if}}{{#if this.text}}{{this.text}}{{else}}<em class="stonetop-wound-empty">(describe the wound)</em>{{/if}}</span>
 						{{#if ../stonetop.woundsView.canEdit}}
 						<span class="stonetop-wound-actions">
-							{{#if (and ../stonetop.woundsView.canTend (eq this.status "problematic"))}}<button type="button" class="stonetop-wound-tend" data-tooltip="Tend (Recover)"><i class="fas fa-hand-holding-heart" aria-hidden="true"></i></button>{{/if}}
-							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit"><i class="fas fa-pencil" aria-hidden="true"></i></button>
-							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
+							{{#if (and ../stonetop.woundsView.canTend (eq this.status "problematic"))}}<button type="button" class="stonetop-wound-tend" data-tooltip="Tend (Recover)" aria-label="Tend (Recover)"><i class="fas fa-hand-holding-heart" aria-hidden="true"></i></button>{{/if}}
+							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit" aria-label="Edit"><i class="fas fa-pencil" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
 						</span>
 						{{/if}}
 					</li>
@@ -70,8 +70,8 @@
 						<span class="stonetop-wound-text" data-tooltip="{{this.tooltip}}">{{#if this.isDeathsDoor}}<i class="fas fa-skull stonetop-wound-dd" aria-hidden="true"></i> {{/if}}{{this.text}}</span>
 						{{#if ../stonetop.woundsView.canEdit}}
 						<span class="stonetop-wound-actions">
-							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit"><i class="fas fa-pencil" aria-hidden="true"></i></button>
-							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-wound-edit" data-tooltip="Edit" aria-label="Edit"><i class="fas fa-pencil" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-wound-remove" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
 						</span>
 						{{/if}}
 					</li>

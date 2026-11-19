@@ -74,7 +74,7 @@
 						<input class="stonetop-monster-stat-input" type="text"
 						       name="system.tags" value="{{system.tags}}"
 						       placeholder="hoarder, cautious, stealthy...">
-						<a class="stonetop-monster-reset-defaults" title='{{localize "stonetop.monster.resetDefaults"}}'>
+						<a class="stonetop-monster-reset-defaults" title='{{localize "stonetop.monster.resetDefaults"}}' aria-label='{{localize "stonetop.monster.resetDefaults"}}'>
 							<i class="fas fa-rotate-left" aria-hidden="true"></i>
 						</a>
 						{{else}}
@@ -180,7 +180,7 @@
 						{{#each stonetop.damageModes}}
 						<li class="stonetop-monster-damage-mode">
 							{{#if formula}}
-							<a class="stonetop-monster-damage-roll" data-mode-index="{{@index}}" data-roll-formula="{{this.formula}}" data-roll-label="{{this.title}}" data-roll-keywords="{{this.keywords}}" data-roll-mode="{{this.rollMode}}" title="Roll damage ({{this.formula}})">
+							<a class="stonetop-monster-damage-roll" data-mode-index="{{@index}}" data-roll-formula="{{this.formula}}" data-roll-label="{{this.title}}" data-roll-keywords="{{this.keywords}}" data-roll-mode="{{this.rollMode}}" title="Roll damage ({{this.formula}})" aria-label="Roll damage ({{this.formula}})">
 								<i class="fas fa-dice-d6" aria-hidden="true"></i>
 							</a>
 							{{/if}}
@@ -289,7 +289,7 @@
 							<span class="stonetop-monster-numbers-fields">
 								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-swarm-count" data-numbers-count="attackers" type="number" min="1" value="{{stonetop.swarmCount}}" title="How many of them pile onto that one foe"> <span class="stonetop-outnumber-vs">attackers</span></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.swarmClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
-								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (swarm)" title="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (swarm)" title="Roll the swarm's damage against that foe" aria-label="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
 							</span>
 						</span>
 
@@ -301,7 +301,7 @@
 							<span class="stonetop-monster-numbers-fields">
 								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-outnumber-yours" data-numbers-count="yours" type="number" min="1" value="{{stonetop.swarmCount}}" title="How many of this group"> <span class="stonetop-outnumber-vs">vs</span> <input class="stonetop-monster-outnumber-theirs" data-numbers-count="theirs" type="number" min="1" value="1" title="How many they face"></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.exchangeClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
-								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (group)" title="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (group)" title="Roll the group's damage in an abstracted exchange" aria-label="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
 							</span>
 						</span>
 						{{/if}}
@@ -333,7 +333,7 @@
 								       data-field="system.rollFormula" value="{{system.rollFormula}}"
 								       title='{{localize "stonetop.monster.moveFormulaHint"}}' placeholder="d6">
 								<span class="stonetop-monster-move-controls">
-									<a class="stonetop-monster-delete-move" title='{{localize "stonetop.monster.deleteMove"}}'>
+									<a class="stonetop-monster-delete-move" title='{{localize "stonetop.monster.deleteMove"}}' aria-label='{{localize "stonetop.monster.deleteMove"}}'>
 										<i class="fas fa-trash" aria-hidden="true"></i>
 									</a>
 								</span>
@@ -343,7 +343,7 @@
 							{{else}}
 							<div class="stonetop-monster-move-head">
 								{{#if system.rollFormula}}
-								<a class="stonetop-monster-move-roll" title="Roll {{system.rollFormula}}">
+								<a class="stonetop-monster-move-roll" title="Roll {{system.rollFormula}}" aria-label="Roll {{system.rollFormula}}">
 									<i class="fas fa-dice-d6" aria-hidden="true"></i>
 								</a>
 								{{/if}}

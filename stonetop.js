@@ -1417,9 +1417,9 @@ function _chatWireRebuildCrops(message, html) {
 			// only the parents that failed. Latching it closed on "Rebuilt N" would make a
 			// reload the only way back to the remainder.
 			btn.disabled = false;
-			btn.innerHTML = `<i class="fas fa-rotate-right"></i> Retry ${res.failed}`;
+			btn.innerHTML = `<i class="fas fa-rotate-right" aria-hidden="true"></i> Retry ${res.failed}`;
 		} else {
-			btn.innerHTML = `<i class="fas fa-check"></i> Rebuilt ${res.written}`;
+			btn.innerHTML = `<i class="fas fa-check" aria-hidden="true"></i> Rebuilt ${res.written}`;
 		}
 	});
 }
@@ -1832,7 +1832,7 @@ function _wireLogbook(message, html, actor, card) {
 	for (const { source, uses } of offers) {
 		const btn = document.createElement("button");
 		btn.className = "stonetop-logbook-btn";
-		btn.innerHTML = `<i class="fas ${source.icon}"></i> ${escHtml(source.button)}`;
+		btn.innerHTML = `<i class="fas ${source.icon}" aria-hidden="true"></i> ${escHtml(source.button)}`;
 		btn.dataset.tooltip = source.tooltip?.(uses)
 			?? `Expend a use (${uses.left} of ${uses.max} left) to ignore this roll and treat the result as a 10+.`;
 		btn.dataset.tooltipDirection = "UP";
@@ -2032,7 +2032,7 @@ function _chatWireHolyRelics(message, html) {
 		const btn = document.createElement("button");
 		btn.className = "stonetop-logbook-btn stonetop-holy-relic-btn";
 		btn.dataset.prePick = prePick ? "1" : "";
-		btn.innerHTML = `<i class="fas fa-sun"></i> ${escHtml(i18n(prePick ? "stonetop.invocations.relicButtonEmpowered" : "stonetop.invocations.relicButton"))}`;
+		btn.innerHTML = `<i class="fas fa-sun" aria-hidden="true"></i> ${escHtml(i18n(prePick ? "stonetop.invocations.relicButtonEmpowered" : "stonetop.invocations.relicButton"))}`;
 		btn.dataset.tooltip = i18n(prePick ? "stonetop.invocations.relicTooltipEmpowered" : "stonetop.invocations.relicTooltip",
 			{ left: relics.left, max: relics.max });
 		btn.dataset.tooltipDirection = "UP";

@@ -724,7 +724,7 @@ function promptAttackMode(moveName, { question, choices, fallback }) {
 	return new Promise(resolve => {
 		const buttons = {};
 		for (const { key, icon, label } of choices) {
-			buttons[key] = { icon: `<i class="fas ${icon}"></i>`, label, callback: () => resolve(key) };
+			buttons[key] = { icon: `<i class="fas ${icon}" aria-hidden="true"></i>`, label, callback: () => resolve(key) };
 		}
 		new Dialog({
 			title: moveName,
@@ -917,7 +917,7 @@ const ROLL_DAMAGE = { label: "Roll your damage", icon: "fa-dice-d6" };
 function confirmBtn(counter = false) {
 	return `<button type="button" class="stonetop-attack-btn stonetop-attack-confirm"
 		data-counter="${counter ? 1 : 0}">
-		<i class="fas ${ROLL_DAMAGE.icon}"></i> ${escHtml(ROLL_DAMAGE.label)}
+		<i class="fas ${ROLL_DAMAGE.icon}" aria-hidden="true"></i> ${escHtml(ROLL_DAMAGE.label)}
 	</button>`;
 }
 
@@ -1972,7 +1972,7 @@ export function tagNoticesHtml(weapon) {
 			const note = TAG_NOTES[tag];
 			if (!note) return "";
 			return `<li class="stonetop-attack-tag-note stonetop-attack-${tag}">
-				<i class="fas ${note.icon}"></i> <span><strong>${note.label}</strong> ${note.body}</span>
+				<i class="fas ${note.icon}" aria-hidden="true"></i> <span><strong>${note.label}</strong> ${note.body}</span>
 			</li>`;
 		}).concat(muscleboundMoreHtml(weapon)).filter(Boolean),
 	});
@@ -1990,7 +1990,7 @@ function muscleboundMoreHtml(weapon) {
 	if (!forceful && !messy) return "";
 	const which = forceful && messy ? "both" : forceful ? "forceful" : "messy";
 	return `<li class="stonetop-attack-tag-note stonetop-attack-musclebound">
-		<i class="fas fa-hand-fist"></i> <span>${escHtml(format(`stonetop.fight.heroMoves.muscleboundMore.${which}`, {}))}</span>
+		<i class="fas fa-hand-fist" aria-hidden="true"></i> <span>${escHtml(format(`stonetop.fight.heroMoves.muscleboundMore.${which}`, {}))}</span>
 	</li>`;
 }
 
@@ -2009,7 +2009,7 @@ function muscleboundMoreHtml(weapon) {
  */
 export function weaponWarningsHtml(weapon, { noRangedWeapon = false, downed = "" } = {}) {
 	const items = [];
-	const warn = (cls, text) => items.push(`<li class="stonetop-attack-tag-note stonetop-attack-${cls}"><i class="fas fa-triangle-exclamation"></i> <span>${escHtml(text)}</span></li>`);
+	const warn = (cls, text) => items.push(`<li class="stonetop-attack-tag-note stonetop-attack-${cls}"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> <span>${escHtml(text)}</span></li>`);
 	// An arcanum's price that could not be paid when the attack was made (combat/arcana-attacks.js): flagged, not refused.
 	if (weapon?.costUnpaid) warn("cost-unpaid", weapon.costUnpaid);
 	// The Azure Hand's fling names no damage: "inflicting damage and other effects of the GM's choosing".
@@ -2051,7 +2051,7 @@ export function attackerDowned(actor) {
 function ghostBlowCautionHtml(actor, { own = true, selfHarm = false, weapon = null } = {}) {
 	if (!own || selfHarm || weapon?.notTouch || !disembodiedSufferer(actor)) return "";
 	if (manifestsHarmfulTouch(actor) || possessedHost(actor)) return "";
-	return `<p class="stonetop-attack-warn stonetop-damage-ghost-caution"><i class="fas fa-triangle-exclamation"></i> ${escHtml(format("stonetop.fight.disembodied.ownBlowCaution", { name: actor.name ?? "" }))}</p>`;
+	return `<p class="stonetop-attack-warn stonetop-damage-ghost-caution"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ${escHtml(format("stonetop.fight.disembodied.ownBlowCaution", { name: actor.name ?? "" }))}</p>`;
 }
 
 // Roll damage once per applyable target and post the results card. With no applyable
@@ -2526,7 +2526,7 @@ function seedToggleLabel(seed) {
 	const on = seed.applied !== false;
 	const bonus = seedBonus(seed);
 	const text = format(`stonetop.fight.seed.${on ? "leaveOff" : "addBack"}`, { bonus: bonus < 0 ? String(bonus) : `+${bonus}` });
-	return `<i class="fas ${on ? "fa-minus" : "fa-plus"}"></i> ${escHtml(text)}`;
+	return `<i class="fas ${on ? "fa-minus" : "fa-plus"}" aria-hidden="true"></i> ${escHtml(text)}`;
 }
 
 /**
@@ -2784,7 +2784,7 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 	// Several targets is the book's own rule now that the roller is asked who a blow hits
 	// (fight/fight-targets.js), so the note says when it applies rather than calling it an abstraction.
 	const multiWarn = results.length > 1 && !weapon?.area
-		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation"></i> ${escHtml(format("stonetop.fight.targets.several", { move }))}</p>`
+		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ${escHtml(format("stonetop.fight.targets.several", { move }))}</p>`
 		: "";
 
 	// Each target gets the shared roll-result block (big total + label + fine print) rather
@@ -2847,7 +2847,7 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 		<ul class="stonetop-damage-list">${rows}</ul>
 		${notices}
 		<div class="card-buttons stonetop-card-buttons stonetop-attack-actions">
-			${hasApplyable ? `<button type="button" class="stonetop-attack-btn stonetop-apply-damage"><i class="fas fa-heart-crack"></i> ${selfHarm ? "Take this damage" : "Apply damage"}</button>` : ""}
+			${hasApplyable ? `<button type="button" class="stonetop-attack-btn stonetop-apply-damage"><i class="fas fa-heart-crack" aria-hidden="true"></i> ${selfHarm ? "Take this damage" : "Apply damage"}</button>` : ""}
 			${seedToggle}
 		</div>
 	</div>${adjustHtml}`;
@@ -2991,7 +2991,7 @@ function wireAttackNoHarm(root, moveKey) {
 	const paint = () => {
 		const held = pickedEffects(moveKey, pickedOptionLabels(root)).addons.includes(NO_HARM);
 		const { label, icon } = held ? NO_DAMAGE : ROLL_DAMAGE;
-		for (const btn of btns) btn.innerHTML = `<i class="fas ${icon}"></i> ${escHtml(label)}`;
+		for (const btn of btns) btn.innerHTML = `<i class="fas ${icon}" aria-hidden="true"></i> ${escHtml(label)}`;
 	};
 	paint();
 
@@ -3753,7 +3753,7 @@ export function wireApplyDamage(message, html, gateFor = applyGateOnce(message))
 
 	if (pending.length === 0) {
 		btn.disabled = true;
-		btn.innerHTML = `<i class="fas fa-check"></i> ${damage.selfHarm ? "Damage taken" : "Damage applied"}`;
+		btn.innerHTML = `<i class="fas fa-check" aria-hidden="true"></i> ${damage.selfHarm ? "Damage taken" : "Damage applied"}`;
 		return;
 	}
 
@@ -3761,7 +3761,7 @@ export function wireApplyDamage(message, html, gateFor = applyGateOnce(message))
 	// nothing to take while it stands. A rewrite that moves the card off the 10+ brings the button back.
 	if (avoidedCounterOf(damage)) {
 		btn.disabled = true;
-		btn.innerHTML = `<i class="fas fa-shield-halved"></i> ${escHtml(localize("stonetop.fight.counterAvoided.label"))}`;
+		btn.innerHTML = `<i class="fas fa-shield-halved" aria-hidden="true"></i> ${escHtml(localize("stonetop.fight.counterAvoided.label"))}`;
 		btn.title = localize("stonetop.fight.counterAvoided.tooltip");
 		return;
 	}
@@ -5319,7 +5319,7 @@ function sufferAmountCardContent(pc, { foeName, foeText = "", attack = null, see
 		<p class="stonetop-suffer-detail">${escHtml(armorLine)}</p>
 		<div class="card-buttons stonetop-card-buttons stonetop-attack-actions">
 			<button type="button" class="stonetop-attack-btn stonetop-suffer-deal">
-				<i class="fas fa-hand-fist"></i> Deal it
+				<i class="fas fa-hand-fist" aria-hidden="true"></i> Deal it
 			</button>
 		</div>
 	</div>`;
@@ -5375,7 +5375,7 @@ export function wireSufferAmount(message, html) {
 	// nothing — and `!state.dealt` would leave the card askable again after it was answered.
 	if (isDealt(state)) {
 		settle();
-		btn.innerHTML = `<i class="fas fa-check"></i> Dealt ${state.dealt}`;
+		btn.innerHTML = `<i class="fas fa-check" aria-hidden="true"></i> Dealt ${state.dealt}`;
 		return;
 	}
 	if (!game.user.isGM) return settle("The GM names this damage");

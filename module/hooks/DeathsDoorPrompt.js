@@ -340,12 +340,12 @@ export function promptRaiseFromDead(actor, { fromHp = false } = {}) {
 				+ `<p>${l("raiseAsk")}</p>`,
 			buttons: {
 				yes: {
-					icon:     '<i class="fas fa-heart-pulse"></i>',
+					icon:     '<i class="fas fa-heart-pulse" aria-hidden="true"></i>',
 					label:    l("raiseYes"),
 					callback: () => resolve(applyRaise(actor, name, l)),
 				},
 				no: {
-					icon:  '<i class="fas fa-skull"></i>',
+					icon:  '<i class="fas fa-skull" aria-hidden="true"></i>',
 					label: l("raiseNo"),
 					callback: () => resolve(),
 				},
@@ -473,10 +473,10 @@ export async function postDyingPrompt(actor) {
 	// card hands them that instead of a dialog that would say the wrong thing.
 	const button = move.dialog
 		? `<button type="button" class="stonetop-dying-btn stonetop-dying-open" data-actor="${escHtml(actor.uuid)}">
-				<i class="fas fa-door-open"></i> ${localize(`${_I18N}.button`)}
+				<i class="fas fa-door-open" aria-hidden="true"></i> ${localize(`${_I18N}.button`)}
 			</button>`
 		: `<button type="button" class="stonetop-dying-btn stonetop-dying-move" data-actor="${escHtml(actor.uuid)}" data-move="${escHtml(move.name)}">
-				<i class="fas fa-skull"></i> ${escHtml(move.name)}
+				<i class="fas fa-skull" aria-hidden="true"></i> ${escHtml(move.name)}
 			</button>`;
 
 	// Markup in the string, so what rides into it is escaped on the way in.
@@ -642,7 +642,7 @@ function wireDyingGmButtons(root, actor) {
 		const button = (root.ownerDocument ?? globalThis.document).createElement("button");
 		button.type = "button";
 		button.className = `stonetop-dying-btn stonetop-dying-gm ${cls}`;
-		button.innerHTML = `<i class="fas ${icon}"></i> ${escHtml(localize(`${_I18N}.dyingCard.${key}`))}`;
+		button.innerHTML = `<i class="fas ${icon}" aria-hidden="true"></i> ${escHtml(localize(`${_I18N}.dyingCard.${key}`))}`;
 		button.dataset.tooltip = localize(`${_I18N}.dyingCard.${key}Hint`);
 		button.disabled = !enabled;
 		button.addEventListener("click", async () => {

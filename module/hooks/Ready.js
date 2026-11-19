@@ -2225,7 +2225,7 @@ function _buildBook2ArtReminderContent() {
 		</div>
 		<div class="row stonetop-art-reminder__actions">
 			<button type="button" class="stonetop-import-art-open">
-				<i class="fas fa-images"></i> Import Book Art
+				<i class="fas fa-images" aria-hidden="true"></i> Import Book Art
 			</button>
 		</div>`,
 		"stonetop-art-reminder-card");
@@ -2282,7 +2282,7 @@ function _buildBookArtRebuildContent(count) {
 		</div>
 		<div class="row stonetop-art-reminder__actions">
 			<button type="button" class="stonetop-rebuild-crops-run">
-				<i class="fas fa-crop-simple"></i> Rebuild ${count} pictures
+				<i class="fas fa-crop-simple" aria-hidden="true"></i> Rebuild ${count} pictures
 			</button>
 		</div>`,
 		"stonetop-art-reminder-card");
@@ -2330,7 +2330,7 @@ function _buildPartialArtImportContent(missing, total) {
 		</div>
 		<div class="row stonetop-art-reminder__actions">
 			<button type="button" class="stonetop-import-art-open">
-				<i class="fas fa-images"></i> Import the missing ${missing}
+				<i class="fas fa-images" aria-hidden="true"></i> Import the missing ${missing}
 			</button>
 		</div>`,
 		"stonetop-art-reminder-card");
@@ -2389,7 +2389,7 @@ function _buildGmPlaybookArtContent({ maps, diagrams }) {
 		</div>
 		<div class="row stonetop-art-reminder__actions">
 			<button type="button" class="stonetop-import-art-open">
-				<i class="fas fa-images"></i> Add the GM playbook
+				<i class="fas fa-images" aria-hidden="true"></i> Add the GM playbook
 			</button>
 		</div>`,
 		"stonetop-art-reminder-card");
@@ -2450,7 +2450,7 @@ function _buildStartupWelcomeContent() {
 			</div>
 			<div class="row stonetop-startup-card__actions">
 				<button type="button" class="stonetop-startup-open-welcome">
-					<i class="fas fa-feather"></i> Open the First-Session Guide
+					<i class="fas fa-feather" aria-hidden="true"></i> Open the First-Session Guide
 				</button>
 			</div>
 			<div class="row row--border stonetop-startup-card__footer">

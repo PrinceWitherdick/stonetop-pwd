@@ -114,7 +114,7 @@
           {{#each customMoveRows}}
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <input type="text" class="stonetop-cf-input stonetop-tb-move-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="a move of your own…">
-            <button type="button" class="stonetop-tb-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <button type="button" class="stonetop-tb-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this move"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-tb-move-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add GM move</button>

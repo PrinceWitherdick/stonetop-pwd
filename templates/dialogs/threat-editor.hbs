@@ -45,7 +45,7 @@
 			<div class="threat-list-row threat-list-row--portent stonetop-field-btns" data-index="{{this.index}}">
 				<input type="checkbox" class="threat-list-done" data-field="done"{{#if done}} checked{{/if}} data-tooltip="Come to pass">
 				<input type="text" class="threat-list-text" data-field="text" value="{{this.text}}" placeholder="A concrete, observable milestone">
-				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 			</div>
 			{{/each}}
 			<button type="button" class="threat-list-add" data-list="grimPortents"><i class="fas fa-plus" aria-hidden="true"></i> Add portent</button>
@@ -100,7 +100,7 @@
 						{{#each @root.typeOptions}}<option value="{{this.id}}"{{#if (eq id ../type)}} selected{{/if}}>{{this.label}}</option>{{/each}}
 					</select>
 					<input type="text" class="threat-list-text" data-field="instinct" value="{{this.instinct}}" placeholder="instinct">
-					<button type="button" class="threat-list-remove" data-list="nested" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+					<button type="button" class="threat-list-remove" data-list="nested" data-index="{{this.index}}" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 				</div>
 				{{/each}}
 				<button type="button" class="threat-list-add" data-list="nested"><i class="fas fa-plus" aria-hidden="true"></i> Add lesser threat</button>
@@ -114,7 +114,7 @@
 				<div class="threat-list-row threat-list-row--pmove" data-index="{{this.index}}">
 					<input type="text" class="threat-list-text" data-field="label" value="{{this.label}}" placeholder="Move name or trigger">
 					<textarea class="threat-list-textarea" data-field="text" rows="2" placeholder="The move text">{{this.text}}</textarea>
-					<button type="button" class="threat-list-remove" data-list="customPlayerMoves" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+					<button type="button" class="threat-list-remove" data-list="customPlayerMoves" data-index="{{this.index}}" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 				</div>
 				{{/each}}
 				<button type="button" class="threat-list-add" data-list="customPlayerMoves"><i class="fas fa-plus" aria-hidden="true"></i> Add player move</button>

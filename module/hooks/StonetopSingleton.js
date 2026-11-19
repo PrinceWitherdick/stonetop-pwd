@@ -193,7 +193,7 @@ export async function resetOmenReminder() {
 function _buildOmenReminderContent(destined) {
 	const names = destined.map(a => escHtml(a.name)).join(localize(`${_OMENS_KEY}.separator`));
 	const buttons = destined.map(a => `<button type="button" class="stonetop-omens-roll-btn" data-actor-id="${escHtml(a.id)}">`
-		+ `<i class="fas fa-dice-d6"></i> ${escHtml(format(`${_OMENS_KEY}.button`, {name: a.name}))}</button>`).join("");
+		+ `<i class="fas fa-dice-d6" aria-hidden="true"></i> ${escHtml(format(`${_OMENS_KEY}.button`, {name: a.name}))}</button>`).join("");
 	return stonetopChatCard(localize(`${_OMENS_KEY}.title`),
 		`<div class="stonetop-roll-card-description">
 			<p>${format(`${_OMENS_KEY}.intro`, {names})}</p>

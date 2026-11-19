@@ -285,14 +285,14 @@ const LOSE_SELECTOR = ".stonetop-pouch-card-lose";
 export function suckThePoisonOutRollOptions(actor) {
 	if (!ownsLearnedMoveNamed(actor, SUCK_THE_POISON_OUT)) return null;
 	return { tierActions: { success: `<button type="button" class="stonetop-pouch-card-store" data-tier="success">`
-		+ `<i class="fas fa-box-archive"></i> Store the malady in your pouch</button>` } };
+		+ `<i class="fas fa-box-archive" aria-hidden="true"></i> Store the malady in your pouch</button>` } };
 }
 
 /** Borrow Power's 7-9 row: "Lose the power". LEARNED only. */
 export function borrowPowerRollOptions(actor) {
 	if (!ownsLearnedMoveNamed(actor, BORROW_POWER)) return null;
 	return { tierActions: { partial: `<button type="button" class="stonetop-pouch-card-lose" data-tier="partial">`
-		+ `<i class="fas fa-wind"></i> Lose the power</button>` } };
+		+ `<i class="fas fa-wind" aria-hidden="true"></i> Lose the power</button>` } };
 }
 
 /** Refuse a row the card no longer reads (a Shift since), the way Send Them Back does. */

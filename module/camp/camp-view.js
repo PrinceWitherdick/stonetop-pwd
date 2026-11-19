@@ -70,7 +70,7 @@ export function campJoinCardBody(hostName) {
 	return `<div class="card-content stonetop-camp-card">
 		<p class="stonetop-camp-card-text"><strong>${escHtml(hostName)}</strong> is making camp. Everyone settling in for the night can share food from their pack and take their rest.</p>
 		<div class="card-buttons stonetop-card-buttons stonetop-camp-card-actions" data-camp-join="1">
-			<button type="button" class="stonetop-camp-join"><i class="fas fa-campground"></i> Join the camp</button>
+			<button type="button" class="stonetop-camp-join"><i class="fas fa-campground" aria-hidden="true"></i> Join the camp</button>
 		</div>
 	</div>`;
 }

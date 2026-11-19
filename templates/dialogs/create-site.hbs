@@ -157,7 +157,7 @@
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <input type="text" class="stonetop-cf-input stonetop-cs-table-caption stonetop-cs-title" data-index="{{this.index}}" value="{{this.caption}}" placeholder="What the crinwin are up to">
             <span class="stonetop-cs-die">{{this.die}}</span>
-            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this table"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{#each rows}}
           <div class="stonetop-cf-gear-row stonetop-field-btns stonetop-cs-trow-line">
@@ -168,7 +168,7 @@
               <span aria-hidden="true">&times;</span>
               <input type="number" class="stonetop-cf-input stonetop-cs-trow-span stonetop-cs-body" data-table="{{../index}}" data-index="{{this.rowIndex}}" min="1" max="{{@root.maxRowSpan}}" step="1" value="{{this.span}}" aria-label="Faces this result covers">
             </label>
-            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{this.rowIndex}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{this.rowIndex}}" aria-label="Remove this row"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-cs-trow-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-table="{{this.index}}"><i class="fas fa-plus" aria-hidden="true"></i> Add result</button>

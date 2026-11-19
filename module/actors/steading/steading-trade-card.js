@@ -53,8 +53,8 @@ export function tradeItemActions(slug) {
 	if (!item) return "";
 	const name = escHtml(item.name);
 	return `<div class="stonetop-trade-item-row" data-item-slug="${escHtml(slug)}">`
-		+ `<button type="button" class="stonetop-trade-item" data-trade="buy"><i class="fas fa-gem"></i> Bought: add ${name} to a character</button>`
-		+ `<button type="button" class="stonetop-trade-item" data-trade="sell"><i class="fas fa-coins"></i> Sold: take ${name} off a character</button>`
+		+ `<button type="button" class="stonetop-trade-item" data-trade="buy"><i class="fas fa-gem" aria-hidden="true"></i> Bought: add ${name} to a character</button>`
+		+ `<button type="button" class="stonetop-trade-item" data-trade="sell"><i class="fas fa-coins" aria-hidden="true"></i> Sold: take ${name} off a character</button>`
 		+ `</div>`;
 }
 
@@ -329,8 +329,8 @@ function valueSaid(value) {
 /** The payment row a Trade & Barter card's 10+ and 7-9 carry. `value` is the traded item's, when said. */
 export function tradePaymentActions(value = null) {
 	return `<div class="stonetop-trade-pay-row"${valueSaid(value) ? ` data-item-value="${count(value)}"` : ""}>`
-		+ `<button type="button" class="stonetop-trade-pay" data-trade-pay="stores"><i class="fas fa-coins"></i> Settle the payment: Surplus or coin</button>`
-		+ `<button type="button" class="stonetop-trade-pay" data-trade-pay="artifact"><i class="fas fa-gem"></i> An artifact changes hands</button>`
+		+ `<button type="button" class="stonetop-trade-pay" data-trade-pay="stores"><i class="fas fa-coins" aria-hidden="true"></i> Settle the payment: Surplus or coin</button>`
+		+ `<button type="button" class="stonetop-trade-pay" data-trade-pay="artifact"><i class="fas fa-gem" aria-hidden="true"></i> An artifact changes hands</button>`
 		+ `</div>`;
 }
 

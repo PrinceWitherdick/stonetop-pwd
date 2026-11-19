@@ -166,7 +166,7 @@
 				{{/if}}
 				{{#if (and @root.stonetop.movesEdit owned (lookup @root.stonetop.possessionTriggerMoves name))}}
 				<a class="stonetop-move-possession-edit" data-possession-choices="{{lookup @root.stonetop.possessionTriggerMoves name}}"
-				   data-tooltip="Choose your sacred pouch's remarkable trait(s)" data-tooltip-direction="UP">
+				   data-tooltip="Choose your sacred pouch's remarkable trait(s)" aria-label="Choose your sacred pouch's remarkable trait(s)" data-tooltip-direction="UP">
 					<i class="fas fa-pencil" aria-hidden="true"></i>
 				</a>
 				{{/if}}

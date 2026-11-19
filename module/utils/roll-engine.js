@@ -199,7 +199,7 @@ function _resultTableLadder(resultTable, tier) {
 }
 
 // The title row's "?" that reveals a hidden move description, shared by every card that carries one.
-const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" title="Show move description"><i class="fas fa-circle-question"></i></button>`;
+const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" title="Show move description"><i class="fas fa-circle-question" aria-hidden="true"></i></button>`;
 
 // The die-faces readouts live with the card pieces (utils/chat.js); re-exported for the callers that
 // have always taken them from here.
@@ -370,7 +370,7 @@ export function postSeasonsRollPrompt({
 		${conditions}
 		<div class="card-buttons stonetop-card-buttons">
 			<button type="button" class="stonetop-seasons-roll-btn" data-fortunes="${fortunes}" data-mod="${mod}" data-counts-as-miss="${escHtml(countsAsMiss)}" data-alias="${escHtml(alias)}" data-roll-mode="${escHtml(rollMode)}" data-table="${escHtml(table)}"${seasonKey ? ` data-season-key="${escHtml(seasonKey)}"` : ""}>
-				<i class="fas fa-dice-d6"></i> Roll +Fortunes (${sign(fortunes)})${plus}
+				<i class="fas fa-dice-d6" aria-hidden="true"></i> Roll +Fortunes (${sign(fortunes)})${plus}
 			</button>
 		</div>
 	</div>`;
@@ -605,8 +605,8 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", k
 	const descToggleHtml = description ? DESC_TOGGLE_HTML : "";
 	const buttonsHtml = buttons
 		? `<div class="card-buttons stonetop-card-buttons">
-			<button data-action="shiftDown"><i class="fas fa-arrow-down"></i> Shift Down</button>
-			<button data-action="shiftUp"><i class="fas fa-arrow-up"></i> Shift Up</button>
+			<button data-action="shiftDown"><i class="fas fa-arrow-down" aria-hidden="true"></i> Shift Down</button>
+			<button data-action="shiftUp"><i class="fas fa-arrow-up" aria-hidden="true"></i> Shift Up</button>
 		</div>`
 		: "";
 	// A row of the card's OWN controls, deliberately not the `.stonetop-card-buttons` row above.
@@ -1172,7 +1172,7 @@ export async function markXpReceipt(actor, { header, description = "", move, amo
 			resultClass: "success",
 			sectionClass: "stonetop-xp-mark-card",
 			description,
-			actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo XP Gain</button>`,
+			actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo XP Gain</button>`,
 		}),
 		flags: { [XP_MARK_FLAG]: amount },
 	};

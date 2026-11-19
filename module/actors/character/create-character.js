@@ -202,20 +202,20 @@ function _askAboutExisting(user, existing, { canReplace = true, isSelf = false }
 		// leads, and Replace never occupies the spot a reflexive click lands on.
 		const buttons = {
 			add: {
-				icon: '<i class="fas fa-user-plus"></i>',
+				icon: '<i class="fas fa-user-plus" aria-hidden="true"></i>',
 				label: "Add Another",
 				callback: () => resolve({ choice: "add", deleteIds: [] }),
 			},
 		};
 		if (canReplace) {
 			buttons.replace = {
-				icon: '<i class="fas fa-triangle-exclamation"></i>',
+				icon: '<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>',
 				label: "Replace",
 				callback: html => resolve({ choice: "replace", deleteIds: _tickedIds(html) }),
 			};
 		}
 		buttons.cancel = {
-			icon: '<i class="fas fa-xmark"></i>',
+			icon: '<i class="fas fa-xmark" aria-hidden="true"></i>',
 			label: "Cancel",
 			callback: () => resolve(null),
 		};

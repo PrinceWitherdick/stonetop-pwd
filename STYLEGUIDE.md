@@ -504,7 +504,12 @@ New steps in those flows reuse those classes.
   `-lettering` / `-paper`, not `-ink`: the palette tests measure every `-ink` against the sheet's
   page.
 - **Pop-overs and tooltips** on the paper use `var(--st-on-dark-raised, #fffdf7)` with a
-  `--st-radius-lg` corner. For hover help prefer Foundry's `data-tooltip` over a native `title`.
+  `--st-radius-lg` corner.
+- **Hover help is Foundry's tooltip, never a native `title`.** A `title` is drawn by the operating
+  system and ignores the palette and the Sheet Text Size. Core draws a plain `data-tooltip` as
+  HTML, so there are two spellings: **`data-tooltip`** for words we wrote or a `{{localize}}` of a
+  key we ship, and **`data-tooltip-text`** for anything printed from data (a name a player typed).
+  In JS set the attribute the same way; do not write `.title`.
 
 ---
 
@@ -556,7 +561,10 @@ What that means for a new component:
 - One glyph per meaning: **`fa-pencil`** edit · **`fa-xmark`** remove from a list or close ·
   **`fa-trash`** delete for good · **`fa-plus`** add · **`fa-check`** done ·
   **`fa-dice-d6`** roll (the game rolls d6s) · **`fa-rotate-left`** reset / undo.
-- Decorative icons are `aria-hidden="true"`. An icon-only control has an `aria-label`.
+- Decorative icons are `aria-hidden="true"`, in templates and in markup built in JS alike.
+- A control that holds only an icon has an **`aria-label`** saying what it does (usually the same
+  words as its tooltip). One that is not a control at all, like the fading "done" check, is
+  `aria-hidden` itself.
 - A button that *is* the icon element (`<button class="fas fa-xmark">`) must not be given our serif;
   the `:not([class*="fa-"])` guard on the base button rule exists for that.
 - The book's own marks (spiral, diamond, circle, blood drop, playbook arrow, season glyphs, tab
@@ -611,7 +619,8 @@ What that means for a new component:
 |---|---|
 | `font-floor` | No text under 0.95× body; exemptions by exact selector |
 | `token-literals` | Washes on the ink and slate channels; rem sizes scaled; radii, slate edges and pop-over rungs on tokens; one disabled opacity; focus rings the dark pages can see |
-| `templates/icon-conventions` | `fas`, current glyph names, the pencil for edit, `aria-hidden` on a bare icon |
+| `templates/icon-conventions` | `fas`, current glyph names, the pencil for edit, `aria-hidden` on a bare icon (templates and JS), an `aria-label` on an icon-only control |
+| `templates/tooltip-conventions` | No native `title` in a template, outside a shrinking list of those not yet converted |
 | `dark-mode` | Lamplit and Slate contrast; no near-black ink or white well left for the dark page; lifts have fallbacks |
 | `high-contrast` | 7:1 inks; block sits last; no bare `slategrey` ink or fill; core names on window roots |
 | `past-death-inks` | Black-paper sheets re-declare the inks they need |
@@ -665,13 +674,18 @@ delete an entry when it is done.
 
 **Markup**
 
-10. **Icons built in JS** follow the template rules only by habit: about 300 `<i>` strings in
-    `module/` have no `aria-hidden`, and `fa-solid` remains where a class string is handed to a
-    Foundry API (header controls, context menus), which is core's own spelling.
-11. **Half of the icon-only buttons have no `aria-label`.**
-12. **Tooltips are split** — `data-tooltip` ×436, native `title` ×250 in templates, and more in
-    JS, some of which code updates by writing `.title`. Native titles ignore the palette and the
-    text size. Converting needs the JS that sets them moved over in the same change.
+10. **Native `title` tooltips remain in 23 templates** (92 of them: the NPC and monster sheets,
+    the bestiary pages, Death's Door, the people gallery, the steading's Neighbors tab and a dozen
+    dialogs), and in a handful of markup strings and `.title =` writes in JS (the attack flow's
+    19, the ledger window, the book reader). The character sheet and every partial it draws are
+    done. The list is `PENDING` in `tests/templates/tooltip-conventions.test.js`; convert a window
+    and the code that rewrites its tooltips in one change, then take it off the list.
+11. **About 195 `data-tooltip` attributes print a value from data**, which core draws as HTML.
+    Most print strings the system builds. Any that can carry text a player typed should be
+    `data-tooltip-text`; they have not been sorted one from the other.
+12. **Icon-only controls built in JS** are not checked for an `aria-label`, and `fa-solid` remains
+    where a class string is handed to a Foundry API (header controls, context menus), which is
+    core's own spelling.
 
 **Naming**
 

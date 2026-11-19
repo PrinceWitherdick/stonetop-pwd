@@ -1447,7 +1447,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (oldImg && newImg
 				&& oldSrc === newImg.getAttribute("src")
 				&& oldStyle === (newImg.getAttribute("style") ?? "")) {
-				oldImg.title = newImg.title;
+				// The portrait's tooltip is its name (actor-header.hbs), and a rename keeps the picture.
+				const tip = newImg.getAttribute("data-tooltip-text");
+				if (tip === null) oldImg.removeAttribute("data-tooltip-text");
+				else oldImg.setAttribute("data-tooltip-text", tip);
 				oldImg.alt = newImg.alt;
 				newImg.replaceWith(oldImg);
 			}
@@ -6247,7 +6250,7 @@ export function createStonetopCharacterSheetClass(Base) {
 							<label>Person</label>
 							<div class="stonetop-field-btns">
 								<input type="text" class="stonetop-individual-person-name" readonly tabindex="-1" placeholder="A new Person is made for them" value="${escHtml(currentPerson?.name ?? "")}">
-								<button type="button" class="stonetop-individual-person-link stonetop-inline-btn"><i class="fas fa-link"></i> Link a Person…</button>
+								<button type="button" class="stonetop-individual-person-link stonetop-inline-btn"><i class="fas fa-link" aria-hidden="true"></i> Link a Person…</button>
 							</div>
 							<input type="hidden" name="ind-person" value="${escHtml(currentPerson?.uuid ?? "")}">
 						</div>
@@ -6261,7 +6264,7 @@ export function createStonetopCharacterSheetClass(Base) {
 							<div class="stonetop-individual-traits-grid">${traitsHtml}</div>
 							<div class="stonetop-trait-custom-row stonetop-field-btns">
 								<input type="text" class="stonetop-trait-custom-input" placeholder="Add a trait of your own…" autocomplete="off">
-								<button type="button" class="stonetop-trait-custom-add stonetop-inline-btn"><i class="fas fa-plus"></i> Add</button>
+								<button type="button" class="stonetop-trait-custom-add stonetop-inline-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
 							</div>
 						</div>
 					</form>`;
@@ -6276,7 +6279,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					// Closing the window is the cancel — the titlebar ✕ already does it.
 					buttons: {
 						save: {
-							icon:  "<i class='fas fa-user-pen'></i>",
+							icon:  "<i class='fas fa-user-pen' aria-hidden='true'></i>",
 							label: "Save",
 							callback: async (dlgHtml) => {
 								// Editing keeps the old name when the field is cleared: a member
@@ -7894,7 +7897,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// die is the part that's easy to miss in the move's prose.
 				const granted = grantedWeaponForMove(grant.name);
 				const weaponNote = granted
-					? `<p class="stonetop-stat-picker-weapon"><i class="fas fa-dice-d10"></i>
+					? `<p class="stonetop-stat-picker-weapon"><i class="fas fa-dice-d10" aria-hidden="true"></i>
 						Choosing ${_esc(Handlebars.helpers.statLabel(granted.whenStat))} means the
 						<strong>${_esc(granted.meta.name)}</strong> is your weapon: 
 						<strong>${_esc(weaponTraitText(granted.meta))}</strong>, in place of your own damage die.</p>`
@@ -9012,7 +9015,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				content,
 				buttons: {
 					learn: {
-						icon:  "<i class='fas fa-book'></i>",
+						icon:  "<i class='fas fa-book' aria-hidden='true'></i>",
 						label: localize("stonetop.specialMoves.levelUp.tickPicker.learn"),
 						callback: async html => {
 							const id = html.find(".stonetop-foreign-move-select").val();
@@ -11296,7 +11299,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!cost) return "";
 			return `<div class="card-buttons stonetop-roll-actions">
 				<button type="button" class="stonetop-spend-stock" data-action="spendStock" data-amount="${cost.amount}" data-move-id="${_esc(item.id ?? item._id ?? "")}">
-					<i class="fas fa-mortar-pestle"></i> Spend ${cost.amount} ${_esc(cost.label)}
+					<i class="fas fa-mortar-pestle" aria-hidden="true"></i> Spend ${cost.amount} ${_esc(cost.label)}
 				</button>
 			</div>`;
 		}
@@ -12148,13 +12151,13 @@ export function createStonetopCharacterSheetClass(Base) {
 						// The affirmative key is declared first and is in the shared left-side list,
 						// so it sits opposite "Just show it".
 						roll: {
-							icon:     '<i class="fas fa-sun"></i>',
+							icon:     '<i class="fas fa-sun" aria-hidden="true"></i>',
 							label:    !canInvoke ? "Use it"
 								: asTenPlus ? game.i18n.localize("stonetop.invocations.tenPlusButton") : "Invoke the Sun God (+WIS)",
 							callback: html => { answer = read(html, canInvoke, true); },
 						},
 						no: {
-							icon:     '<i class="fas fa-comment"></i>',
+							icon:     '<i class="fas fa-comment" aria-hidden="true"></i>',
 							label:    "Just show it",
 							// `used: false` is the load-bearing half of this button. Showing an
 							// Invocation's text is not using it, so it must not take hold of a new one
@@ -13018,7 +13021,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					+ `<p>What does <strong>${subject}</strong> produce?</p>`
 					+ `<input type="text" class="stonetop-hwtn-item stonetop-cf-input" placeholder="an item, some supplies…" style="width:100%"></form>`,
 				buttons: {
-					add: { icon: '<i class="fas fa-sack"></i>', label: "Add to their gear",
+					add: { icon: '<i class="fas fa-sack" aria-hidden="true"></i>', label: "Add to their gear",
 						callback: async html => {
 							const form = html?.[0];
 							const item = String(form?.querySelector(".stonetop-hwtn-item")?.value ?? "").trim();
@@ -13068,7 +13071,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title:   format(`${KEY}.title`, { name: who }),
 				content,
 				buttons: {
-					use: { icon: '<i class="fas fa-box-open"></i>', label: localize(`${KEY}.confirm`),
+					use: { icon: '<i class="fas fa-box-open" aria-hidden="true"></i>', label: localize(`${KEY}.confirm`),
 						callback: html => this._applyUseUp(card, who, html?.[0]) },
 					cancel: { label: localize(`${KEY}.cancel`) },
 				},
@@ -13583,7 +13586,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title:   `Spend ${name || "follower"}'s Loyalty`,
 				content: `<form class="stonetop-spend-form">${lead}${opts}${purse}</form>`,
 				buttons: {
-					spend:  { icon: '<i class="fas fa-hand-holding-heart"></i>', label: presence > 0 ? "Spend 1" : "Spend 1 Loyalty",
+					spend:  { icon: '<i class="fas fa-hand-holding-heart" aria-hidden="true"></i>', label: presence > 0 ? "Spend 1" : "Spend 1 Loyalty",
 						callback: html => this._applySpendLoyalty(path, name, reasons, html, { ftype, slug }) },
 					cancel: { label: "Cancel" },
 				},
@@ -13711,7 +13714,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title:   `Spend ${name || "follower"}'s Readiness`,
 				content: `<form class="stonetop-spend-form">${lead}${opts}${unwilling}${purse}</form>`,
 				buttons: {
-					spend:  { icon: '<i class="fas fa-shield"></i>', label: presence > 0 ? "Spend 1" : "Spend Readiness",
+					spend:  { icon: '<i class="fas fa-shield" aria-hidden="true"></i>', label: presence > 0 ? "Spend 1" : "Spend Readiness",
 						callback: html => this._applySpendReadiness({ rPath, readiness, lPath, loyalty, name, reasons, html, ftype }) },
 					cancel: { label: "Cancel" },
 				},
@@ -13779,7 +13782,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					<div class="form-group stonetop-handoff-row"><label>Character</label>
 						<select class="stonetop-handoff-target">${opts}</select></div>`,
 				buttons: {
-					handoff: { icon: '<i class="fas fa-people-arrows"></i>', label: "Hand off",
+					handoff: { icon: '<i class="fas fa-people-arrows" aria-hidden="true"></i>', label: "Hand off",
 						callback: html => this._handOffFollower(slug, html.find(".stonetop-handoff-target").val()) },
 					cancel:  { label: "Cancel" },
 				},
@@ -14306,7 +14309,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// a real impairment (lost limb, shattered knee) prompts "retire or Make a Plan"; a
 			// purely narrative Death's-Door mark is just carried and never gets the retire framing.
 			const permRow = (w) => `<li class="stonetop-convalesce-permanent-row">
-					<span class="stonetop-convalesce-permanent-text"><i class="fas fa-lock"></i> ${_esc(w.text || "(unnamed injury)")}</span>
+					<span class="stonetop-convalesce-permanent-text"><i class="fas fa-lock" aria-hidden="true"></i> ${_esc(w.text || "(unnamed injury)")}</span>
 					<input type="text" name="plan-${_esc(w.id)}" value="${_esc(w.planNote ?? "")}" placeholder="Make a Plan to adapt (a prosthetic, learn to compensate…)">
 				</li>`;
 			const permBlock = (title, list) => list.length
@@ -14319,7 +14322,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// any interim penalty like "Let Fly at disadvantage until practiced") lives on the
 			// wound's own edit form, so point there rather than duplicating that editor.
 			const permHint = permanent.length
-				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pencil"></i> edit on the sheet.</p>`
+				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pencil" aria-hidden="true"></i> edit on the sheet.</p>`
 				: "";
 			const permSection =
 				permBlock("Permanent injury: retire or Make a Plan to adapt:", permanent.filter(w => w.origin !== "deaths-door")) +
@@ -14860,7 +14863,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// single confirm — the GM says it's handled, and the wound stabilizes.
 			const content = `<form class="stonetop-homestead-dialog stonetop-wound-tend-form">
 				<p class="stonetop-homestead-trigger"><em>When you tend to a problematic wound, say how.</em></p>
-				<p class="stonetop-wound-tend-target"><i class="fas fa-droplet"></i> <strong>${_esc(label)}</strong></p>
+				<p class="stonetop-wound-tend-target"><i class="fas fa-droplet" aria-hidden="true"></i> <strong>${_esc(label)}</strong></p>
 				<p class="stonetop-homestead-note">The GM will say it's taken care of, or tell you what's still required. Stabilizing isn't healing — that takes Convalesce.</p>
 			</form>`;
 

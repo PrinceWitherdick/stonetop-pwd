@@ -1504,7 +1504,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// dice: "On a 6- either way ... you'll need to travel to ___ or wait until next season" (p.540).
 			const specialItemHtml = flow.specialItems
 				? `<div class="stonetop-tb-special">
-					<button type="button" class="stonetop-tb-special-btn"><i class="fas fa-gem"></i> Choose a special item…</button>
+					<button type="button" class="stonetop-tb-special-btn"><i class="fas fa-gem" aria-hidden="true"></i> Choose a special item…</button>
 					<span class="stonetop-tb-special-chosen" data-tb-chosen hidden="hidden"></span>
 					<input type="hidden" name="specialItem" value="">
 				</div>`
@@ -2010,10 +2010,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			// step of the season deliberately. Once a season, like the Surplus steps.
 			const rollOrAskBtn = seasonId === "spring"
 				? `<button class="stonetop-season-btn" data-action="ask-hopeful">
-					<i class="fas fa-comment-dots"></i> Ask the most hopeful to roll (in chat)
+					<i class="fas fa-comment-dots" aria-hidden="true"></i> Ask the most hopeful to roll (in chat)
 				</button>`
 				: `<button class="stonetop-season-btn" data-action="roll-fortunes">
-					<i class="fas fa-dice-d6"></i> Roll +Fortunes (current: <span data-season-live="fortunes">${sign(fortunes)}</span>)
+					<i class="fas fa-dice-d6" aria-hidden="true"></i> Roll +Fortunes (current: <span data-season-live="fortunes">${sign(fortunes)}</span>)
 				</button>`;
 			// Both figures are kept live by the render callback: winter is the one season whose
 			// Fortunes moves BEFORE its roll (a shortfall), and a shortfall at −1 can mark
@@ -2021,7 +2021,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			const fortunesBtns = `<div class="stonetop-season-actions">
 				${rollOrAskBtn}
 				<button class="stonetop-season-btn" data-action="reset-fortunes">
-					<i class="fas fa-rotate-left"></i> Then reset Fortunes to <span data-season-live="reset">${sign(resetFortunes)}</span>
+					<i class="fas fa-rotate-left" aria-hidden="true"></i> Then reset Fortunes to <span data-season-live="reset">${sign(resetFortunes)}</span>
 				</button>
 			</div>`;
 
@@ -2054,14 +2054,14 @@ export function createStonetopSteadingSheetClass(Base) {
 			// once the GM has walked the rest. The unreset warning is shown by the render
 			// callback, which knows whether the roll step's reset has been taken.
 			const notesBlock = `<div class="stonetop-season-notes-wrap">
-				<label class="stonetop-season-notes-label"><i class="fas fa-feather"></i> Notes for the Chronicle</label>
+				<label class="stonetop-season-notes-label"><i class="fas fa-feather" aria-hidden="true"></i> Notes for the Chronicle</label>
 				<textarea class="stonetop-season-notes" rows="2" placeholder="The omen, threat, or hook this season opens…"></textarea>
 			</div>
 			<p class="stonetop-season-note" data-season-unreset hidden>⚠️ Fortunes has not been reset yet this season. That is on the <strong>Roll +Fortunes</strong> step.</p>
 			<p class="stonetop-season-note" data-season-debt-unpaid hidden>⚠️ Last winter's debt is still unsettled. That is on the <strong>Winter's end</strong> step.</p>
 			<div class="stonetop-season-actions">
 				<button class="stonetop-season-btn" data-action="record-season">
-					<i class="fas fa-book"></i> Record the season &amp; close
+					<i class="fas fa-book" aria-hidden="true"></i> Record the season &amp; close
 				</button>
 			</div>`;
 
@@ -2073,7 +2073,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// No divider of its own: the blocks share a step, and joinBlocks puts one BETWEEN them, so
 			// the first never opens on a rule.
 			const upkeepBlock = ({ icon, name, sentence, body }) => `<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas ${icon}"></i> <strong>${name}</strong> ${sentence} Surplus: <strong>${surplus}</strong>.</p>
+					<p class="stonetop-season-note"><i class="fas ${icon}" aria-hidden="true"></i> <strong>${name}</strong> ${sentence} Surplus: <strong>${surplus}</strong>.</p>
 					${body}
 				</div>`;
 
@@ -2099,10 +2099,10 @@ export function createStonetopSteadingSheetClass(Base) {
 					body: `${short && copy.shortNote ? `<p class="stonetop-season-note"><em>${copy.shortNote}</em></p>` : ""}
 						<div class="stonetop-season-actions" data-upkeep-slug="${_esc(due.slug)}">
 						${short ? "" : `<button class="stonetop-season-btn" data-action="pay-upkeep" data-upkeep-slug="${_esc(due.slug)}">
-							<i class="fas ${copy.payIcon}"></i> ${copy.pay}
+							<i class="fas ${copy.payIcon}" aria-hidden="true"></i> ${copy.pay}
 						</button>`}
 						<button class="stonetop-season-btn stonetop-season-btn--warn" data-action="lose-upkeep" data-upkeep-slug="${_esc(due.slug)}">
-							<i class="fas fa-person-walking-arrow-right"></i> ${copy.lose}
+							<i class="fas fa-person-walking-arrow-right" aria-hidden="true"></i> ${copy.lose}
 						</button>
 					</div>`,
 				});
@@ -2129,7 +2129,7 @@ export function createStonetopSteadingSheetClass(Base) {
 					sentence: "wants <strong>1 Surplus</strong> and a week of drills this summer, or it loses its training in 1 tactic.",
 					body: `${surplus >= 1 ? `<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="drill-militia">
-							<i class="fas fa-bullseye"></i> Drill this summer (1 Surplus)
+							<i class="fas fa-bullseye" aria-hidden="true"></i> Drill this summer (1 Surplus)
 						</button>
 					</div>` : ""}
 					${tactics.length
@@ -2155,7 +2155,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// So spring says it is available and where to run it, which closes the only gap that
 			// mattered: a GM working through spring had nothing at all to remind them it exists.
 			const aurochsNote = (seasonId === "spring" && this._hasImprovement("aurochsHunting"))
-				? `<p class="stonetop-season-note"><i class="fas fa-cow"></i> The herds are on the Flats: <strong>Aurochs Hunting</strong> is open this spring. It is led when the group leads it, not when the season turns, so it is rolled from its own card on the Improvements tab, or as the Aurochs Hunt in the Homefront moves.</p>`
+				? `<p class="stonetop-season-note"><i class="fas fa-cow" aria-hidden="true"></i> The herds are on the Flats: <strong>Aurochs Hunting</strong> is open this spring. It is led when the group leads it, not when the season turns, so it is rolled from its own card on the Improvements tab, or as the Aurochs Hunt in the Homefront moves.</p>`
 				: "";
 
 			// The Inn's own +Fortunes roll — a SECOND roll the season makes, not a variant of the
@@ -2167,10 +2167,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Rites of the Land's, promised to the steading's own roll, and which of two rolls in
 			// one window counts as "next" is a ruling the table makes, not one to make for them.
 			const innRollBlock = this._hasImprovement("inn") ? `<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas fa-beer-mug-empty"></i> <strong>The Inn</strong>: whoever is friendliest rolls +Fortunes. On a <strong>10+</strong>, ask the GM 3 questions about the wider world; on a <strong>7-9</strong>, ask 1; on a <strong>6-</strong>, ask 1, but the GM describes some trouble that stems from the inn or its guests.</p>
+					<p class="stonetop-season-note"><i class="fas fa-beer-mug-empty" aria-hidden="true"></i> <strong>The Inn</strong>: whoever is friendliest rolls +Fortunes. On a <strong>10+</strong>, ask the GM 3 questions about the wider world; on a <strong>7-9</strong>, ask 1; on a <strong>6-</strong>, ask 1, but the GM describes some trouble that stems from the inn or its guests.</p>
 					<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="ask-friendliest">
-							<i class="fas fa-comment-dots"></i> Ask the friendliest to roll (in chat)
+							<i class="fas fa-comment-dots" aria-hidden="true"></i> Ask the friendliest to roll (in chat)
 						</button>
 					</div>
 				</div>` : "";
@@ -2195,7 +2195,7 @@ export function createStonetopSteadingSheetClass(Base) {
 									: `<div class="stonetop-season-actions">
 										<button class="stonetop-season-btn" data-action="take-yield"
 											data-yield-key="${_esc(y.key)}" data-yield-amount="${y.take}" data-yield-label="${_esc(y.label)}">
-											<i class="fas fa-wheat-awn"></i> ${y.needsHit ? `On a 7+: take ${y.take} Surplus` : `Take ${y.take} Surplus`}
+											<i class="fas fa-wheat-awn" aria-hidden="true"></i> ${y.needsHit ? `On a 7+: take ${y.take} Surplus` : `Take ${y.take} Surplus`}
 										</button>
 									</div>`}
 						</li>`).join("")}
@@ -2240,14 +2240,14 @@ export function createStonetopSteadingSheetClass(Base) {
 			const hasHerd = this._hasImprovement("herdOfHorses");
 			const herdAdvanceBlock = (seasonId === "summer" && hasHerd) ? `<div class="stonetop-season-actions">
 				<button class="stonetop-season-btn" data-action="advance-herd">
-					<i class="fas fa-horse"></i> Advance the herd (promote tiers, add foals)
+					<i class="fas fa-horse" aria-hidden="true"></i> Advance the herd (promote tiers, add foals)
 				</button>
 			</div>` : "";
 			const herdFeedBlock = (seasonId === "winter" && hasHerd) ? `<div>
 				<p class="stonetop-season-note">The herd eats 1 Surplus per ${HERD_SURPLUS_PER} grown-or-yearling horses; each Surplus it goes short costs 1d6 horses.</p>
 				<div class="stonetop-season-actions">
 					<button class="stonetop-season-btn" data-action="feed-herd">
-						<i class="fas fa-horse"></i> Feed the herd (consume Surplus, roll any losses)
+						<i class="fas fa-horse" aria-hidden="true"></i> Feed the herd (consume Surplus, roll any losses)
 					</button>
 				</div>
 			</div>` : "";
@@ -2276,7 +2276,7 @@ export function createStonetopSteadingSheetClass(Base) {
 					<p>Autumn's harvest was never rolled. It comes before winter's consumption, which it feeds.</p>
 					<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="roll-late-harvest">
-							<i class="fas fa-dice-d4"></i> Roll ${harvest.formula} Surplus (the harvest)
+							<i class="fas fa-dice-d4" aria-hidden="true"></i> Roll ${harvest.formula} Surplus (the harvest)
 						</button>
 					</div>
 					${partsNote(harvest.parts)}`)
@@ -2294,7 +2294,7 @@ export function createStonetopSteadingSheetClass(Base) {
 					step("brings", "What it brings", "fa-wheat-awn", joinBlocks([
 						`<div class="stonetop-season-actions">
 							<button class="stonetop-season-btn" data-action="roll-surplus">
-								<i class="fas fa-dice-d4"></i> Roll 1d4−1 Surplus (add to steading)
+								<i class="fas fa-dice-d4" aria-hidden="true"></i> Roll 1d4−1 Surplus (add to steading)
 							</button>
 						</div>${herdAdvanceBlock}`,
 						yieldsBlock,
@@ -2308,10 +2308,10 @@ export function createStonetopSteadingSheetClass(Base) {
 						// comes at the end of the season", p. 523). So it is not a thing to do on
 						// the season's first day: until it is rolled it waits on the steading's
 						// header, and the season can be recorded without it.
-						`<p class="stonetop-season-note"><i class="fas fa-wheat-awn"></i> <strong>The harvest</strong> is rolled when it is complete, at the end of autumn, not now. Until then it waits on the steading's header (the sheaf); roll it from there when autumn's play is done, or here if it already is.</p>
+						`<p class="stonetop-season-note"><i class="fas fa-wheat-awn" aria-hidden="true"></i> <strong>The harvest</strong> is rolled when it is complete, at the end of autumn, not now. Until then it waits on the steading's header (the sheaf); roll it from there when autumn's play is done, or here if it already is.</p>
 						<div class="stonetop-season-actions">
 							<button class="stonetop-season-btn" data-action="roll-surplus" data-formula="${_esc(harvest.formula)}">
-								<i class="fas fa-dice-d4"></i> The harvest is complete: roll ${harvest.formula} Surplus
+								<i class="fas fa-dice-d4" aria-hidden="true"></i> The harvest is complete: roll ${harvest.formula} Surplus
 							</button>
 						</div>
 						${partsNote(harvest.parts)}`,
@@ -2328,7 +2328,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						${partsNote(winterBill.parts)}
 						<div id="stonetop-winter-step1" class="stonetop-season-actions">
 							<button class="stonetop-season-btn" data-action="roll-consumption" data-formula="${_esc(winterBill.formula)}">
-								<i class="fas fa-dice-d4"></i> Roll ${winterBill.formula} for Surplus Consumption
+								<i class="fas fa-dice-d4" aria-hidden="true"></i> Roll ${winterBill.formula} for Surplus Consumption
 							</button>
 						</div>
 						<!-- Stands in for step 1 when the window is REOPENED on a winter whose
@@ -2366,7 +2366,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							${fortunesBtns}
 							<div class="stonetop-season-actions">
 								<button class="stonetop-season-btn stonetop-season-btn--warn" data-action="record-winter-debt">
-									<i class="fas fa-hourglass-half"></i> On a 7-9 or 6-: roll what winter still wants
+									<i class="fas fa-hourglass-half" aria-hidden="true"></i> On a 7-9 or 6-: roll what winter still wants
 								</button>
 							</div>
 						</div>`),
@@ -2404,7 +2404,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							<ol class="stonetop-guide-toc-list">
 								${steps.map((s, i) => `<li class="stonetop-guide-toc-item${i === 0 ? " is-active" : ""}">
 									<button type="button" class="stonetop-guide-toc-btn stonetop-season-tab" data-season-tab="${s.key}"${i === 0 ? ` aria-current="true"` : ""}>
-										<i class="fas ${s.icon} stonetop-guide-toc-icon"></i>
+										<i class="fas ${s.icon} stonetop-guide-toc-icon" aria-hidden="true"></i>
 										<span class="stonetop-guide-toc-text">${s.title}</span>
 										${s.key === "roll" ? `<span class="stonetop-guide-toc-count stonetop-season-gains-count" hidden></span>` : ""}
 									</button>
@@ -2783,7 +2783,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						if (!recordBtn) return;
 						const willApply = !!root.querySelector(".stonetop-season-gain-check[data-gain-key='population']:checked")
 							|| !!root.querySelector(".stonetop-season-gain-check[data-gain-key='bounty']:checked");
-						recordBtn.innerHTML = `<i class="fas fa-book"></i> ${willApply
+						recordBtn.innerHTML = `<i class="fas fa-book" aria-hidden="true"></i> ${willApply
 							? "Apply those gains, record the season &amp; close"
 							: "Record the season &amp; close"}`;
 					};
@@ -2933,7 +2933,7 @@ export function createStonetopSteadingSheetClass(Base) {
 					const innAsked = () => steading.seasonStepApplied(INN_ROLL_SEASON_STEP, year, seasonId);
 					const relabelInn = () => {
 						if (askFriendliestBtn && innAsked()) {
-							askFriendliestBtn.innerHTML = `<i class="fas fa-rotate-right"></i> Post the Inn's card again (already asked this season)`;
+							askFriendliestBtn.innerHTML = `<i class="fas fa-rotate-right" aria-hidden="true"></i> Post the Inn's card again (already asked this season)`;
 						}
 					};
 					relabelInn();
@@ -3726,12 +3726,12 @@ export function createStonetopSteadingSheetClass(Base) {
 					// Affirmative LEFT, as everywhere else. Both labels name an OUTCOME rather
 					// than an answer, so neither depends on having read the paragraph above it.
 					yes: {
-						icon:  '<i class="fas fa-person-walking-arrow-right"></i>',
+						icon:  '<i class="fas fa-person-walking-arrow-right" aria-hidden="true"></i>',
 						label: "Stand the muster down",
 						callback: () => this._applyStandDownMuster(held, defenses),
 					},
 					no: {
-						icon:  '<i class="fas fa-shield-halved"></i>',
+						icon:  '<i class="fas fa-shield-halved" aria-hidden="true"></i>',
 						label: "No, keep it mustered",
 					},
 				},
@@ -4083,13 +4083,13 @@ export function createStonetopSteadingSheetClass(Base) {
 				</div>`,
 				buttons: {
 					yes: {
-						icon: '<i class="fas fa-trash"></i>',
+						icon: '<i class="fas fa-trash" aria-hidden="true"></i>',
 						// Core's Dialog renders a button label as HTML: the label is the author's.
 						label: `Remove ${escHtml(def.label)}`,
 						callback: () => this._applyRemoveCustomImprovement(slug),
 					},
 					no: {
-						icon: '<i class="fas fa-screwdriver-wrench"></i>',
+						icon: '<i class="fas fa-screwdriver-wrench" aria-hidden="true"></i>',
 						label: "Keep it on the steading",
 					},
 				},

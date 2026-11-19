@@ -214,7 +214,7 @@ export function registerFollowerFateQueries(queries = globalThis.CONFIG?.queries
 
 /** The card's "Decide their fate" button, carrying the fate it reopens (read back with rowFromButton). PURE. */
 export function fateReopenButton(fate = {}) {
-	return `<div class="stonetop-attack-actions"><button type="button" class="stonetop-follower-fate-reopen" ${rowButtonData(fate)}><i class="fas fa-skull"></i> ${escHtml(localize(`${FATE}.reopenButton`))}</button></div>`;
+	return `<div class="stonetop-attack-actions"><button type="button" class="stonetop-follower-fate-reopen" ${rowButtonData(fate)}><i class="fas fa-skull" aria-hidden="true"></i> ${escHtml(localize(`${FATE}.reopenButton`))}</button></div>`;
 }
 
 /** Post the "out of the action" card for a fate window closed with nothing picked. */

@@ -118,11 +118,14 @@ describe("section collapse", () => {
 		expect(bodies.background.folded).toBe(true);
 		expect(carets.background.classes.has("stonetop-section-collapsed")).toBe(true);
 		expect(carets.background.attrs["aria-expanded"]).toBe("false");
-		expect(carets.background.attrs.title).toBe("Expand section");
+		// Foundry's tooltip and the control's spoken name, not a native title.
+		expect(carets.background.attrs["data-tooltip"]).toBe("Expand section");
+		expect(carets.background.attrs["aria-label"]).toBe("Expand section");
+		expect(carets.background.attrs.title).toBeUndefined();
 
 		html[0].fire("click", click(carets.background));
 		expect(bodies.background.folded).toBe(false);
-		expect(carets.background.attrs.title).toBe("Collapse section");
+		expect(carets.background.attrs["data-tooltip"]).toBe("Collapse section");
 	});
 
 	it("folds from the keyboard too, and ignores other keys", () => {
@@ -268,7 +271,8 @@ describe("sections that default to collapsed", () => {
 
 		html[0].fire("click", click(carets.guide));
 		expect(bodies.guide.folded).toBe(false);
-		expect(carets.guide.attrs.title).toBe("Collapse section");
+		expect(carets.guide.attrs["data-tooltip"]).toBe("Collapse section");
+		expect(carets.guide.attrs["aria-label"]).toBe("Collapse section");
 		// The stored id means "against its default", which for this section is OPEN.
 		expect(store.sheetSectionsCollapsed.actor1).toEqual(["guide"]);
 	});

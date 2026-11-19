@@ -4099,7 +4099,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		popup.innerHTML =
 			`<p class="stonetop-onboarding-faq-popup-title">Related questions</p>` +
 			`<div class="stonetop-onboarding-faq-popup-body">${this._currentFaq.map(i => i.html).join("")}</div>` +
-			`<p class="stonetop-onboarding-faq-popup-more">Click the <i class="fas fa-circle-question"></i> for the full FAQ</p>`;
+			`<p class="stonetop-onboarding-faq-popup-more">Click the <i class="fas fa-circle-question" aria-hidden="true"></i> for the full FAQ</p>`;
 		// Spiral bullet beside each Q&A, matching the full FAQ journal page.
 		markFaqItems(popup);
 		// Redraw the ◇/◆ load glyphs as the masked, theme-aware spans the journal

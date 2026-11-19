@@ -95,14 +95,14 @@ export function openLedgerDialog(actor, ledger) {
 			${mayEdit ? `<label class="stonetop-edit-toggle stonetop-ledger-edit-toggle" title="Edit entries">
 				<input type="checkbox" class="stonetop-ledger-edit-check">
 				<span class="stonetop-toggle-track">
-					<span class="stonetop-toggle-thumb"><i class="fas fa-pencil"></i></span>
+					<span class="stonetop-toggle-thumb"><i class="fas fa-pencil" aria-hidden="true"></i></span>
 				</span>
 			</label>
 			<label class="stonetop-ledger-select-all-label" title="Select all">
 				<input type="checkbox" class="stonetop-ledger-select-all">
 			</label>
 			<button type="button" class="stonetop-ledger-delete-selected">
-				<i class="fas fa-trash"></i> Delete
+				<i class="fas fa-trash" aria-hidden="true"></i> Delete
 			</button>` : ""}
 			<input type="search" class="stonetop-ledger-search" placeholder="Filter entries…">
 			<select class="stonetop-ledger-noun" title="Filter by subject">

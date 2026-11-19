@@ -141,7 +141,7 @@ export function speechRollOptions(actor) {
 	if (actor?.type !== "character" || !ownsLearnedMoveNamed(actor, WE_HAPPY_FEW)) return null;
 	const button = tier => {
 		const amount = inspirationForTier(tier);
-		return `<button type="button" class="stonetop-inspire-allies" data-amount="${amount}"><i class="fas fa-bullhorn"></i> `
+		return `<button type="button" class="stonetop-inspire-allies" data-amount="${amount}"><i class="fas fa-bullhorn" aria-hidden="true"></i> `
 			+ `${escHtml(format(`${KEY}.inspireButton`, { amount }))}</button>`;
 	};
 	return { tierActions: { success: button("success"), partial: button("partial"), failure: button("failure") } };

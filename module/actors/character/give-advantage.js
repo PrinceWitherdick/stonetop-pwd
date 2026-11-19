@@ -174,7 +174,7 @@ function buttonHtml(moveName, actor = null) {
 		: rule?.othersOnly ? "Give advantage to another PC..." : "Give advantage to...");
 	const line = typeof rule?.lead === "function" ? rule.lead(actor) : rule?.lead;
 	const lead = line ? `<p class="stonetop-give-advantage-lead">${line}</p>` : "";
-	return `${lead}<button type="button" class="stonetop-give-advantage" data-move="${escHtml(moveName)}"><i class="fas fa-angles-up"></i> ${escHtml(label)}</button>`;
+	return `${lead}<button type="button" class="stonetop-give-advantage" data-move="${escHtml(moveName)}"><i class="fas fa-angles-up" aria-hidden="true"></i> ${escHtml(label)}</button>`;
 }
 
 /**
@@ -228,7 +228,7 @@ function focusFireCardHtml(actor, item) {
 	if (actor?.type !== "character") return "";
 	if (item && bookMoveName(item, HERO_MOVES.FOCUS_FIRE) == null) return "";
 	if (!ownsLearnedBookMoveNamed(actor, HERO_MOVES.FOCUS_FIRE)) return "";
-	return `<div class="card-buttons stonetop-roll-actions stonetop-focus-fire-row"><button type="button" class="stonetop-focus-fire"><i class="fas fa-crosshairs"></i> ${escHtml(localize("stonetop.fight.heroMoves.focusFire.button"))}</button></div>`;
+	return `<div class="card-buttons stonetop-roll-actions stonetop-focus-fire-row"><button type="button" class="stonetop-focus-fire"><i class="fas fa-crosshairs" aria-hidden="true"></i> ${escHtml(localize("stonetop.fight.heroMoves.focusFire.button"))}</button></div>`;
 }
 
 /**
@@ -242,7 +242,7 @@ function rapierWitCardHtml(actor, item) {
 	if (actor?.type !== "character") return "";
 	if (item && bookMoveName(item, HERO_MOVES.RAPIER_WIT) == null) return "";
 	if (!ownsLearnedBookMoveNamed(actor, HERO_MOVES.RAPIER_WIT)) return "";
-	return `<div class="card-buttons stonetop-roll-actions stonetop-rapier-wit-row"><button type="button" class="stonetop-rapier-wit"><i class="fas fa-face-angry"></i> ${escHtml(localize("stonetop.fight.heroMoves.rapierWit.button"))}</button></div>`;
+	return `<div class="card-buttons stonetop-roll-actions stonetop-rapier-wit-row"><button type="button" class="stonetop-rapier-wit"><i class="fas fa-face-angry" aria-hidden="true"></i> ${escHtml(localize("stonetop.fight.heroMoves.rapierWit.button"))}</button></div>`;
 }
 
 /**
@@ -256,7 +256,7 @@ function truthCardHtml(actor, item) {
 	if (actor?.type !== "character") return "";
 	if (item && bookMoveName(item, HERO_MOVES.TRUTH) == null) return "";
 	if (!ownsLearnedBookMoveNamed(actor, HERO_MOVES.TRUTH)) return "";
-	const button = (mode, icon) => `<button type="button" class="stonetop-truth" data-truth="${mode}"><i class="fas ${icon}"></i> ${escHtml(localize(`stonetop.fight.heroMoves.truth.${mode}Button`))}</button>`;
+	const button = (mode, icon) => `<button type="button" class="stonetop-truth" data-truth="${mode}"><i class="fas ${icon}" aria-hidden="true"></i> ${escHtml(localize(`stonetop.fight.heroMoves.truth.${mode}Button`))}</button>`;
 	return `<div class="card-buttons stonetop-roll-actions stonetop-truth-row">${button("adv", "fa-eye")}${button("dis", "fa-masks-theater")}</div>`;
 }
 
@@ -271,7 +271,7 @@ function speakSoftlyCardHtml(actor, item) {
 	if (actor?.type !== "character") return "";
 	if (item && bookMoveName(item, HERO_MOVES.SPEAK_SOFTLY) == null) return "";
 	if (!ownsLearnedBookMoveNamed(actor, HERO_MOVES.SPEAK_SOFTLY)) return "";
-	return `<div class="card-buttons stonetop-roll-actions stonetop-speak-softly-row"><button type="button" class="stonetop-speak-softly"><i class="fas fa-dove"></i> ${escHtml(localize("stonetop.fight.heroMoves.speakSoftly.button"))}</button></div>`;
+	return `<div class="card-buttons stonetop-roll-actions stonetop-speak-softly-row"><button type="button" class="stonetop-speak-softly"><i class="fas fa-dove" aria-hidden="true"></i> ${escHtml(localize("stonetop.fight.heroMoves.speakSoftly.button"))}</button></div>`;
 }
 
 /** The held advantage's label: the move, and whose it was when it is someone else's. PURE. */

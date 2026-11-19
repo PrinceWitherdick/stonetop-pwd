@@ -448,7 +448,7 @@ export function wireKeepOneHp(message, html, { user = globalThis.game?.user } = 
 	const button = (root.ownerDocument ?? globalThis.document).createElement("button");
 	button.type = "button";
 	button.className = "stonetop-dying-btn stonetop-inspiration-keep";
-	button.innerHTML = `<i class="fas fa-heart-pulse"></i> ${escHtml(localize(`${KEY}.keepCardButton`))}`;
+	button.innerHTML = `<i class="fas fa-heart-pulse" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.keepCardButton`))}`;
 	button.dataset.tooltipText = format(`${KEY}.keepAsk`, { name: actor.name, held: inspirationHeld(actor) });
 	button.addEventListener("click", async () => {
 		if (button.disabled) return;

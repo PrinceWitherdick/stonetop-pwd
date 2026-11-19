@@ -165,7 +165,12 @@ export function withSectionEditing(Base) {
 				}
 				caret.classList.toggle("stonetop-section-collapsed", collapsed);
 				caret.setAttribute("aria-expanded", String(!collapsed));
-				caret.setAttribute("title", collapsed ? "Expand section" : "Collapse section");
+				// The tooltip the template gives it (section-collapse.hbs), and the name a screen
+				// reader says for a control that is only a caret. Not a native `title`: that one
+				// ignores the reader's palette and Sheet Text Size.
+				const says = collapsed ? "Expand section" : "Collapse section";
+				caret.setAttribute("data-tooltip", says);
+				caret.setAttribute("aria-label", says);
 			};
 			for (const caret of root.querySelectorAll(".stonetop-section-collapse")) {
 				apply(caret, this._isSectionCollapsed(caret));

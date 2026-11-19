@@ -74,7 +74,7 @@
 					</label>
 					{{#if note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 					{{#if (and isCustom @root.stonetop.editMode)}}
-					<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
+					<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.inventory.removeItem'}}" aria-label="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 					{{/if}}
 				</div>
 				{{/each}}
@@ -229,11 +229,11 @@
 					</span>
 					{{/if}}
 					{{#if (and isCustom @root.stonetop.possessionsEdit)}}
-					<a class="stonetop-possession-custom-remove" data-slug="{{this.slug}}" title="{{localize 'stonetop.character.gear.removePossession'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
+					<a class="stonetop-possession-custom-remove" data-slug="{{this.slug}}" data-tooltip="{{localize 'stonetop.character.gear.removePossession'}}" aria-label="{{localize 'stonetop.character.gear.removePossession'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 					{{/if}}
 					{{#if (and hasChoiceGroups @root.stonetop.possessionsEdit)}}
 					<a class="stonetop-possession-choices-edit" data-possession-choices="{{this.slug}}"
-					   data-tooltip="Edit your sacred pouch's details &amp; remarkable trait(s)" data-tooltip-direction="UP">
+					   data-tooltip="Edit your sacred pouch's details &amp; remarkable trait(s)" aria-label="Edit your sacred pouch's details &amp; remarkable trait(s)" data-tooltip-direction="UP">
 						<i class="fas fa-pencil" aria-hidden="true"></i>
 					</a>
 					{{/if}}

@@ -266,7 +266,7 @@ const DEPLOY_CONSEQUENCES = [
 // have the militia "suffer heavy losses (mark diminished)". `data-move` names the card it is on
 // for the steading's ledger. Wired in stonetop.js.
 const markDiminishedAction = move => `<button type="button" class="stonetop-deploy-mark-diminished" data-action="deploy-mark-diminished" data-move="${move}">
-				<i class="fas fa-band-aid"></i> Injuries abound: mark diminished
+				<i class="fas fa-band-aid" aria-hidden="true"></i> Injuries abound: mark diminished
 			</button>`;
 
 /**
@@ -298,14 +298,14 @@ const AUROCHS_CONSEQUENCES = [
 // consequences that change the sheet (the herd's weakness is remembered for next spring's
 // warning). Wired in stonetop.js; each settles once per card.
 const AUROCHS_SURPLUS_ACTION = `<button type="button" class="stonetop-aurochs-surplus" data-action="aurochs-surplus">
-		<i class="fas fa-drumstick-bite"></i> Gain 1d4 Surplus
+		<i class="fas fa-drumstick-bite" aria-hidden="true"></i> Gain 1d4 Surplus
 	</button>`;
 const AUROCHS_CONSEQUENCE_ACTIONS = `<button type="button" class="stonetop-aurochs-horses" data-action="aurochs-horses">
-		<i class="fas fa-horse"></i> Horses lamed or killed: roll 1d4
+		<i class="fas fa-horse" aria-hidden="true"></i> Horses lamed or killed: roll 1d4
 	</button>
 	${markDiminishedAction("Aurochs Hunt")}
 	<button type="button" class="stonetop-aurochs-weak" data-action="aurochs-weak">
-		<i class="fas fa-cow"></i> The herd is weak: remember it next spring
+		<i class="fas fa-cow" aria-hidden="true"></i> The herd is weak: remember it next spring
 	</button>`;
 
 const MUSTER_CHOICES = [
@@ -326,10 +326,10 @@ const MUSTER_CHOICES = [
 // to remove is worse than one nobody remembers to add: it is invisible on the sheet either way,
 // but the stale one is wrong. Taking it here is what lets standing down undo it.
 const MUSTER_RAISE_ACTIONS = `<button type="button" class="stonetop-muster-raise" data-action="muster-raise">
-		<i class="fas fa-tower-observation"></i> Raise the muster
+		<i class="fas fa-tower-observation" aria-hidden="true"></i> Raise the muster
 	</button>
 	<button type="button" class="stonetop-muster-raise" data-action="muster-raise" data-defenses="1">
-		<i class="fas fa-shield-halved"></i> Raise it, +1 Defenses while it holds
+		<i class="fas fa-shield-halved" aria-hidden="true"></i> Raise it, +1 Defenses while it holds
 	</button>`;
 
 /**

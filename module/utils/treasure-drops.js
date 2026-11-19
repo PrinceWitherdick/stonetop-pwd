@@ -187,7 +187,7 @@ function writeDrag(ev, entry) {
 // too small. The badge CSS sizes them up and paints each in the badge's own colour.
 function badgeHtml(entry) {
 	const parts = [];
-	if (entry.column === "immobile") parts.push(`<span class="st-treasure-weight st-immobile" data-tooltip="Immobile: needs a cart or beast to move, not a personal-load item"><i class="fas fa-dolly"></i></span>`);
+	if (entry.column === "immobile") parts.push(`<span class="st-treasure-weight st-immobile" data-tooltip="Immobile: needs a cart or beast to move, not a personal-load item"><i class="fas fa-dolly" aria-hidden="true"></i></span>`);
 	else if (entry.weight > 0) parts.push(`<span class="st-treasure-weight" data-tooltip="Load ${entry.weight}">${diamondGlyphs(Math.min(entry.weight, 6))}</span>`);
 	else parts.push(`<span class="st-treasure-weight st-small" data-tooltip="Small item (no load)">▫</span>`);
 	if (entry.uses > 0) {

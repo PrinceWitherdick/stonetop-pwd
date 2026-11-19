@@ -15,9 +15,9 @@
 	{{> "stonetop.inv-note" note=note resource=resource resourceFirst=resourceFirst slug=slug}}
 	{{> "stonetop.inv-artifact" deletable=deletable}}
 	{{#if (and deletable @root.stonetop.editMode)}}
-	<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
+	<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.inventory.removeItem'}}" aria-label="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 	{{/if}}
 	{{#if isAddedSpecial}}
-	<a class="stonetop-inv-remove-special" data-slug="{{this.slug}}" title="Remove special item"><i class="fas fa-xmark" aria-hidden="true"></i></a>
+	<a class="stonetop-inv-remove-special" data-slug="{{this.slug}}" data-tooltip="Remove special item" aria-label="Remove special item"><i class="fas fa-xmark" aria-hidden="true"></i></a>
 	{{/if}}
 </div>

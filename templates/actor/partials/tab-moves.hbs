@@ -38,12 +38,12 @@
 					<div class="stonetop-love-letter-actions">
 						{{#if draft}}
 						<button type="button" class="stonetop-love-letter-send" data-item-id="{{this.ownedId}}"
-						        title="{{localize 'stonetop.character.moves.loveLetter.sendHint'}}">
+						        data-tooltip="{{localize 'stonetop.character.moves.loveLetter.sendHint'}}">
 							<i class="fas fa-paper-plane" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.sendButton"}}
 						</button>
 						{{else if resolved}}
 						<button type="button" class="stonetop-love-letter-resend" data-item-id="{{this.ownedId}}"
-						        title="{{localize 'stonetop.character.moves.loveLetter.resendHint'}}">
+						        data-tooltip="{{localize 'stonetop.character.moves.loveLetter.resendHint'}}">
 							<i class="fas fa-paper-plane" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.resendButton"}}
 						</button>
 						{{else}}
@@ -52,10 +52,10 @@
 						</button>
 						{{/if}}
 						{{#if @root.stonetop.canAuthorLoveLetters}}
-						<a class="stonetop-love-letter-edit" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.editMove'}}">
+						<a class="stonetop-love-letter-edit" data-item-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.character.moves.loveLetter.editMove'}}" aria-label="{{localize 'stonetop.character.moves.loveLetter.editMove'}}">
 							<i class="fas fa-pencil" aria-hidden="true"></i>
 						</a>
-						<a class="stonetop-love-letter-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.deleteMove'}}">
+						<a class="stonetop-love-letter-delete" data-item-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.character.moves.loveLetter.deleteMove'}}" aria-label="{{localize 'stonetop.character.moves.loveLetter.deleteMove'}}">
 							<i class="fas fa-trash" aria-hidden="true"></i>
 						</a>
 						{{/if}}
@@ -134,7 +134,7 @@
 			<button type="button" class="stonetop-moves-level-notice-dismiss"
 			        data-overage-key="{{stonetop.movelist.levelMovesOverageKey}}"
 			        aria-label="{{localize 'stonetop.character.moves.dismissLevelMovesOverLimit'}}"
-			        title="{{localize 'stonetop.character.moves.dismissLevelMovesOverLimit'}}">
+			        data-tooltip="{{localize 'stonetop.character.moves.dismissLevelMovesOverLimit'}}">
 				<i class="fas fa-xmark" aria-hidden="true"></i>
 			</button>
 		</div>
@@ -192,7 +192,7 @@
 								<strong class="stonetop-item-name{{#if rollType}} rollable move-rollable{{/if}}"{{#if rollType}} data-roll="{{this.rollType}}" data-mod=""{{/if}}>{{this.name}}</strong>
 								{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 								{{#if @root.stonetop.movesEdit}}
-								<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
+								<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.character.moves.removeMove'}}" aria-label="{{localize 'stonetop.character.moves.removeMove'}}">
 									<i class="fas fa-trash" aria-hidden="true"></i>
 								</a>
 								{{/if}}
@@ -226,7 +226,7 @@
 							      answer to the authoring gate, exactly as the delete affordance does. --}}
 							<input type="checkbox" class="stonetop-item-check stonetop-other-move-learned"
 							       data-item-id="{{this.ownedId}}"
-							       title="{{localize 'stonetop.character.moves.learnedTitle'}}"
+							       data-tooltip="{{localize 'stonetop.character.moves.learnedTitle'}}"
 							       {{#if learned}}checked{{/if}}
 							       {{#unless (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}disabled{{/unless}}>
 							{{!-- Un-learning a move takes the roll off its title, which is what the
@@ -252,12 +252,12 @@
 							</span>
 							{{/if}}
 							{{#if (and custom @root.stonetop.movesEdit @root.stonetop.canAuthorCustomMoves)}}
-							<a class="stonetop-custom-move-edit" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.custom.editMove'}}">
+							<a class="stonetop-custom-move-edit" data-item-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.character.moves.custom.editMove'}}" aria-label="{{localize 'stonetop.character.moves.custom.editMove'}}">
 								<i class="fas fa-pencil" aria-hidden="true"></i>
 							</a>
 							{{/if}}
 							{{#if (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}
-							<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
+							<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" data-tooltip="{{localize 'stonetop.character.moves.removeMove'}}" aria-label="{{localize 'stonetop.character.moves.removeMove'}}">
 								<i class="fas fa-trash" aria-hidden="true"></i>
 							</a>
 							{{/if}}
@@ -279,7 +279,7 @@
 			      and out of edit mode so authoring never depends on the Edit toggle. --}}
 			{{#if stonetop.canAuthorCustomMoves}}
 			<div class="stonetop-move-add-bar">
-				<button type="button" class="stonetop-add-custom-move" title="{{localize 'stonetop.character.moves.addMove'}}">
+				<button type="button" class="stonetop-add-custom-move" data-tooltip="{{localize 'stonetop.character.moves.addMove'}}">
 					<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.character.moves.custom.addButton"}}
 				</button>
 			</div>

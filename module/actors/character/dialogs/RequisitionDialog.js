@@ -371,7 +371,7 @@ export class RequisitionDialog extends StonetopDialog {
 			title:   count > 1 ? "Add as followers?" : "Add as a follower?",
 			content: `<p>You requisitioned <strong>${escHtml(assetName)}</strong>. Also add ${what} (<em>${escHtml(beast.name)}</em> - HP ${beast.hp}${count > 1 ? " each" : ""}, Cost ${escHtml(beast.cost)})?</p>`,
 			buttons: {
-				yes: { icon: '<i class="fas fa-dog"></i>', label: count > 1 ? `Add ${count} followers` : "Add as follower",
+				yes: { icon: '<i class="fas fa-dog" aria-hidden="true"></i>', label: count > 1 ? `Add ${count} followers` : "Add as follower",
 					callback: () => this._addRequisitionedFollower(match, assetName, assetName) },
 				no:  { label: count > 1 ? "Don't add them" : "Don't add it" },
 			},

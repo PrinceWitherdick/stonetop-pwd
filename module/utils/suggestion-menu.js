@@ -58,7 +58,7 @@ export function openSuggestionMenu(anchor, { heading = "", blankLabel, items = [
 	if (anchor.id) menu.setAttribute("aria-labelledby", anchor.id);
 	const glyph = ({ icon = "", iconClass = "", iconStyle = "" } = {}) => (icon
 		? `<span class="stonetop-suggestion-menu-icon${iconClass ? ` ${esc(iconClass)}` : ""}"${iconStyle ? ` style="${esc(iconStyle)}"` : ""}`
-			+ ` aria-hidden="true"><i class="fas ${esc(icon)}"></i></span>`
+			+ ` aria-hidden="true"><i class="fas ${esc(icon)}" aria-hidden="true"></i></span>`
 		: "");
 	const row = (value, label, hint, { used = false, blank = false, item = null } = {}) =>
 		`<li class="stonetop-autocomplete-option${blank ? " is-blank" : ""}${used ? " is-used" : ""}" role="menuitem" tabindex="-1"`

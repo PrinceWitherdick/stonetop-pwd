@@ -61,7 +61,7 @@ const DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-inn-dialog"] 
 // window knows WHICH season was spent and can name it, where the card has room only to say
 // that one was.
 const BLOCKED_COPY = {
-	done:    seasonLine => `<p class="stonetop-inn-done"><i class="fas fa-check"></i> Folks already gathered in ${seasonLine}. The inn hosts one such gathering per season.</p>`,
+	done:    seasonLine => `<p class="stonetop-inn-done"><i class="fas fa-check" aria-hidden="true"></i> Folks already gathered in ${seasonLine}. The inn hosts one such gathering per season.</p>`,
 	surplus: () => `<p class="stonetop-inn-warn">The steading has <strong>no Surplus</strong> to spend on a gathering.</p>`,
 	healthy: () => `<p class="stonetop-inn-note">${GATHERING_HINT.healthy} Save the Surplus.</p>`,
 };

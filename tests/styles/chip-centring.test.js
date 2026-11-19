@@ -491,7 +491,7 @@ describe("the post-death card buttons and Death's Door's caution row carry no ha
 	it("draws the Forced out button as the audit measured it: an icon element, then the label", async () => {
 		const { cardButton } = await import("../../module/actors/character/post-death-card-button.js");
 		expect(cardButton("stonetop-pd-forced-out", { key: "forced-out", label: "Forced out", icon: "fa-person-walking-arrow-right" }))
-			.toMatch(/^<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out"[^>]*><i class="fas fa-person-walking-arrow-right"><\/i> Forced out<\/button>$/);
+			.toMatch(/^<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out"[^>]*><i class="fas fa-person-walking-arrow-right" aria-hidden="true"><\/i> Forced out<\/button>$/);
 		expect(readRepo("templates/dialogs/partials/deaths-door-dictates.hbs"))
 			.toMatch(/<p class="deaths-door-dictated"><i class="fas [\w-]+" aria-hidden="true"><\/i> /);
 	});

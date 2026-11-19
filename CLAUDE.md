@@ -16,6 +16,8 @@ Read [STYLEGUIDE.md](STYLEGUIDE.md). The short version:
   `Dialog`, `themedDialogClasses()` for a `DialogV2`.
 - Dialog buttons name the outcome they commit, not "OK" / "Yes".
 - Icons are `<i class="fas fa-name" aria-hidden="true"></i>`; edit is `fa-pencil`.
+- A control that is only an icon carries an `aria-label`. Hover help is `data-tooltip` (our own
+  words) or `data-tooltip-text` (anything printed from data), never a native `title`.
 - New class names are `stonetop-<area>-<part>`, `--modifier`, `is-state`.
 - If you add a rule the guide does not cover, or find the stylesheet disagreeing with it, update
   the guide (and its Known gaps list) in the same change.

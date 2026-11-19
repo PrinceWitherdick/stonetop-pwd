@@ -434,7 +434,7 @@ export function winterDebtDialogHtml(state, { due = false } = {}) {
 		${state.canPay
 			? `<div class="stonetop-season-actions">
 				<button type="button" class="stonetop-season-btn" data-action="pay-winter-debt">
-					<i class="fas fa-wheat-awn"></i> Consume ${state.owed} Surplus, and winter is done
+					<i class="fas fa-wheat-awn" aria-hidden="true"></i> Consume ${state.owed} Surplus, and winter is done
 				</button>
 			</div>
 			<p class="stonetop-season-note"><em>Or refuse, and take the consequences instead. That costs more, not less: Surplus still drops to <strong>0</strong>, ${disaster}, and one of these happens on top. Pick the one the steading suffers.</em></p>`

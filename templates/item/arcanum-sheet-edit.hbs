@@ -154,7 +154,7 @@
 							{{else}}
 							<input type="text" class="stonetop-arc-req-input stonetop-arc-req-input--wide" data-req-prop="content" placeholder="Interstitial label (e.g. “And then…”)" value="{{this.content}}">
 							{{/if}}
-							<button type="button" class="stonetop-arc-req-remove" title="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-arc-req-remove" title="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></button>
 						</li>
 						{{/each}}
 					</ul>
@@ -257,7 +257,7 @@
 								<label class="stonetop-arc-check stonetop-arc-check--sub"><input type="checkbox" class="stonetop-check" data-foll-prop="repeatable" {{#if repeatable}}checked{{/if}}>
 									<span>Repeatable (can be summoned again each time)</span></label>
 							</div>
-							<button type="button" class="stonetop-arc-foll-remove" title="Remove follower"><i class="fas fa-trash" aria-hidden="true"></i></button>
+							<button type="button" class="stonetop-arc-foll-remove" title="Remove follower" aria-label="Remove follower"><i class="fas fa-trash" aria-hidden="true"></i></button>
 						</li>
 						{{/each}}
 					</ul>

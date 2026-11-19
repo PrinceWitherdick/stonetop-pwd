@@ -138,9 +138,9 @@ export function improviseOffer(actor, move, arcanumSlug, { editable = true } = {
 export function improviseTierActions({ arcanumSlug, moveSlug, moveName }) {
 	const slugAttr = `data-arcanum-slug="${escHtml(arcanumSlug)}"`;
 	const use = `<button type="button" class="stonetop-improvise-use" ${slugAttr} data-move-slug="${escHtml(moveSlug)}">`
-		+ `<i class="fas fa-wand-sparkles"></i> ${escHtml(`Use ${moveName} this once`)}</button>`;
+		+ `<i class="fas fa-wand-sparkles" aria-hidden="true"></i> ${escHtml(`Use ${moveName} this once`)}</button>`;
 	const step = `<button type="button" class="stonetop-improvise-step" ${slugAttr}>`
-		+ `<i class="fas fa-circle-check"></i> Mark a step towards unlocking</button>`;
+		+ `<i class="fas fa-circle-check" aria-hidden="true"></i> Mark a step towards unlocking</button>`;
 	return { success: use + step, partial: use };
 }
 
@@ -951,7 +951,7 @@ export function askConsequencePick({ title, consequences }, { ask = askWithButto
 export function markConsequenceButton(slug, title) {
 	return `<div class="card-buttons stonetop-roll-actions">`
 		+ `<button type="button" class="stonetop-mark-consequence" data-arcanum-slug="${escHtml(slug)}">`
-		+ `<i class="fas fa-triangle-exclamation"></i> ${escHtml(`Mark a consequence (${title})`)}</button></div>`;
+		+ `<i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ${escHtml(`Mark a consequence (${title})`)}</button></div>`;
 }
 
 /**

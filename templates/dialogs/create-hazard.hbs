@@ -74,7 +74,7 @@
           {{#each moveRows}}
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <input type="text" class="stonetop-cf-input stonetop-ch-move-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="{{this.placeholder}}">
-            <button type="button" class="stonetop-ch-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <button type="button" class="stonetop-ch-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this move"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-ch-move-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add GM move</button>
@@ -94,7 +94,7 @@
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <span class="stonetop-ch-portent-glyph stonetop-glyph stonetop-glyph--circle" aria-hidden="true">○</span>
             <input type="text" class="stonetop-cf-input stonetop-ch-portent-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="pillar cracks and buckles, dirt pours down…">
-            <button type="button" class="stonetop-ch-portent-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <button type="button" class="stonetop-ch-portent-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this portent"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-ch-portent-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add grim portent</button>
@@ -110,7 +110,7 @@
           <div class="stonetop-ch-pm-row">
             <div class="stonetop-cf-gear-row stonetop-field-btns">
               <input type="text" class="stonetop-cf-input stonetop-ch-pm-label" data-index="{{this.index}}" value="{{this.label}}" placeholder="When you fall from the boughs of the tree…">
-              <button type="button" class="stonetop-ch-pm-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+              <button type="button" class="stonetop-ch-pm-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this player move"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
             <textarea class="stonetop-cf-textarea stonetop-ch-pm-text" data-index="{{this.index}}" rows="3" placeholder="…take 1d10+3 damage (ignores armor, forceful) and roll +CON: on a 10+…">{{this.text}}</textarea>
           </div>

@@ -28,7 +28,7 @@
 		      highest filled one to spend back down. --}}
 		<span class="stonetop-move-readiness" data-tooltip="Readiness (Defend, p.216). 10+: hold 3{{#if readiness.hasShield}} (4 with a shield){{/if}}. 7&ndash;9: hold 1{{#if readiness.hasShield}} (2 with a shield){{/if}}.{{#if readiness.hasGuardian}} Guardian: +1, and 1 even on a 6-.{{/if}} Filled when you Defend; lost when you go on the offense (Clash / Let Fly). Click a circle to set how much you hold. Spend it 1-for-1 to suffer an attack's damage/effects instead of your ward, halve an attack's effect or damage, draw all attention from your ward to yourself, or strike back at an attacker (deal your damage, with disadvantage)." data-tooltip-direction="UP">
 			{{#each readiness.pips}}
-			<button type="button" class="stonetop-readiness-pip stonetop-move-readiness-pip{{#if filled}} is-filled{{/if}}" data-index="{{this.index}}" title="Set Readiness"></button>
+			<button type="button" class="stonetop-readiness-pip stonetop-move-readiness-pip{{#if filled}} is-filled{{/if}}" data-index="{{this.index}}" data-tooltip="Set Readiness"></button>
 			{{/each}}
 		</span>
 		{{!-- Big Damn Hero's leap: "don't roll to Defend. Instead, treat it as though you rolled a

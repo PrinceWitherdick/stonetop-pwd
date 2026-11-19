@@ -23,7 +23,7 @@
 				<span class="stonetop-rulebook-actions">
 					{{#if this.path}}
 						<button type="button" data-action="read" data-book="{{this.book}}"
-							data-tooltip="Open this book">
+							data-tooltip="Open this book" aria-label="Open this book">
 							<i class="fas fa-book-open" aria-hidden="true"></i>
 						</button>
 					{{/if}}
@@ -34,19 +34,19 @@
 					<button type="button" class="stonetop-rulebook-choose"
 						data-action="choose" data-book="{{this.book}}"
 						{{#unless ../canStore}}disabled{{/unless}}
-						data-tooltip="Choose the PDF on this computer">
+						data-tooltip="Choose the PDF on this computer" aria-label="Choose the PDF on this computer">
 						<i class="fas fa-upload" aria-hidden="true"></i>
 					</button>
 					{{!-- The second door, for a book already on the server: one copied in earlier,
 					      or, on a hosted setup, one already sitting in the assets library. --}}
 					<button type="button" data-action="browse" data-book="{{this.book}}"
 						{{#unless ../canBrowse}}disabled{{/unless}}
-						data-tooltip="Pick one already in this world">
+						data-tooltip="Pick one already in this world" aria-label="Pick one already in this world">
 						<i class="fas fa-folder-open" aria-hidden="true"></i>
 					</button>
 					{{#if this.path}}
 						<button type="button" data-action="forget" data-book="{{this.book}}"
-							data-tooltip="Forget this file">
+							data-tooltip="Forget this file" aria-label="Forget this file">
 							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 					{{/if}}

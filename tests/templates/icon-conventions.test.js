@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { templateSources } from "../fakes/hbs.js";
+import fs from "node:fs";
+import path from "node:path";
+import { repoPath } from "../fakes/css.js";
+import { openingTags, templateSources } from "../fakes/hbs.js";
 
 // HOW AN ICON IS WRITTEN IN A TEMPLATE (STYLEGUIDE.md, "Icons and glyphs").
 //
@@ -14,7 +17,9 @@ import { templateSources } from "../fakes/hbs.js";
 //   · `aria-hidden`: on a third of them. A decorative `<i>` with no words in it is announced by
 //     some screen readers as a private-use character, and one reader at this table uses one.
 //
-// Markup built in JS is not read here. It follows the same rules, and nothing yet holds it to them.
+// A second pass took the same two rules to the markup JS builds, and gave every control that is
+// ONLY an icon a name: a button holding one glyph and no words says nothing at all to a screen
+// reader unless it carries an `aria-label`.
 
 const TEMPLATES = templateSources();
 const where = (re, source) => [...source.matchAll(re)].map(m => source.slice(0, m.index).split("\n").length);
@@ -39,5 +44,59 @@ describe("an icon in a template", () => {
 	// something, and hiding it would take that away.
 	it("is hidden from a screen reader when it carries nothing but its class", () => {
 		expect(offenders(/<i class="(?:fas|far|fab) [^"<>]*"><\/i>/g)).toEqual([]);
+	});
+});
+
+describe("an icon in markup built in JS", () => {
+	const walk = dir => fs.readdirSync(dir, { withFileTypes: true })
+		.flatMap(e => e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith(".js") ? [path.join(dir, e.name)] : []);
+	const FILES = [...walk(repoPath("module")), repoPath("stonetop.js")];
+	// With ", ' or an escaped \" round the class; a `${…}` inside it is still an icon.
+	const ICON = /<i class=\\?["'](?:fas|far|fab) [^>]*><\/i>/g;
+
+	it("found the modules", () => {
+		expect(FILES.length).toBeGreaterThan(300);
+	});
+
+	it("is hidden from a screen reader when it carries nothing but its class", () => {
+		const bare = FILES.flatMap(file => {
+			const source = fs.readFileSync(file, "utf8");
+			return [...source.matchAll(ICON)].filter(m => !/aria-hidden|data-tooltip|title=|aria-label/.test(m[0]))
+				.map(m => `${path.relative(repoPath("."), file)}:${source.slice(0, m.index).split("\n").length}`);
+		});
+		expect(bare).toEqual([]);
+	});
+});
+
+describe("a control that is only an icon", () => {
+	// Named at runtime instead: the relationship map's group bar writes both buttons' aria-label
+	// with the count in it each time it changes (relmap-group-bar.js#_sayCount).
+	const NAMED_IN_JS = new Set(["stonetop-relmap-tiebar-btn stonetop-relmap-groupbar-who"]);
+	const BLOCKS = /\{\{\s*(?:#if|#unless|else if|else|\/if|\/unless|\^)[^}]*\}\}/g;
+	const unnamed = [];
+	let seen = 0;
+	for (const { rel, source } of TEMPLATES) {
+		for (const tag of openingTags(source)) {
+			if (tag.name !== "button" && tag.name !== "a") continue;
+			const close = source.indexOf(`</${tag.name}>`, tag.end);
+			if (close < 0) continue;
+			const inner = source.slice(tag.end, close).replace(/\{\{!--[\s\S]*?--\}\}/g, "").replace(BLOCKS, "");
+			// A mustache left outside the <i> is a label printed from data: not icon-only.
+			if (/\{\{/.test(inner.replace(/<i\b[^>]*>/g, ""))) continue;
+			if (!/^(?:\s*<i\b[^>]*>\s*<\/i>\s*)+$/.test(inner)) continue;
+			seen++;
+			const has = name => tag.attrs.some(a => a.name === name);
+			if (has("aria-label") || has("aria-labelledby") || has("aria-hidden")) continue;
+			if (NAMED_IN_JS.has(tag.attrs.find(a => a.name === "class")?.raw)) continue;
+			unnamed.push(`${rel}:${source.slice(0, tag.start).split("\n").length}`);
+		}
+	}
+
+	it("found them", () => {
+		expect(seen).toBeGreaterThan(150);
+	});
+
+	it("says what it does", () => {
+		expect(unnamed).toEqual([]);
 	});
 });
