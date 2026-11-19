@@ -2838,6 +2838,12 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// Mirror a background change driven by an inline input (setup/neighbor/action
 		// pick) onto the background radio cards, so engaging an inner control also
 		// selects its card.
+		//
+		// Each inner control switches the background only when it belongs to another one
+		// (`prevBackground !== backgroundSlug`). _applyBackgroundChange clears the Initiates
+		// picks and rebuilds the steps, so re-running it for the background already taken (a
+		// setup field's `input`, on every keystroke) threw those picks away for nothing; its
+		// reconcilers and the step list come out the same for an unchanged background.
 		const _syncBackgroundSelection = (prevBackground, backgroundSlug) => {
 			if (prevBackground === backgroundSlug) return;
 			_paintBackgroundPicks();
@@ -2893,7 +2899,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".stonetop-onboarding-background-choice-option input[type='radio']").on("change", ev => {
 			const { backgroundSlug, choiceKey, choiceLabel } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundChoices[choiceKey] = {
 				label: choiceLabel,
 				value: ev.currentTarget.value,
@@ -2959,7 +2965,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".stonetop-onboarding-background-setup-option input[type='radio']").on("change", ev => {
 			const { backgroundSlug, choiceKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundSetup.choices[choiceKey] = ev.currentTarget.value;
 			html.find(`[name='${ev.currentTarget.name}']`).each((_, radio) => {
 				radio.closest(".stonetop-onboarding-background-setup-option")
@@ -2971,7 +2977,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".onboard-background-setup-text").on("input", ev => {
 			const { backgroundSlug, textKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundSetup.texts[textKey] = ev.currentTarget.value;
 			_syncBackgroundSelection(prevBackground, backgroundSlug);
 			_refreshNextButton();
@@ -2984,7 +2990,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".onboard-background-neighbor-trait").on("input", ev => {
 			const { backgroundSlug, traitKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundSetup.neighborTraits[traitKey] = ev.currentTarget.value.trim();
 			_syncBackgroundSelection(prevBackground, backgroundSlug);
 			_refreshNextButton();
@@ -3019,7 +3025,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const { backgroundSlug, choiceKey } = ev.currentTarget.dataset;
 			const max = Number(ev.currentTarget.dataset.choiceCount ?? 1);
 			const prevBackground = this._selections.backgroundSlug;
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			const current = this._selections.backgroundSetup.neighborPicks[choiceKey] ?? [];
 			const value = ev.currentTarget.value;
 			const next = ev.currentTarget.checked
@@ -3060,7 +3066,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const prevBackground = this._selections.backgroundSlug;
 			// Engaging a background's action picks that background, mirroring the
 			// setup/neighbor/arcana inputs on the other cards.
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			const bg  = this._backgrounds.find(b => b.slug === backgroundSlug);
 			const max = allowedMarkableActions(bg?.markableActions, 1);
 			const value = ev.currentTarget.value;
@@ -3105,7 +3111,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find("[name='onboard-background-major-arcanum']").on("change", ev => {
 			const prevBackground = this._selections.backgroundSlug;
 			const { backgroundSlug } = ev.currentTarget.dataset;
-			this._applyBackgroundChange(backgroundSlug);
+			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
 			this._selections.arcana.major = ev.currentTarget.value;
 
 			// Update arcana is-selected without re-rendering.
@@ -3114,13 +3120,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					?.classList.toggle("is-selected", radio.checked);
 			});
 
-			// If the background itself changed, sync the background card selection too.
-			if (prevBackground !== backgroundSlug) {
-				html.find("[name='onboard-background']").each((_, radio) => {
-					radio.closest(".stonetop-onboarding-card")
-						?.classList.toggle("is-selected", radio.value === backgroundSlug);
-				});
-			}
+			// If the background itself changed, sync the background card selection too: the
+			// radio checked as well as the card lit, and its picks repainted, as every other inner
+			// control does.
+			_syncBackgroundSelection(prevBackground, backgroundSlug);
 
 			_refreshNextButton();
 		});
