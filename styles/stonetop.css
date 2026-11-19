@@ -24960,6 +24960,11 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 .stonetop-season-btn:hover { background: var(--st-btn-primary-bg-hover); }
 
+/* Same trap as `.stonetop-season-actions[hidden]` above: the `display: flex` out-specifies the
+   UA's `[hidden]`. An upkeep's Pay button is drawn hidden while the steading cannot afford it,
+   and shown when the Surplus rises in the same window. */
+.stonetop-season-btn[hidden] { display: none; }
+
 /* Disbanding the Standing Watch is the one seasonal button that TAKES something away for good,
    so it reads as the reluctant option beside "Feed the watch" rather than a peer of it.
    Declared after `.stonetop-season-btn` because a `--mod` ties with its base on specificity

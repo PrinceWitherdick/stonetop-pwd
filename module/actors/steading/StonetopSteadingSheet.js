@@ -176,6 +176,21 @@ function upkeepCopy(due) {
 	};
 }
 
+/**
+ * Offer an upkeep's Pay button, or the note that says there is not enough to pay with, by whether
+ * the steading can afford it now. The Seasons Change window draws both, one hidden, off the Surplus
+ * it opened with, and runs this as the live Surplus moves (a harvest or a yield in the same window).
+ * @param {{ payBtn: HTMLElement, shortNote: HTMLElement|null }} els
+ * @param {boolean} affordable
+ */
+export function refreshUpkeepAfford({ payBtn, shortNote }, affordable) {
+	payBtn.hidden = !affordable;
+	// Given back when it can be afforded again: a pay that found the Surplus short leaves the
+	// button down, and Surplus found since is exactly what "unless some is found" asked for.
+	if (affordable) payBtn.disabled = false;
+	if (shortNote) shortNote.hidden = affordable;
+}
+
 /** Any improvement question (improvementQuestions) as its control: a tick, a pick, or a count. */
 export function improvementQuestionHtml(q) {
 	if (q.type === "select") {
@@ -2084,8 +2099,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			//
 			// No divider of its own: the blocks share a step, and joinBlocks puts one BETWEEN them, so
 			// the first never opens on a rule.
+			//
+			// The Surplus it quotes is a live cell (the render callback's stats hook), since a harvest
+			// or a yield in the same window can move it.
 			const upkeepBlock = ({ icon, name, sentence, body }) => `<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas ${icon}"></i> <strong>${name}</strong> ${sentence} Surplus: <strong>${surplus}</strong>.</p>
+					<p class="stonetop-season-note"><i class="fas ${icon}"></i> <strong>${name}</strong> ${sentence} Surplus: <strong data-season-stat="surplus">${surplus}</strong>.</p>
 					${body}
 				</div>`;
 
@@ -2101,18 +2119,24 @@ export function createStonetopSteadingSheetClass(Base) {
 			//
 			// One owed EVERY season is owed at the start of it (the watch's own words), so it opens
 			// the window, before the season's roll; one owed in named seasons is a cost of that season.
+			//
+			// The pay button and the could-not-pay note are both always drawn, one of them hidden: a
+			// harvest or a yield taken in this same window can raise the Surplus after it opens, and
+			// the upkeep wiring swaps them as it moves (refreshUpkeepAfford) rather than leaving Pay
+			// missing until a reopen.
 			const upkeepHtml = due => {
 				const copy = upkeepCopy(due);
 				const short = surplus < due.surplus;
+				const hidden = on => (on ? " hidden" : "");
 				return upkeepBlock({
 					icon: copy.icon,
 					name: _esc(due.label),
 					sentence: copy.sentence,
-					body: `${short && copy.shortNote ? `<p class="stonetop-season-note"><em>${copy.shortNote}</em></p>` : ""}
+					body: `${copy.shortNote ? `<p class="stonetop-season-note" data-upkeep-short="${_esc(due.slug)}"${hidden(!short)}><em>${copy.shortNote}</em></p>` : ""}
 						<div class="stonetop-season-actions" data-upkeep-slug="${_esc(due.slug)}">
-						${short ? "" : `<button class="stonetop-season-btn" data-action="pay-upkeep" data-upkeep-slug="${_esc(due.slug)}">
+						<button class="stonetop-season-btn" data-action="pay-upkeep" data-upkeep-slug="${_esc(due.slug)}"${hidden(short)}>
 							<i class="fas ${copy.payIcon}"></i> ${copy.pay}
-						</button>`}
+						</button>
 						<button class="stonetop-season-btn stonetop-season-btn--warn" data-action="lose-upkeep" data-upkeep-slug="${_esc(due.slug)}">
 							<i class="fas fa-person-walking-arrow-right"></i> ${copy.lose}
 						</button>
@@ -2524,13 +2548,16 @@ export function createStonetopSteadingSheetClass(Base) {
 					// The trade opportunity gain's neighbours (seasonal-gains.js).
 					wireTradeOpportunityLinks(root);
 
-					// The rail's numbers follow the steading while the window is open.
+					// The rail's numbers follow the steading while the window is open, and so does every
+					// other cell quoting one (each upkeep's "Surplus: N"). Anything else that turns on a
+					// live figure — which upkeeps can be paid, whether the militia can drill — registers
+					// on `liveRefreshers` below and is run after the cells.
+					const liveRefreshers = [];
 					if (statsHook !== null) Hooks.off("updateActor", statsHook);
 					statsHook = Hooks.on("updateActor", actor => {
 						if (actor?.id !== this.actor.id) return;
 						const set = (attr, key, text) => {
-							const el = root.querySelector(`[data-season-${attr}="${key}"]`);
-							if (el) el.textContent = text;
+							root.querySelectorAll(`[data-season-${attr}="${key}"]`).forEach(el => { el.textContent = text; });
 						};
 						const fortunesNow = sign(this._stonetopSteading.getStatValue("fortunes"));
 						set("stat", "fortunes", fortunesNow);
@@ -2539,6 +2566,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						// And the two button labels that quote a figure (see fortunesBtns).
 						set("live", "fortunes", fortunesNow);
 						set("live", "reset", sign(resetFortunesNow()));
+						for (const refresh of liveRefreshers) refresh();
 					});
 
 					// Once per season, like the Surplus rolls below: the season's +Fortunes roll is
@@ -2854,20 +2882,36 @@ export function createStonetopSteadingSheetClass(Base) {
 						const box = root.querySelector(`.stonetop-season-actions[data-upkeep-slug="${CSS.escape(due.slug)}"]`);
 						const payBtn  = box?.querySelector("[data-action='pay-upkeep']") ?? null;
 						const loseBtn = box?.querySelector("[data-action='lose-upkeep']") ?? null;
+						const shortNote = root.querySelector(`[data-upkeep-short="${CSS.escape(due.slug)}"]`);
 						const copy = upkeepCopy(due);
+						// True from the click until the write lands or is given back, so a stats update
+						// that arrives mid-write (the write itself, or a harvest rolled meanwhile) cannot
+						// hand the pay button back before the step is closed.
+						let busy = false;
 						const settle = () => {
+							busy = true;
 							if (payBtn) payBtn.disabled = true;
 							if (loseBtn) loseBtn.disabled = true;
 						};
 						const reopen = () => {
+							busy = false;
 							if (payBtn) payBtn.disabled = false;
 							if (loseBtn) loseBtn.disabled = false;
 						};
-						// Asked of the STEADING, not of whether a given button came back from the
-						// query: with too little Surplus the pay button is never rendered, so keying
-						// "already settled" off its return value would read false on a season that is done.
+						// Asked of the STEADING, not of the pay button: it is hidden while it cannot be
+						// afforded, and its state says nothing about whether the season is done.
 						this._disableIfSeasonStepDone(loseBtn, due.key, year, seasonId);
 						if (this._stonetopSteading.seasonStepApplied(due.key, year, seasonId)) settle();
+
+						// The window is drawn off the Surplus it opened with; a harvest or a yield taken
+						// here since may have raised it (or a spend lowered it), so whether Pay is offered
+						// follows the LIVE figure. Only while the season's question is still open and
+						// nothing is in flight: a settled upkeep keeps its dead buttons, whatever the
+						// Surplus does next.
+						liveRefreshers.push(() => {
+							if (!payBtn || busy || this._stonetopSteading.seasonStepApplied(due.key, year, seasonId)) return;
+							refreshUpkeepAfford({ payBtn, shortNote }, this._stonetopSteading.getStatValue("surplus") >= due.surplus);
+						});
 
 						// Spends and closes the step in one write, off a LIVE Surplus read: the herd
 						// feed and the surplus roll in this same dialog may have moved it since the
@@ -2877,6 +2921,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							step: due.key, year, seasonId, seasonsMove, amount: due.surplus,
 							lock: settle,
 							shortUnlock: () => {
+								busy = false;
 								if (payBtn) payBtn.disabled = true;
 								if (loseBtn) loseBtn.disabled = false;
 							},
