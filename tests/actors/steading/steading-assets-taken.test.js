@@ -106,10 +106,12 @@ describe("the Assets card on the sheet that ships", () => {
 	it("leaves an on-hand asset plain, with nothing to click and no tooltip", () => {
 		const card = assetsCard([{ name: "Horses", checked: true }]);
 
-		expect(card).toContain("steading-asset-name");
+		// The name's whole tag, so "no tooltip" is said of the name: the row's Remove button has
+		// one of its own (Foundry's, since the native titles went).
+		expect(card).toContain('<span class="steading-list-name steading-asset-name">Horses</span>');
 		expect(card).not.toContain("steading-asset-taken");
 		expect(card).not.toContain("is-taken");
-		expect(card).not.toContain("data-tooltip");
+		expect(card).not.toContain("Click to return");
 	});
 
 	it("keeps each row's index tied to the stored slot, past a blank one", () => {

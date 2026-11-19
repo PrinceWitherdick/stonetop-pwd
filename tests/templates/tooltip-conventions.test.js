@@ -14,15 +14,12 @@ import { openingTags, templateSources } from "../fakes/hbs.js";
 //
 // CONVERTED A WINDOW AT A TIME, because a tooltip that code rewrites has to be moved in the same
 // change as the code that rewrites it (the fold caret's, the header's edit switch). The character
-// sheet and every partial it draws went first, 2026-11-19, the NPC and monster sheets after it.
-// PENDING is what is left, by exact
-// path: take a template off it when its titles are gone, and nothing new may be added to it.
+// sheet and every partial it draws went first, 2026-11-19, the NPC and monster sheets after it,
+// then the Steading sheet with its Add Resident dialog. PENDING is what is left, by exact path:
+// take a template off it when its titles are gone, and nothing new may be added to it.
 
 const PENDING = new Set([
 	"templates/actor/partials/bestiary-line-list.hbs",
-	"templates/actor/partials/steading-tab-neighbors.hbs",
-	"templates/actor/partials/steading-tab-overview.hbs",
-	"templates/dialogs/add-steading-member.hbs",
 	"templates/dialogs/arcana-inspire.hbs",
 	"templates/dialogs/background-neighbors.hbs",
 	"templates/dialogs/character-onboarding.hbs",

@@ -88,7 +88,7 @@
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="players" data-index="{{@index}}"
-							        title="Remove" aria-label="Remove" tabindex="-1">
+							        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
 								<i class="fas fa-xmark" aria-hidden="true"></i>
 							</button>
 						</div>
@@ -165,7 +165,7 @@
 							      clamped; in edit mode a pencil opens the shared pop-up editor. --}}
 							{{#if (or @root.stonetop.edit.residents notes)}}
 							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{this.notesHtml}}}</div>{{#if @root.stonetop.edit.residents}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
-							        title="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pencil" aria-hidden="true"></i></button>{{/if}}</div>
+							        data-tooltip="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pencil" aria-hidden="true"></i></button>{{/if}}</div>
 							{{/if}}
 							{{else}}
 							{{!-- Legacy plain-text row (pre-migration): keep the inline input. --}}
@@ -182,7 +182,7 @@
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="residents" data-index="{{@index}}"
-							        title="Remove" aria-label="Remove" tabindex="-1">
+							        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
 								<i class="fas fa-xmark" aria-hidden="true"></i>
 							</button>
 						</div>
@@ -215,7 +215,7 @@
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="residents" data-index="{{@index}}"
-							        title="Remove" aria-label="Remove" tabindex="-1">
+							        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
 								<i class="fas fa-xmark" aria-hidden="true"></i>
 							</button>
 						</div>
@@ -293,7 +293,7 @@
 							      clamped; in edit mode a pencil opens the shared pop-up editor. --}}
 							{{#if (or @root.stonetop.edit.neighbors notes)}}
 							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{this.notesHtml}}}</div>{{#if @root.stonetop.edit.neighbors}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
-							        title="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pencil" aria-hidden="true"></i></button>{{/if}}</div>
+							        data-tooltip="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pencil" aria-hidden="true"></i></button>{{/if}}</div>
 							{{/if}}
 							{{else}}
 							{{!-- Legacy plain-text row (pre-migration): keep the inline input. --}}
@@ -310,7 +310,7 @@
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="neighbors" data-index="{{@index}}"
-							        title="Remove" aria-label="Remove" tabindex="-1">
+							        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
 								<i class="fas fa-xmark" aria-hidden="true"></i>
 							</button>
 						</div>
@@ -346,7 +346,7 @@
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="neighbors" data-index="{{@index}}"
-							        title="Remove" aria-label="Remove" tabindex="-1">
+							        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
 								<i class="fas fa-xmark" aria-hidden="true"></i>
 							</button>
 						</div>

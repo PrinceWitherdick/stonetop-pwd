@@ -2717,7 +2717,10 @@ export function createStonetopSteadingSheetClass(Base) {
 					function refreshResetLock() {
 						if (!resetFortunesBtn || steading.seasonStepApplied("fortunesReset", year, seasonId)) return;
 						const rolled = steading.seasonStepApplied("fortunesRoll", year, seasonId);
-						resetFortunesBtn.title = rolled ? "" : "The reset comes after the roll: you will be asked whether it has been made.";
+						// Foundry's tooltip, not a native title (STYLEGUIDE.md, "Hover help"). Taken
+						// off once the roll is made, since an empty one is still an attribute.
+						if (rolled) resetFortunesBtn.removeAttribute("data-tooltip");
+						else resetFortunesBtn.dataset.tooltip = "The reset comes after the roll: you will be asked whether it has been made.";
 					}
 					refreshResetLock();
 					resetFortunesBtn?.addEventListener("click", async () => {
@@ -3786,7 +3789,7 @@ export function createStonetopSteadingSheetClass(Base) {
 		_disableIfSeasonStepDone(btn, step, year, seasonId) {
 			if (!btn || !this._stonetopSteading.seasonStepApplied(step, year, seasonId)) return false;
 			btn.disabled = true;
-			btn.title = "Already done this season: reopening won't repeat it.";
+			btn.dataset.tooltip = "Already done this season: reopening won't repeat it.";
 			return true;
 		}
 
