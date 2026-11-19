@@ -1705,19 +1705,21 @@ async function _clearDanglingHotbarSlots() {
 // One batched write per collection rather than a round trip each: this now matches most of the
 // actor list rather than a handful of NPCs, and each separate update is its own socket round trip,
 // document diff and sidebar repaint, all of it on the blocking startup path.
+// Through _updateActorsBatched, so one actor the batch cannot write (it and its three neighbours
+// below) costs only itself rather than leaving every clean actor behind it stale.
 //
 // Idempotent: once bumped, nothing matches, so re-running every load is a cheap no-op needing no
 // version flag. Primary-GM only (the caller gates it) so two connected GMs can't both write the
 // same documents.
-async function _migrateTokenNameplates() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateTokenNameplates() {
 	const NONE = CONST.TOKEN_DISPLAY_MODES.NONE;
 	const HOVER = CONST.TOKEN_DISPLAY_MODES.HOVER;
 	const unnamed = (mode) => (mode ?? NONE) === NONE;
 
 	const stale = game.actors?.filter(a => unnamed(a.prototypeToken?.displayName)) ?? [];
-	if (stale.length) {
-		await Actor.updateDocuments(stale.map(a => ({ _id: a.id, "prototypeToken.displayName": HOVER })));
-	}
+	await _updateActorsBatched(stale, () => ({ "prototypeToken.displayName": HOVER }), "nameplate backfill");
 
 	// One request per affected scene, and none at all for a scene with nothing to bump — which
 	// after the first load is every scene. See utils/placed-tokens.js, shared with the two other
@@ -1736,13 +1738,13 @@ async function _migrateTokenNameplates() {
 // One batched write rather than a round trip each, for the reason its neighbours state: on the
 // load where this fires it fires for every art-less NPC in the world at once, and a world seeded
 // with a full steading roster has a lot of those.
-async function _migrateNpcPlaceholderPortraits() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateNpcPlaceholderPortraits() {
 	const stale = game.actors?.filter(
 		a => a.type === "npc" && a.img !== PERSON_DEFAULT_IMG && isDefaultImg(a.img)
 	) ?? [];
-	if (stale.length) {
-		await Actor.updateDocuments(stale.map(a => ({ _id: a.id, img: PERSON_DEFAULT_IMG })));
-	}
+	await _updateActorsBatched(stale, () => ({ img: PERSON_DEFAULT_IMG }), "NPC placeholder portrait");
 }
 
 // Point a stock prototype token at the portrait its actor is already wearing, so somebody who
@@ -1760,15 +1762,16 @@ async function _migrateNpcPlaceholderPortraits() {
 // every character, NPC and monster with art and a stock token, which in an established world is
 // most of the actor list — and each separate update is its own socket round-trip, document diff
 // and sheet/directory repaint, all of it on the blocking startup path.
-async function _migrateTokenImagesToPortraits() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateTokenImagesToPortraits() {
 	const stale = game.actors?.filter(a =>
 		a.type !== "stonetop" && a.system?.customType !== "stonetop"
 		&& !isDefaultImg(a.img)
 		&& a.prototypeToken?.texture?.src !== undefined
 		&& isDefaultImg(a.prototypeToken.texture.src)
 	) ?? [];
-	const updates = stale.map(a => ({ _id: a.id, "prototypeToken.texture.src": a.img }));
-	if (updates.length) await Actor.updateDocuments(updates);
+	await _updateActorsBatched(stale, a => ({ "prototypeToken.texture.src": a.img }), "token-image backfill");
 }
 
 // Lift an initiate of Danu off the marker's old file. The shoot an art-less initiate wears
@@ -1789,18 +1792,16 @@ async function _migrateTokenImagesToPortraits() {
 // TokenDocument carries its own `texture.src`, copied from the prototype when it was placed, so
 // an initiate already on a map would draw a broken image on every load forever; `prototypeToken`
 // only governs the NEXT one dragged out.
-async function _migrateShootMarker() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateShootMarker() {
 	const wasOurs = p => LEGACY_SHOOT_MARKERS.includes(String(p ?? "").replace(/^\//, ""));
-	const updates = [];
-	for (const actor of game.actors ?? []) {
-		const update = { _id: actor.id };
-		if (wasOurs(actor.img)) update.img = NEW_SHOOT_MARKER;
-		if (wasOurs(actor.prototypeToken?.texture?.src)) {
-			update["prototypeToken.texture.src"] = NEW_SHOOT_MARKER;
-		}
-		if (Object.keys(update).length > 1) updates.push(update);
-	}
-	if (updates.length) await Actor.updateDocuments(updates);
+	const tokenWasOurs = actor => wasOurs(actor.prototypeToken?.texture?.src);
+	const stale = game.actors?.filter(actor => wasOurs(actor.img) || tokenWasOurs(actor)) ?? [];
+	await _updateActorsBatched(stale, actor => ({
+		...(wasOurs(actor.img) ? { img: NEW_SHOOT_MARKER } : {}),
+		...(tokenWasOurs(actor) ? { "prototypeToken.texture.src": NEW_SHOOT_MARKER } : {}),
+	}), "shoot-marker lift");
 
 	// One request per affected scene, and none at all for a scene with nothing to lift — which
 	// after the first load is every scene. See utils/placed-tokens.js.
