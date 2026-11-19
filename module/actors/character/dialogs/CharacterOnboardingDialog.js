@@ -4064,12 +4064,18 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	// ── Word tooltip ──────────────────────────────────────────────────
 
+	// Each popup is held by reference rather than found by its class on <body>: the character
+	// sheet keeps its own hidden `.stonetop-word-tooltip` panel there (its move cross-reference
+	// tooltip), and a document-wide lookup took the sheet's panel, the first in the document,
+	// in place of this dialog's tooltip.
 	_removeTooltip() {
-		document.querySelector(".stonetop-word-tooltip")?.remove();
+		this._wordTooltip?.remove();
+		this._wordTooltip = null;
 	}
 
 	_removeArcanaPreview() {
-		document.querySelector(".stonetop-arcana-preview-popup")?.remove();
+		this._arcanaPreview?.remove();
+		this._arcanaPreview = null;
 	}
 
 	// ── FAQ popup ─────────────────────────────────────────────────────
@@ -4081,7 +4087,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	_removeFaqPopup() {
 		clearTimeout(this._faqPopupHideTimer);
 		this._faqPopupHideTimer = null;
-		document.querySelector(".stonetop-onboarding-faq-popup")?.remove();
+		this._faqPopup?.remove();
+		this._faqPopup = null;
 	}
 
 	_scheduleFaqPopupHide() {
@@ -4115,6 +4122,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			this._faqPopupHideTimer = null;
 		});
 		popup.addEventListener("mouseleave", () => this._scheduleFaqPopupHide());
+		this._faqPopup = popup;
 		this._positionPopup(popup, anchor, { align: "right", gap: 8, placement: "below" });
 	}
 
@@ -4145,6 +4153,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// `stonetop-hover-popup` is the shared marker Reduce Motion suppresses (styles/stonetop.css).
 		popup.className = "stonetop-hover-popup stonetop-arcana-preview-popup";
 		popup.innerHTML = source.innerHTML;
+		this._arcanaPreview = popup;
 		// Drop the preview just below the hovered card (these grids sit near the top of
 		// their step); flips above only if it would run off the bottom of the viewport.
 		this._positionPopup(popup, anchor, { align: "center", gap: 8, placement: "below" });
@@ -4162,6 +4171,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// nothing else would drop the collapsibles or redraw the ◇ / □ a move like Outfit is
 		// written with.
 		prepareMoveHoverBody(tip);
+		this._wordTooltip = tip;
 		this._positionPopup(tip, anchor, { gap: 6, placement: "above" });
 	}
 
