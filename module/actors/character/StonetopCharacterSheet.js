@@ -1572,8 +1572,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			// the session, once for every character sheet anybody ever opened on that tab.
 			closeTimelineTab(this);
 			this._masonries?.forEach(m => m.disconnect());
+			// The basic-move panel and the move cross-reference tooltip both live on
+			// document.body. activateListeners replaces them per render, but a sheet that is
+			// closed rather than re-rendered never reaches that, so both go here.
 			this._movePanel?.remove();
 			this._movePanel = null;
+			this._moveRefPanel?.remove();
+			this._moveRefPanel = null;
 			// The art hover preview lives on document.body, so it survives the sheet's DOM
 			// being torn down — clear it or it orphans if the sheet closes (e.g. Escape) while
 			// the cursor is still over a card's art and no mouseleave ever fires.
@@ -4087,25 +4092,23 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			// Reveal the "Drop a playbook here" hint only while a drag is actually
 			// over the sheet — a blank sheet shouldn't show a confusing dashed box,
-			// but the player can still drop a playbook anywhere on it. dragenter and
-			// dragleave bubble up from every child, so track the nesting depth and
-			// only clear the hint once the drag has truly left the form.
-			let dragDepth = 0;
-			// Drop affordance for the Relationships section. Its clear() is folded into
-			// clearDropHint because the sheet-wide drop handler runs in the capture phase and
-			// stops propagation before a listener on the section would ever see the drop.
+			// but the player can still drop a playbook anywhere on it. The playbook zone
+			// itself lights up while the drag is over it, and so does the Relationships
+			// section. All three count the drag's nesting depth through the shared helper,
+			// so none flickers off as the pointer crosses a child (the zone's instinct
+			// badge), and all three clears are folded into clearDropHint because the
+			// sheet-wide drop handler runs in the capture phase and stops propagation before
+			// a listener on any of them would ever see the drop.
+			const clearDraggingHint = wireRelationshipDropHighlight(html[0], "stonetop-dragging-playbook");
+			const clearPlaybookZone = wireRelationshipDropHighlight(
+				html[0].querySelector(".stonetop-playbook-drop-zone"), "drag-over");
 			const clearRelHighlight = wireRelationshipDropHighlight(
 				html[0].querySelector(".stonetop-character-relationships"));
 			const clearDropHint = () => {
-				dragDepth = 0;
-				html[0].classList.remove("stonetop-dragging-playbook");
+				clearDraggingHint();
+				clearPlaybookZone();
 				clearRelHighlight();
 			};
-			html[0].addEventListener("dragenter", () => {
-				dragDepth++;
-				html[0].classList.add("stonetop-dragging-playbook");
-			});
-			html[0].addEventListener("dragleave", () => { if (--dragDepth <= 0) clearDropHint(); });
 
 			html[0].addEventListener("dragover", (ev) => ev.preventDefault());
 			html[0].addEventListener("drop", async (ev) => {
@@ -4181,13 +4184,6 @@ export function createStonetopCharacterSheetClass(Base) {
 					await this._onDropItemCreate(item.toObject());
 				}
 			}, true);
-
-			const dropZone = html[0].querySelector(".stonetop-playbook-drop-zone");
-			if (dropZone) {
-				dropZone.addEventListener("dragenter", () => dropZone.classList.add("drag-over"));
-				dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-				dropZone.addEventListener("drop", () => dropZone.classList.remove("drag-over"));
-			}
 
 			html.find(".cell--stats .stat-value").each((_, el) => {
 				el.value = el.value.replace(/^\+/, "");

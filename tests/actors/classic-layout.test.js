@@ -275,6 +275,28 @@ describe("things that break silently", () => {
 		expect(close.slice(0, close.indexOf("super.close"))).toContain("this._movePanel?.remove()");
 	});
 
+	// The character sheet has two such panels: the basic-move panel and the move
+	// cross-reference tooltip. Its close once dropped only the first, so the tooltip leaked a
+	// `.stonetop-word-tooltip` div onto <body> with every sheet closed.
+	it("drops both of the character sheet's body-level hover panels on close", () => {
+		const close = SHEET_JS.character.slice(SHEET_JS.character.indexOf("async close(options)"));
+		const teardown = close.slice(0, close.indexOf("super.close"));
+		expect(teardown).toContain("this._movePanel?.remove()");
+		expect(teardown).toContain("this._moveRefPanel?.remove()");
+	});
+
+	// The playbook drop zone's highlight flickered off over its instinct badge (no depth count)
+	// and stuck on after a drop (the sheet's capture-phase drop handler stops propagation
+	// before the zone's own drop listener could run). It now goes through the shared counted
+	// highlight, and its clear runs from the sheet's drop handler.
+	it("counts the playbook drop zone's drag depth and clears it from the sheet's drop", () => {
+		const src = SHEET_JS.character;
+		expect(src).toContain('querySelector(".stonetop-playbook-drop-zone"), "drag-over")');
+		const hint = src.slice(src.indexOf("const clearDropHint = () => {"));
+		expect(hint.slice(0, hint.indexOf("};"))).toContain("clearPlaybookZone()");
+		expect(src).not.toContain('dropZone.classList.add("drag-over")');
+	});
+
 	// Both NPC mounts carry five named inputs; a double render collapses each duplicate name
 	// into an array and the next submit writes garbage into all five.
 	it("mounts the NPC quick facts exactly once per layout", () => {
