@@ -2,6 +2,7 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { normalizePlaybookGlyphs } from "../../../utils/strings.js";
 import { STONETOP_SCOPE } from "../StonetopFlags.js";
 import { companionKindOptions, companionPaidTraits, companionTraitAllowance } from "../animal-companion.js";
+import { togglePick, suggestionView, paintPickLimit, bindSuggestionOrCustom } from "./pick-with-writein.js";
 
 // ── CompanionSetupDialog ─────────────────────────────────────────────────────
 // Set up an animal companion the character is owed but has never been given: the Animal Companion
@@ -57,12 +58,8 @@ export function companionSetupSelectType(sel, slug) {
  * past the limit, or the pre-ticked option; the caller puts the box back.
  */
 export function companionSetupToggleTrait(sel, trait, checked, limit, typeData = null) {
-	const traits = sel.traits ?? [];
 	if (trait === typeData?.mandatoryTrait) return { ok: false, sel };
-	if (!checked) return { ok: true, sel: { ...sel, traits: traits.filter(t => t !== trait) } };
-	if (traits.includes(trait)) return { ok: true, sel };
-	if (traits.length >= limit) return { ok: false, sel };
-	return { ok: true, sel: { ...sel, traits: [...traits, trait] } };
+	return togglePick(sel, "traits", trait, checked, limit);
 }
 
 /** The option write-in: the listed picks, plus this one while there is room for it. */
@@ -107,10 +104,8 @@ export function companionSetupView(companionDef, sel, { traitBonus = 0 } = {}) {
 	const known = new Set(typeData?.traits ?? []);
 	const customTrait = [...chosen].find(t => !known.has(t)) ?? "";
 	const kinds = companionKindOptions(typeData);
-	const instinctValues = (companionDef?.instincts ?? []).map(v => normalizePlaybookGlyphs(v));
-	const costValues     = (companionDef?.costs ?? []).map(v => normalizePlaybookGlyphs(v));
-	const isCustomInstinct = !!sel.instinct && !instinctValues.includes(sel.instinct);
-	const isCustomCost     = !!sel.cost && !costValues.includes(sel.cost);
+	const instinct = suggestionView(companionDef?.instincts, sel.instinct);
+	const cost     = suggestionView(companionDef?.costs, sel.cost);
 	return {
 		name: sel.name ?? "",
 		types: (companionDef?.types ?? []).map(t => ({
@@ -136,10 +131,10 @@ export function companionSetupView(companionDef, sel, { traitBonus = 0 } = {}) {
 				};
 			}),
 		} : null,
-		instincts: instinctValues.map(value => ({ value, selected: sel.instinct === value })),
-		costs:     costValues.map(value => ({ value, selected: sel.cost === value })),
-		customInstinct: isCustomInstinct ? sel.instinct : "",
-		customCost:     isCustomCost ? sel.cost : "",
+		instincts:      instinct.options,
+		costs:          cost.options,
+		customInstinct: instinct.custom,
+		customCost:     cost.custom,
 		ready:          companionSetupReady(sel, limit),
 	};
 }
@@ -180,15 +175,16 @@ export class CompanionSetupDialog extends StonetopDialog {
 
 	activateListeners(html) {
 		super.activateListeners(html);
+		// Looked up once: the markup only changes on a re-render, which binds afresh.
+		const pickEls = {
+			count:  html.find(".stonetop-onboarding-ac-trait-count"),
+			boxes:  html.find("[name='companion-setup-trait']:not([data-mandatory])"),
+			custom: html.find(".companion-setup-trait-custom"),
+			create: html.find(".stonetop-companion-setup-create"),
+		};
 		const refresh = () => {
 			const limit = this._limit();
-			const picked = this._sel.traits.length;
-			const atLimit = picked >= limit;
-			html.find(".stonetop-onboarding-ac-trait-count").text(picked);
-			html.find("[name='companion-setup-trait']:not([data-mandatory])").each((_, el) => { if (!el.checked) el.disabled = atLimit; });
-			const custom = html.find(".companion-setup-trait-custom");
-			custom.prop("disabled", atLimit && !String(custom.val() ?? "").trim());
-			html.find(".stonetop-companion-setup-create").prop("disabled", !companionSetupReady(this._sel, limit));
+			paintPickLimit(pickEls, this._sel.traits.length, limit, companionSetupReady(this._sel, limit));
 		};
 
 		html.find(".companion-setup-name").on("input", ev => { this._sel = { ...this._sel, name: ev.currentTarget.value }; });
@@ -224,22 +220,9 @@ export class CompanionSetupDialog extends StonetopDialog {
 
 		// A suggestion radio saves its value and clears the write-in; typing a write-in saves it and
 		// clears the radios, as onboarding's companion step does.
-		const bindSuggestionOrCustom = (radioName, customClass, key) => {
-			html.find(`[name='${radioName}']`).on("change", ev => {
-				this._sel = { ...this._sel, [key]: ev.currentTarget.value };
-				html.find(customClass).val("");
-				html.find(`[name='${radioName}']`).each((_, el) => el.closest(".stonetop-onboarding-card")?.classList.toggle("is-selected", el.checked));
-				refresh();
-			});
-			html.find(customClass).on("input", ev => {
-				this._sel = { ...this._sel, [key]: ev.currentTarget.value.trim() };
-				html.find(`[name='${radioName}']`).prop("checked", false)
-					.closest(".stonetop-onboarding-card").removeClass("is-selected");
-				refresh();
-			});
-		};
-		bindSuggestionOrCustom("companion-setup-instinct", ".companion-setup-instinct-custom", "instinct");
-		bindSuggestionOrCustom("companion-setup-cost", ".companion-setup-cost-custom", "cost");
+		const setSel = key => value => { this._sel = { ...this._sel, [key]: value }; };
+		bindSuggestionOrCustom(html, "companion-setup-instinct", ".companion-setup-instinct-custom", setSel("instinct"), refresh);
+		bindSuggestionOrCustom(html, "companion-setup-cost", ".companion-setup-cost-custom", setSel("cost"), refresh);
 
 		html.find(".stonetop-companion-setup-create").on("click", () => {
 			if (!companionSetupReady(this._sel, this._limit())) return;
