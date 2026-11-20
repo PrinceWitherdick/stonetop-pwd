@@ -58,7 +58,7 @@
       </p>
       <div class="stonetop-onboarding-tag-grid">
         {{#each acData.selectedType.traits}}
-        <label class="stonetop-onboarding-tag-option{{#if isSelected}} is-selected{{/if}}{{#if isMandatory}} is-mandatory{{/if}}"{{#if isMandatory}} title="Always included; doesn't count toward your picks"{{/if}}>
+        <label class="stonetop-onboarding-tag-option{{#if isSelected}} is-selected{{/if}}{{#if isMandatory}} is-mandatory{{/if}}"{{#if isMandatory}} data-tooltip="Always included; doesn't count toward your picks"{{/if}}>
           <input type="checkbox" name="companion-setup-trait" value="{{this.slug}}"
                  {{#if isSelected}}checked{{/if}}
                  {{#if disabled}}disabled{{/if}}
