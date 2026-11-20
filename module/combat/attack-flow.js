@@ -191,6 +191,19 @@ export function grantedWeaponAttackFor(actor, item) {
 	};
 }
 
+/**
+ * Hover help on a control this file draws on a fight card: Foundry's tooltip, not a native `title`
+ * (STYLEGUIDE.md, "Hover help is Foundry's tooltip"). Every one is a plain sentence, several name
+ * a user (a gate's refusal, "Ana will press this"), and one control takes either kind in different
+ * branches, so all are `data-tooltip-text`: core draws a plain `data-tooltip` as HTML. No words
+ * takes the tooltip away, since an empty attribute is still an attribute.
+ * tests/templates/js-tooltip-conventions.test.js keeps `.title =` out of the modules.
+ */
+function setTip(el, words) {
+	if (words) el.dataset.tooltipText = words;
+	else delete el.dataset.tooltipText;
+}
+
 function isFriendly(disposition) {
 	return disposition === CONST.TOKEN_DISPOSITIONS.FRIENDLY;
 }
@@ -2768,7 +2781,7 @@ function appendRowBox(message, actions, { row, standIn, target, several, gate, d
 
 	if (gate.refused || gate.relay || done.size) {
 		box.disabled = true;
-		box.title = gate.refused ?? (gate.relay ? "Ask the GM to change this" : format("stonetop.fight.seed.alreadyApplied", {}));
+		setTip(box, gate.refused ?? (gate.relay ? "Ask the GM to change this" : format("stonetop.fight.seed.alreadyApplied", {})));
 		return;
 	}
 	box.addEventListener("change", async () => {
@@ -3047,7 +3060,7 @@ export function wireAttackConfirm(message, html) {
 			// affordance, same wording shape as wireApplyDamage.
 			if (!message.isOwner) {
 				btn.disabled = true;
-				btn.title = "Ask the GM to confirm this attack";
+				setTip(btn, "Ask the GM to confirm this attack");
 				continue;
 			}
 			// ONE LIVE CONFIRM AT THE TABLE. A GM owns every character and every card, so their copy was live
@@ -3057,13 +3070,13 @@ export function wireAttackConfirm(message, html) {
 			const confirmer = electedApplier([actor], message);
 			if (confirmer && confirmer !== game.user?.id) {
 				btn.disabled = true;
-				btn.title = format("stonetop.fight.attackNotes.otherConfirms", { name: game.users?.get?.(confirmer)?.name ?? "" });
+				setTip(btn, format("stonetop.fight.attackNotes.otherConfirms", { name: game.users?.get?.(confirmer)?.name ?? "" }));
 				continue;
 			}
 			// No player to press it, and several GMs at the table: the primary GM's copy is the live one, as Apply's is.
 			if (!confirmer && confirmStandsDown()) {
 				btn.disabled = true;
-				btn.title = localize("stonetop.fight.attackNotes.anotherGmConfirms");
+				setTip(btn, localize("stonetop.fight.attackNotes.anotherGmConfirms"));
 				continue;
 			}
 			btn.addEventListener("click", ev => resolveAttackTier(message, actor, btn, root, ev?.shiftKey === true));
@@ -3747,7 +3760,7 @@ export function wireApplyDamage(message, html, gateFor = applyGateOnce(message))
 	if (gate.hide) { btn.style.display = "none"; return; }
 	if (gate.refused) {
 		btn.disabled = true;
-		btn.title = gate.refused;
+		setTip(btn, gate.refused);
 		return;
 	}
 
@@ -3762,7 +3775,7 @@ export function wireApplyDamage(message, html, gateFor = applyGateOnce(message))
 	if (avoidedCounterOf(damage)) {
 		btn.disabled = true;
 		btn.innerHTML = `<i class="fas fa-shield-halved" aria-hidden="true"></i> ${escHtml(localize("stonetop.fight.counterAvoided.label"))}`;
-		btn.title = localize("stonetop.fight.counterAvoided.tooltip");
+		setTip(btn, localize("stonetop.fight.counterAvoided.tooltip"));
 		return;
 	}
 
@@ -4109,19 +4122,19 @@ export function wireIgnoresArmorBox(message, html, { isGM = !!globalThis.game?.u
 	box.className = "stonetop-check";
 	box.checked = onTheFly;
 	label.append(box, Object.assign(document.createElement("span"), { textContent: localize("stonetop.fight.attackNotes.ignoresArmorBox") }));
-	label.title = localize("stonetop.fight.attackNotes.ignoresArmorHint");
+	setTip(label, localize("stonetop.fight.attackNotes.ignoresArmorHint"));
 	actions.append(label);
 	// Beside it, the other armor tag the fiction (or a stat block's variant blow) can put on the fly: "[n] piercing".
 	wirePiercingOnTheFly(message, actions, damage);
 
 	if ((damage.applied ?? []).length) {
 		box.disabled = true;
-		box.title = format("stonetop.fight.seed.alreadyApplied", {});
+		setTip(box, format("stonetop.fight.seed.alreadyApplied", {}));
 		return;
 	}
 	if (!isPrimaryGM()) {
 		box.disabled = true;
-		box.title = "Another GM will apply this damage";
+		setTip(box, "Another GM will apply this damage");
 		return;
 	}
 	box.addEventListener("change", async () => {
@@ -4185,11 +4198,11 @@ function wirePiercingOnTheFly(message, actions, damage) {
 	input.className = "stonetop-damage-piercing-input";
 	input.value = String(piercingOnTheFly(damage));
 	label.append(Object.assign(document.createElement("span"), { textContent: localize("stonetop.fight.attackNotes.piercingBox") }), input);
-	label.title = localize("stonetop.fight.attackNotes.piercingHint");
+	setTip(label, localize("stonetop.fight.attackNotes.piercingHint"));
 	actions.append(label);
 	if ((damage.applied ?? []).length || !isPrimaryGM()) {
 		input.disabled = true;
-		input.title = (damage.applied ?? []).length ? format("stonetop.fight.seed.alreadyApplied", {}) : "Another GM will apply this damage";
+		setTip(input, (damage.applied ?? []).length ? format("stonetop.fight.seed.alreadyApplied", {}) : "Another GM will apply this damage");
 		return;
 	}
 	input.addEventListener("change", async () => {
@@ -4535,12 +4548,12 @@ export function wireRosterHitMove(message, html, gateFor = applyGateOnce(message
 		label.append(Object.assign(document.createElement("span"), {
 			textContent: several ? format("stonetop.fight.groupHit.tookItFor", { name: rowName }) : localize("stonetop.fight.groupHit.tookIt"),
 		}), select);
-		label.title = localize("stonetop.fight.groupHit.moveHint");
+		setTip(label, localize("stonetop.fight.groupHit.moveHint"));
 		actions.append(label);
 
 		if (gate.refused) {
 			select.disabled = true;
-			select.title = gate.refused;
+			setTip(select, gate.refused);
 			continue;
 		}
 		select.addEventListener("change", async () => {
@@ -4664,12 +4677,12 @@ export function wireDamageSeed(message, html, gateFor = applyGateOnce(message)) 
 	btn.innerHTML = seedToggleLabel(seed);
 	const gate = gateFor(damage);
 	if (gate.hide) { btn.style.display = "none"; return; }
-	if (gate.refused) { btn.disabled = true; btn.title = gate.refused; return; }
+	if (gate.refused) { btn.disabled = true; setTip(btn, gate.refused); return; }
 	// A card the GM wrote: the player may have it applied (through the GM's client) but not rewrite it.
-	if (gate.relay) { btn.disabled = true; btn.title = "Ask the GM to change this"; return; }
+	if (gate.relay) { btn.disabled = true; setTip(btn, "Ask the GM to change this"); return; }
 	if ((damage.applied ?? []).length) {
 		btn.disabled = true;
-		btn.title = format("stonetop.fight.seed.alreadyApplied", {});
+		setTip(btn, format("stonetop.fight.seed.alreadyApplied", {}));
 		return;
 	}
 
@@ -5201,7 +5214,7 @@ export function wireSufferChoice(message, html) {
 	const choice = message.getFlag(SCOPE, "sufferChoice");
 	const settle = (label) => buttons.forEach(b => {
 		b.disabled = true;
-		if (label) b.title = label;
+		if (label) setTip(b, label);
 	});
 	if (!choice) return settle("This card has lost the attack it was asking about");
 	if (isChosen(choice)) {
@@ -5215,7 +5228,7 @@ export function wireSufferChoice(message, html) {
 	// Every button goes dead while one is being answered, and comes back if the pick could not be
 	// enacted — the same "a refused action leaves the card clickable" rule the tier Confirms
 	// follow (resolveAttackTier), so nothing is lost when a character has gone away.
-	const reopen = () => buttons.forEach(b => { b.disabled = false; b.title = ""; });
+	const reopen = () => buttons.forEach(b => { b.disabled = false; setTip(b, ""); });
 	buttons.forEach(btn => btn.addEventListener("click", async () => {
 		if (btn.disabled) return;
 		settle();
@@ -5366,7 +5379,7 @@ export function wireSufferAmount(message, html) {
 	const settle = (label) => {
 		btn.disabled = true;
 		if (input) input.disabled = true;
-		if (label) btn.title = label;
+		if (label) setTip(btn, label);
 	};
 
 	const state = message.getFlag(SCOPE, "sufferAmount");

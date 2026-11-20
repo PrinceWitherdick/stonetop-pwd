@@ -149,7 +149,7 @@ describe("a counter-attack from several foes at once", () => {
 function renderedCard(flag) {
 	const listeners = { toggle: [], apply: [] };
 	const button = kind => ({
-		disabled: false, title: "", innerHTML: "", style: {},
+		disabled: false, dataset: {}, innerHTML: "", style: {},
 		addEventListener: (type, fn) => listeners[kind].push(fn),
 	});
 	const toggle = button("toggle");
@@ -312,7 +312,7 @@ describe("leaving the +N off a damage card", () => {
 		const card = renderedCard(flags.damage);
 		wireDamageSeed(message, card.root);
 		expect(card.toggle.disabled).toBe(true);
-		expect(card.toggle.title).toBe("Another GM will apply this damage");
+		expect(card.toggle.dataset.tooltipText).toBe("Another GM will apply this damage");
 	});
 
 	/** Apply on a hand-built card aimed at Pim, and the damage Pim took. */

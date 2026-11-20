@@ -68,7 +68,7 @@ function fightInARow(row) {
 
 async function apply(flag) {
 	const listeners = [];
-	const button = { disabled: false, title: "", innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
+	const button = { disabled: false, dataset: {}, innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
 	const message = makeMessage({ damage: flag });
 	message.canUserModify = () => true;
 	wireApplyDamage(message, { querySelector: sel => (sel === ".stonetop-apply-damage" ? button : null) });

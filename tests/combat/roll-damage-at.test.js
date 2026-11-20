@@ -100,7 +100,7 @@ function answerWhoItHits(ticks) {
 /** Press Apply on a damage card, as the GM. */
 async function apply(flag) {
 	const listeners = [];
-	const button = { disabled: false, title: "", innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
+	const button = { disabled: false, dataset: {}, innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
 	const message = makeMessage({ damage: flag });
 	message.canUserModify = () => true;
 	wireApplyDamage(message, { querySelector: sel => (sel === ".stonetop-apply-damage" ? button : null) });
@@ -133,7 +133,7 @@ describe("Apply damage and the fight's rules", () => {
 		const pim = hero("pim", "Pim");
 		const { tokens } = fightInARow([["pim", pim]]);
 		const listeners = [];
-		const button = { disabled: false, title: "", innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
+		const button = { disabled: false, dataset: {}, innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
 		const message = makeMessage({ damage: { move: "Bite", weapon: null, results: [{ uuid: tokens.pim.uuid, name: "Pim", raw: 5 }], applied: [] } });
 		message.canUserModify = () => true;
 		wireApplyDamage(message, { querySelector: sel => (sel === ".stonetop-apply-damage" ? button : null) });
@@ -207,7 +207,7 @@ describe("Apply damage and the fight's rules", () => {
 		const { tokens } = fightInARow([["aerin", aerin]]);
 		// A DOM small enough to wire into: the actions block a card's buttons live in.
 		const made = [];
-		const element = tag => { const el = { tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } }; made.push(el); return el; };
+		const element = tag => { const el = { tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } }; made.push(el); return el; };
 		globalThis.document = { createElement: element };
 		const actions = element("div");
 		const root = { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) };
@@ -239,7 +239,7 @@ describe("Apply damage and the fight's rules", () => {
 		const byToken = globalThis.fromUuidSync;
 		globalThis.fromUuidSync = uuid => (uuid === aerin.uuid ? aerin : byToken(uuid));
 		const made = [];
-		const element = tag => { const el = { tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } }; made.push(el); return el; };
+		const element = tag => { const el = { tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } }; made.push(el); return el; };
 		globalThis.document = { createElement: element };
 		const actions = element("div");
 		const root = { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) };
@@ -301,7 +301,7 @@ describe("Apply damage and the fight's rules", () => {
 	});
 	/** Wire a card's armor boxes into a DOM small enough to read back. */
 	function armorBoxes(results) {
-		const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+		const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 		globalThis.document = { createElement: element };
 		const actions = element("div");
 		const message = makeMessage({ damage: { move: "Bite", results, applied: [] } });
@@ -386,13 +386,13 @@ describe("Apply damage and the fight's rules", () => {
 			get: id => ({ id, name: id === "u-ael" ? "Aeliana's player" : "Pim's player" }),
 		};
 		const flag = { move: "Bite", weapon: null, results: [{ uuid: tokens.pim.uuid, name: "Pim", raw: 6 }], applied: [], standIns: [{ uuid: tokens.pim.uuid, by: aeliana.uuid, name: "Aeliana" }] };
-		const button = { disabled: false, title: "", innerHTML: "", style: {}, addEventListener: () => {} };
+		const button = { disabled: false, dataset: {}, innerHTML: "", style: {}, addEventListener: () => {} };
 		const message = makeMessage({ damage: flag });
 		message.canUserModify = () => true;
 		wireApplyDamage(message, { querySelector: sel => (sel === ".stonetop-apply-damage" ? button : null) });
 		// The GM's copy stands down for the player whose character takes the blow.
 		expect(button.disabled).toBe(true);
-		expect(button.title).toBe("Aeliana's player will take this damage");
+		expect(button.dataset.tooltipText).toBe("Aeliana's player will take this damage");
 	});
 
 	it("lets a blow pass for A Mighty Rampart", async () => {
@@ -487,7 +487,7 @@ describe("Unstoppable on the damage card", () => {
 		const bram = fightingOn("bram", "Bram", 1);
 		const pim = hero("pim", "Pim");
 		const { tokens } = fightInARow([["bram", bram], ["pim", pim]]);
-		const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+		const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 		globalThis.document = { createElement: element };
 		const actions = element("div");
 		const message = makeMessage({ damage: { move: "Bite", results: [
@@ -1100,7 +1100,7 @@ describe("Never Gonna Keep Me Down on a move's own damage", () => {
 // is an UNTICKED box on the damage card, and Apply adds it only when the table ticks it.
 describe("Undaunted's armor where the fight does not show it", () => {
 	const undaunted = () => Object.assign(hero("pim", "Pim"), { items: [{ type: "move", name: "Undaunted" }] });
-	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 
 	it("draws the box unticked for a Would-Be Hero facing one foe their size, and writes it when ticked", async () => {
 		const pim = undaunted();
@@ -1181,7 +1181,7 @@ describe("Undaunted's armor where the fight does not show it", () => {
 // crushes, and the table unticks it for fire, poison and the like.
 describe("a Revenant's Undying on the damage card", () => {
 	const revenant = () => Object.assign(hero("wyn", "Wyn"), { flags: { [SCOPE]: { postDeathInsert: { slug: "revenant" } } } });
-	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 
 	it("halves what gets past armor, rounding up, and says so", async () => {
 		const wyn = revenant();
@@ -1232,7 +1232,7 @@ describe("a Revenant's Undying on the damage card", () => {
 // salt, or that which harms spirits or ghosts" (Book I p.148). An UNTICKED box: unticked, the blow does nothing.
 describe("a Ghost's Disembodied on the damage card", () => {
 	const ghost = () => Object.assign(hero("rhys", "Rhys"), { flags: { [SCOPE]: { postDeathInsert: { slug: "ghost" } } } });
-	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 
 	it("takes nothing from a blow left unticked, and the whole of it once the table ticks that it harms spirits", async () => {
 		const rhys = ghost();
@@ -1271,7 +1271,7 @@ describe("a Ghost's Disembodied on the damage card", () => {
 // to say. And a blow Mirrorshield or Lightning Rod redirected (fight/defend-spend.js) lands on nobody here.
 describe("Fire Within and a redirected blow on the damage card", () => {
 	const lightbearer = () => Object.assign(hero("sol", "Sol"), { items: [{ type: "move", name: "Fire Within" }] });
-	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 
 	it("takes 2 off what gets past armor only when the box was ticked, and says so", async () => {
 		const sol = lightbearer();
@@ -1353,7 +1353,7 @@ describe("an Invocation's own damage (Go Back to the Shadow)", () => {
 // ticked on a blow whose name or tags say poison, venom or disease.
 describe("Undying's poison and disease on the damage card", () => {
 	const revenant = () => Object.assign(hero("wyn", "Wyn"), { flags: { [SCOPE]: { postDeathInsert: { slug: "revenant" } } } });
-	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 
 	it("takes nothing from a blow ticked as poison, and says why", async () => {
 		const wyn = revenant();
@@ -1564,7 +1564,7 @@ describe("a Thrall's Festering Rot and Child of the Deeps on the damage card", (
 	const thrall = mark => Object.assign(hero("ash", "Ash"), { flags: { [SCOPE]: {
 		postDeathInsert: { slug: "thrall" }, postDeathLore: { counts: mark ? { [`marks:${mark}`]: 1 } : {} },
 	} } });
-	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, dataset: {}, textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
 	const boxesFor = (actor, move) => {
 		const { tokens } = fightInARow([["ash", actor]]);
 		globalThis.document = { createElement: element };
@@ -1691,7 +1691,7 @@ describe("Blot Out the Sun", () => {
 	/** Press the Let Fly card's Confirm, as the archer, skipping the damage window. */
 	async function confirmVolley(wren, attack) {
 		const listeners = [];
-		const btn = { disabled: false, title: "", innerHTML: "", dataset: {}, addEventListener: (type, fn) => listeners.push(fn) };
+		const btn = { disabled: false, innerHTML: "", dataset: {}, addEventListener: (type, fn) => listeners.push(fn) };
 		const root = { querySelectorAll: sel => (sel === ".stonetop-attack-confirm" ? [btn] : []), querySelector: () => null };
 		const message = makeMessage({ attack });
 		const byToken = globalThis.fromUuid;
@@ -1936,7 +1936,7 @@ describe("a Clash confirmed after the dice", () => {
 	/** Press the card's Confirm, as the attacking player, on a Clash rolled with `targets` frozen. */
 	async function confirmClash(pim, targets = []) {
 		const listeners = [];
-		const btn = { disabled: false, title: "", innerHTML: "", dataset: {}, addEventListener: (type, fn) => listeners.push(fn) };
+		const btn = { disabled: false, innerHTML: "", dataset: {}, addEventListener: (type, fn) => listeners.push(fn) };
 		const root = { querySelectorAll: sel => (sel === ".stonetop-attack-confirm" ? [btn] : []), querySelector: () => null };
 		const message = makeMessage({ attack: { move: "Clash", moveKey: "clash", attackerUuid: pim.uuid, weapon: null, targets } });
 		const byToken = globalThis.fromUuid;
@@ -1984,7 +1984,7 @@ describe("a Clash confirmed after the dice", () => {
 		/** Confirm a Clash with "Strike hard" ticked, totalling `total`, with or without Battle Dancer on the card. */
 		async function confirmTicked(pim, { total, battleDancer }) {
 			const listeners = [];
-			const btn = { disabled: false, title: "", innerHTML: "", dataset: { counter: "0" }, addEventListener: (type, fn) => listeners.push(fn) };
+			const btn = { disabled: false, innerHTML: "", dataset: { counter: "0" }, addEventListener: (type, fn) => listeners.push(fn) };
 			const label = { textContent: STRIKE_HARD };
 			const box = { closest: sel => (sel === ".stonetop-picklist-item" ? { querySelector: () => label } : null) };
 			const root = {

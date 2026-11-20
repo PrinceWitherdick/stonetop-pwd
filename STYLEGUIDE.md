@@ -509,7 +509,10 @@ New steps in those flows reuse those classes.
   system and ignores the palette and the Sheet Text Size. Core draws a plain `data-tooltip` as
   HTML, so there are two spellings: **`data-tooltip`** for words we wrote or a `{{localize}}` of a
   key we ship, and **`data-tooltip-text`** for anything printed from data (a name a player typed).
-  In JS set the attribute the same way; do not write `.title`.
+  In JS set the attribute the same way; do not write `.title`. A `title` stays only where
+  Foundry's tooltip cannot reach (markup drawn inside pdf.js's iframe) or where it is not hover
+  help at all (`journal-image-titles.js` sets one for a single synchronous read by core).
+  When there are no words, remove the attribute: an empty one is still an attribute.
 
 ---
 
@@ -620,7 +623,8 @@ What that means for a new component:
 | `font-floor` | No text under 0.95× body; exemptions by exact selector |
 | `token-literals` | Washes on the ink and slate channels; rem sizes scaled; radii, slate edges and pop-over rungs on tokens; one disabled opacity; focus rings the dark pages can see |
 | `templates/icon-conventions` | `fas`, current glyph names, the pencil for edit, `aria-hidden` on a bare icon (templates and JS), an `aria-label` on an icon-only control |
-| `templates/tooltip-conventions` | No native `title` in a template, outside a shrinking list of those not yet converted |
+| `templates/tooltip-conventions` | No native `title` in a template |
+| `templates/js-tooltip-conventions` | No native `title` built in JS (`.title =` on anything but a listed data object, `title=` in a markup string, `setAttribute("title")`), outside four stated exceptions |
 | `dark-mode` | Lamplit and Slate contrast; no near-black ink or white well left for the dark page; lifts have fallbacks |
 | `high-contrast` | 7:1 inks; block sits last; no bare `slategrey` ink or fill; core names on window roots |
 | `past-death-inks` | Black-paper sheets re-declare the inks they need |
@@ -674,16 +678,13 @@ delete an entry when it is done.
 
 **Markup**
 
-10. **Native `title` tooltips remain in JS**: the attack flow's 19 `.title =` writes. The
-    ledger window, the journal roll-table die and the roll card's "?" are done; the book
-    reader's bookmarks tab keeps its titles on purpose, because it is drawn inside pdf.js's
-    iframe, where Foundry's tooltips do not reach. Every template is done,
-    and `tests/templates/tooltip-conventions.test.js` now forbids a new `title` in one; its
-    `PENDING` list is empty and stays that way. The draggable improvement and threat
-    cards in journal prose carry a `title` too, and are a change of their own: the markup is
-    baked into the lore and location packs (7 pages) as well as built in
-    `steading-improvement-cards.js` and `threat-seed-cards.js`, and stored journal HTML goes
-    through core's editor, so check there that a `data-tooltip` survives a save.
+10. **The draggable improvement and threat cards in journal prose still carry a native
+    `title`.** Every other tooltip, in templates and in JS, is Foundry's, and
+    `tests/templates/tooltip-conventions.test.js` and `js-tooltip-conventions.test.js` forbid a
+    new `title`. These cards are a change of their own: the markup is baked into the lore and
+    location packs (7 pages) as well as built in `steading-improvement-cards.js` and
+    `threat-seed-cards.js` (both listed as exceptions in the JS test until then), and stored
+    journal HTML goes through core's editor, so check there that a `data-tooltip` survives a save.
 11. **About 195 `data-tooltip` attributes print a value from data**, which core draws as HTML.
     Most print strings the system builds. Any that can carry text a player typed should be
     `data-tooltip-text`; they have not been sorted one from the other.
