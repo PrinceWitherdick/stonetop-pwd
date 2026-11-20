@@ -39,6 +39,44 @@ export const BUNDLE_OUTFILE = "dist/stonetop.js";
 /** The checkout's empty stand-in, whose contents the bundle replaces with every template precompiled. */
 export const PRECOMPILED_TEMPLATES_MODULE = "module/utils/precompiled-templates.js";
 
+/** The stylesheet a checkout loads, as system.json names it. */
+export const STYLES_ENTRY = "styles/stonetop.css";
+
+/**
+ * The comment-free copy release.yml points the shipped manifest at. It must stay one folder below the
+ * root, like its source, or the stylesheet's `../assets` URLs stop resolving.
+ */
+export const STYLES_OUTFILE = "dist/stonetop.css";
+
+// Strings, unquoted url()s and backslash escapes are matched first so a `/*` inside one is left alone.
+// A comment on its own line takes the line with it, and one ending a line takes the space before it.
+const CSS_COMMENT = String.raw`\/\*(?:[^*]|\*(?!\/))*\*\/`;
+const CSS_COMMENT_SCAN = new RegExp([
+	String.raw`"(?:[^"\\\n]|\\[\s\S])*"`,
+	String.raw`'(?:[^'\\\n]|\\[\s\S])*'`,
+	String.raw`url\(\s*[^"'\s)](?:[^)\\]|\\[\s\S])*\)`,
+	String.raw`\\[\s\S]`,
+	String.raw`(?<=^|\n)[ \t]*${CSS_COMMENT}[ \t]*(?:\r?\n|$)`,
+	String.raw`[ \t]+${CSS_COMMENT}(?=[ \t]*(?:\r?\n|$))`,
+	CSS_COMMENT,
+	String.raw`\/\*[\s\S]*$`,
+].join("|"), "gi");
+
+/**
+ * Removes every comment and changes nothing else. A comment with no whitespace on either side
+ * becomes an empty one, because it may be all that keeps two tokens apart (`a/**\/b`).
+ * @param {string} css
+ * @returns {string}
+ */
+export function stripCssComments(css) {
+	return css.replace(CSS_COMMENT_SCAN, (match, offset) => {
+		if (!match.trimStart().startsWith("/*")) return match;
+		const before = css[offset - 1];
+		const after = css[offset + match.length];
+		return before && after && !/\s/.test(before) && !/\s/.test(after) ? "/**/" : "";
+	});
+}
+
 /**
  * Every templates/**\/*.hbs as a precompiled Handlebars spec, keyed by the path Foundry asks for
  * it by (`systems/<id>/templates/...`). Compiled with the one option core v14's `getTemplate`
@@ -116,4 +154,19 @@ export async function buildBundle({ write = true } = {}) {
 		throw new Error(`The bundle has ${result.warnings.length} warning(s), and a release treats each one as an error:\n${text.join("\n")}`);
 	}
 	return result;
+}
+
+/**
+ * Build the release stylesheet. Over half the source is comments, and every player downloads it.
+ * @param {{write?: boolean}} [options]
+ * @returns {{css: string, bytes: number}}
+ */
+export function buildStyles({ write = true } = {}) {
+	const css = stripCssComments(fs.readFileSync(path.join(ROOT, STYLES_ENTRY), "utf8"));
+	if (write) {
+		const out = path.join(ROOT, STYLES_OUTFILE);
+		fs.mkdirSync(path.dirname(out), { recursive: true });
+		fs.writeFileSync(out, css);
+	}
+	return { css, bytes: Buffer.byteLength(css) };
 }

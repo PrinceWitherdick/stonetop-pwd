@@ -24993,6 +24993,11 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 .stonetop-season-btn:hover { background: var(--st-btn-primary-bg-hover); }
 
+/* Same trap as `.stonetop-season-actions[hidden]` above: the `display: flex` out-specifies the
+   UA's `[hidden]`. An upkeep's Pay button is drawn hidden while the steading cannot afford it,
+   and shown when the Surplus rises in the same window. */
+.stonetop-season-btn[hidden] { display: none; }
+
 /* Disbanding the Standing Watch is the one seasonal button that TAKES something away for good,
    so it reads as the reluctant option beside "Feed the watch" rather than a peer of it.
    Declared after `.stonetop-season-btn` because a `--mod` ties with its base on specificity
@@ -47831,9 +47836,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
    So the mark here says WHICH, not which season: a rule down the left edge, the
    wash behind it, and a chip. The season's NAME is what says which season, and
-   it is right there. */
+   it is right there.
+
+   6px on top, not 2px: the "now" chip rides on the title's first line, and at 2px its outline
+   sat just under the wash's top edge and read as a line drawn along it. */
 .stonetop-gm-homefront-season--now {
-	padding: 2px 6px 4px 8px;
+	padding: 6px 6px 4px 8px;
 	border-left: 3px solid var(--st-text);
 	border-radius: 0 var(--st-radius-sm) var(--st-radius-sm) 0;
 	background: var(--st-warm-hover-bg);

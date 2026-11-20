@@ -8,12 +8,14 @@
 // sheet-chrome helpers) so it reads as one system.
 import { rollDamageAt, crewBlow } from "../../combat/attack-flow.js";
 import { settleFollowerTokenReadinessOnAttack } from "../../combat/readiness-loss.js";
-import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { printedBlow } from "../../utils/damage.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle, fitDisplayName } from "../../utils/sheet-chrome.js";
-import { escHtml, isDefaultImg } from "../../utils/strings.js";
+import { isDefaultImg } from "../../utils/strings.js";
 import { headerPortraitContext, wirePortraitPopout } from "../../utils/actor-portrait-picker.js";
-import { updateRichTextField, updateMoveField } from "../../utils/stat-block-edit.js";
+import {
+	updateRichTextField, updateMoveField, itemFromRow, confirmDeleteMove, wireStatBlockInlineEdits,
+	STAT_BLOCK_MOVE_EDITABLE_FIELDS,
+} from "../../utils/stat-block-edit.js";
 import { getOpenSheetsInEditMode, isClassicLayout, layoutClasses, stampLayoutClass } from "../../settings.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
 import { buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice, wireRelationshipDropHighlight } from "../../utils/relationship-hearts.js";
@@ -40,10 +42,6 @@ const NPC_RICH_TEXT_FIELDS = [
 	{ key: "motivations", enrichedKey: "enrichedMotivations" },
 	{ key: "notes",       enrichedKey: "enrichedNotes" },
 ];
-
-// The only fields an inline edit may write to an npcMove item — its name and its
-// two schema fields — so a stray data-field can't write anywhere else.
-const NPC_MOVE_EDITABLE_FIELDS = new Set(["name", "system.description", "system.rollFormula"]);
 
 export function createStonetopNpcSheetClass(Base) {
 	// withSheetSizeMemory: reopen at the size this user last left this NPC's sheet. This is the
@@ -551,20 +549,10 @@ export function createStonetopNpcSheetClass(Base) {
 					if (rolled && card) await settleFollowerTokenReadinessOnAttack(this.actor, label);
 					return;
 				}
-				const moveRoll = ev.target.closest(".stonetop-npc-move-roll");
-				if (moveRoll) {
-					const li   = ev.target.closest("[data-item-id]");
-					const item = this.actor.items.get(li?.dataset?.itemId);
-					await item?.roll();
-					return;
-				}
-				if (!this._editMode) {
-					const moveName = ev.target.closest(".stonetop-npc-move-name");
-					if (moveName) {
-						const li   = ev.target.closest("[data-item-id]");
-						const item = this.actor.items.get(li?.dataset?.itemId);
-						await item?.roll();
-					}
+				// The roll button always; the move's name too, in play mode.
+				if (ev.target.closest(".stonetop-npc-move-roll")
+					|| (!this._editMode && ev.target.closest(".stonetop-npc-move-name"))) {
+					await itemFromRow(this, ev)?.roll();
 				}
 			});
 
@@ -608,36 +596,14 @@ export function createStonetopNpcSheetClass(Base) {
 
 				} else if (ev.target.closest(".stonetop-npc-delete-move")) {
 					if (!this._editMode) return;
-					const li   = ev.target.closest("[data-item-id]");
-					const item = this.actor.items.get(li?.dataset?.itemId);
+					const item = itemFromRow(this, ev);
 					if (!item) return;
-					const confirmed = await confirmOutcome({
-						title:   "Delete Move",
-						// Escaped: a move name is user text, and this is HTML.
-						content: `<p>Delete <strong>${escHtml(item.name)}</strong>?</p>`,
-						yes:     { label: "Delete the move", icon: "fa-trash" },
-						no:      { label: "Keep it" },
-					});
-					if (confirmed) await item.delete();
+					if (await confirmDeleteMove(item)) await item.delete();
 				}
 			});
 
-			root.addEventListener("change", async ev => {
-				// Inline npcMove edits (name / formula / description).
-				const moveField = ev.target.closest(".stonetop-npc-move-field");
-				if (moveField) {
-					if (!this._editMode) return;
-					const li = ev.target.closest("[data-item-id]");
-					await this._updateMoveField(li?.dataset?.itemId, moveField.dataset?.field, moveField.value);
-					return;
-				}
-				// Rich-text fields: Notes stays editable in play mode; the rest only in edit mode.
-				const editor = ev.target.closest(".stonetop-npc-rich-editor");
-				if (!editor) return;
-				if (editor.dataset?.field === "notes" || this._editMode) {
-					await this._updateRichTextField(editor.dataset?.field, editor.value);
-				}
-			});
+			// Inline npcMove edits (name / formula / description) and the rich-text fields.
+			wireStatBlockInlineEdits(this, root, "stonetop-npc");
 		}
 
 		async _updateRichTextField(field, value) {
@@ -645,7 +611,7 @@ export function createStonetopNpcSheetClass(Base) {
 		}
 
 		async _updateMoveField(itemId, field, value) {
-			return updateMoveField(this, NPC_MOVE_EDITABLE_FIELDS, itemId, field, value);
+			return updateMoveField(this, STAT_BLOCK_MOVE_EDITABLE_FIELDS, itemId, field, value);
 		}
 
 		// Reveal the next impression slot (up to 3) by injecting an input row into the
