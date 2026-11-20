@@ -242,15 +242,78 @@ describe("StonetopGmToolkitSheet", () => {
 		expect(sections[1].note).toBe("On an expedition, or inside a site");
 	});
 
+	// TWO groups: the rail's, which must stay FIRST (everything that asks "which tab" reads
+	// `_tabs[0]`, and the window restore matches saved groups by index), and the Prep tab's view
+	// switcher, which opens on Encounters.
 	it("opens on the moves tab, wired to the nav and body the template renders", async () => {
 		const { tabs } = makeSheet().constructor.defaultOptions;
 		expect(tabs).toEqual([
 			{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "moves" },
+			{ navSelector: ".stonetop-gm-prep-switcher", contentSelector: ".stonetop-gm-prep-panes", initial: "encounters" },
 		]);
 		// A mismatch between any of these three and the markup renders a blank body.
 		expect(SHEET_HBS).toContain('class="sheet-tabs tabs stonetop-tab-rail"');
 		expect(SHEET_HBS).toContain('<section class="sheet-body">');
 		expect(MOVES_HBS).toContain('data-tab="moves"');
+		// And the same for the switcher's pair: a selector that matches nothing binds a group with
+		// no nav, and every pane stays hidden.
+		const PREP_HBS = read("templates/actor/partials/gm-toolkit-tab-prep.hbs");
+		expect(PREP_HBS).toMatch(/<nav class="stonetop-gm-prep-switcher" data-group="prep"/);
+		expect(PREP_HBS).toContain('<div class="stonetop-gm-prep-panes">');
+		// NOT `sheet-tabs` on the switcher, or the rail's controller could bind it instead.
+		expect(PREP_HBS).not.toMatch(/<nav[^>]*sheet-tabs/);
+	});
+
+	// The view is whatever core's controller for the switcher's group holds, which outlives every
+	// render. getData only stamps the markup to match it — so a GM who chose Sites and then ticked
+	// a portent on the Threats tab comes back to Sites, not to Encounters.
+	it("stamps the Prep view core's controller holds, opening on Encounters when it holds none", async () => {
+		const sheet = makeSheet();
+		const active = d => d.stonetop.prep.views.filter(v => v.active).map(v => v.key);
+		expect(active(await sheet.getData())).toEqual(["encounters"]);
+		sheet._tabs = [{ active: "moves" }, { active: "sites" }];
+		const data = await sheet.getData();
+		expect(active(data)).toEqual(["sites"]);
+		expect(data.stonetop.prep.panes.sites.active).toBe(true);
+		expect(data.stonetop.prep.panes.encounters.active).toBe(false);
+		// The RAIL's active tab is never read as a view, even when its name is one.
+		sheet._tabs = [{ active: "expeditions" }, { active: "encounters" }];
+		expect(active(await sheet.getData())).toEqual(["encounters"]);
+	});
+
+	// Live only: a completed encounter is history, filed in the fold at the pane's foot.
+	it("counts what is live in each Prep view off the context the panes are drawn from", async () => {
+		const bundle = (id, used) => ({ id, name: id, notes: "", used, entries: [] });
+		const sheet = makeSheet({
+			id: "toolkit1", name: "GM Toolkit", type: "gmToolkit",
+			system: {
+				encounters:  [bundle("a", false), bundle("b", true), bundle("c", false)],
+				expeditions: [bundle("d", true)],
+			},
+		});
+		const { views } = (await sheet.getData()).stonetop.prep;
+		expect(views.map(v => [v.key, v.count])).toEqual([["encounters", 2], ["expeditions", 0], ["sites", 0]]);
+		expect(views[0].countTip).toBe("2 to run");
+	});
+
+	// Core flips the classes on a view change and never touches ARIA. Matched by the CONTROLLER,
+	// not the name: the rail changing tab must leave the switcher's state alone.
+	it("puts the switcher's ARIA back when the view changes without a render, and only then", () => {
+		const sheet = makeSheet();
+		const buttons = ["encounters", "expeditions", "sites"].map(tab => {
+			const attrs = { "aria-selected": tab === "encounters" ? "true" : "false" };
+			return { dataset: { tab }, attrs, setAttribute(k, v) { attrs[k] = v; } };
+		});
+		const nav = { querySelectorAll: () => buttons };
+		sheet.element = [{ querySelector: sel => (sel === ".stonetop-gm-prep-switcher" ? nav : null) }];
+		sheet._tabs = [{ active: "moves" }, { active: "encounters" }];
+
+		sheet._onChangeTab(null, sheet._tabs[0], "threats");
+		expect(buttons.map(b => b.attrs["aria-selected"])).toEqual(["true", "false", "false"]);
+
+		sheet._onChangeTab(null, sheet._tabs[1], "sites");
+		expect(buttons.map(b => b.attrs["aria-selected"])).toEqual(["false", "false", "true"]);
+		expect(buttons.map(b => b.attrs.tabindex)).toEqual(["-1", "-1", "0"]);
 	});
 
 	// Foundry's Tabs binds a nav and its panels by `data-group`. Mismatch them and the controller

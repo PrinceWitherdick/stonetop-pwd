@@ -1,7 +1,14 @@
 {{!-- ENCOUNTERS — what has been gathered for one session or one scene, in named bundles: the
       monsters, the read-aloud page, the battle map, the treasure table, the arcanum somebody is
-      about to find. The one tab on this sheet that holds POINTERS to other documents rather than
-      prose about them.
+      about to find. The first of the Prep tab's three views (gm-toolkit-tab-prep.hbs), and the
+      one it opens on. With Expeditions, the panes on this sheet that hold POINTERS to other
+      documents rather than prose about them.
+
+      A PANE OF THE PREP TAB'S OWN GROUP, `data-group="prep"`, not the rail's: the switcher at
+      the top of that tab shows and hides it. `tab encounters` is still its class and that is not
+      a leftover — `.tab.encounters` is the scope every listener and the drop zone in
+      gm-encounters-tab.js is bound to, and the scope its edit flush searches for a focused field.
+      Rename it and the pane draws perfectly and does nothing.
 
       TWO LISTS, ONE CARD. What is still to come is at the top; what has been run is filed into
       the Completed fold at the foot, and the tick on a card is what sends it there. Both lists
@@ -19,7 +26,7 @@
       `name` on an input inside this sheet's <form> puts it in core's submit data, where the array
       indices would expand into an OBJECT keyed "0", "1", ... and quietly replace the list with it.
 
-      ONE PENCIL for the whole tab, in the panel's corner, and it guards exactly the two delete
+      ONE PENCIL for the whole pane, in the pane's corner, and it guards exactly the two delete
       buttons — in BOTH lists, because the `--reading` class sits on the <section> that wraps
       them. Everything else stays live while it is off, which is the point rather than an
       oversight: the reason this tab exists is to be dropped into and noted on mid-session, and a
@@ -33,9 +40,11 @@
       the paragraph above says have to stay lit. `--reading` hides the two buttons it is about and
       touches nothing else.
 
-      `data-tab="encounters"` earns the rail's stack glyph; the icon table in stonetop.css is one
-      flat list keyed by data-tab with no per-sheet scope. --}}
-<div class="tab encounters steading-edit-section" data-group="primary" data-tab="encounters">
+      `data-tab="encounters"` is also what earns the switcher segment its stack glyph (the
+      `.stonetop-gm-prep-view[data-tab]` rows in stonetop.css). The rail no longer has a button
+      by this name, so nothing in the rail's own icon table answers to it. --}}
+<div class="tab encounters steading-edit-section{{#if stonetop.prep.panes.encounters.active}} active{{/if}}" data-group="prep" data-tab="encounters"
+     id="{{stonetop.prep.panes.encounters.id}}" role="tabpanel" aria-labelledby="{{stonetop.prep.panes.encounters.tabId}}">
 	{{> "stonetop.steading-section-toggle" section="encounters" editing=stonetop.edit.encounters}}
 	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.encounters}} stonetop-gm-encounters--reading{{/unless}}">
 

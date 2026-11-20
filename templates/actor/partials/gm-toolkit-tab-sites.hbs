@@ -1,0 +1,63 @@
+{{!-- SITES — interesting places the PCs can explore. The third of the Prep tab's three views
+      (gm-toolkit-tab-prep.hbs), having been a section folded in at the foot of the Expeditions
+      pane, before that a rail tab of its own here, and before that a tab on the steading sheet.
+
+      WHY IT IS A VIEW BESIDE EXPEDITIONS AND NOT A SECTION UNDER IT. Its own first sentence says
+      a site is "the destination of an expedition, a point of interest on the way, or an
+      incidental discovery", which is why it was put under the trips in the first place. But a
+      site is a page-long card and a world has a dozen of them, so under a full card list it was
+      the one pane a GM had to scroll past every trip to reach. One click on the switcher is the
+      same distance from the journey and no scroll from anything.
+
+      NO HEADING AND NO FOLD, therefore. The switcher segment IS its heading, and a fold over the
+      whole of a view would only be a second way to hide what the switcher already hides. Its old
+      collapse key (`gm-expeditions-sites`) is retired with it: a GM who had folded it finds the
+      view open, which is the right way round for a pane they have to ask for by name.
+
+      A PANE OF THE PREP TAB'S OWN GROUP, `data-group="prep"`, which is what the switcher shows
+      and hides. The sites masonry (gm-prep-masonry.js) needs nothing from that: a grid in a
+      hidden pane measures zero and is left unpacked, and the pane being shown is the resize its
+      observer is waiting for.
+
+      THE STORAGE DID NOT MOVE and must not. A site is a JournalEntryPage inside a hidden
+      per-steading JournalEntry, pointed at by a flag on the STEADING actor — see the header of
+      module/actors/gmtoolkit/gm-prep-tabs.js, which spells out the silent data-loss path.
+
+      NO PENCIL, unlike the Threats tab, and so no `stonetop-readonly` either. A pencil gates the
+      fields you type into, and this pane has none: a site is written up in the wizard and
+      re-opened in it, its d20 tables roll without writing anything, and the only control left is
+      the trash. Gating that ONE button behind a pencil bought nothing and cost the obvious reading
+      of the toolbar — the trash sat beside a live pencil and was simply mouse-dead, when the
+      confirm dialog it already opens is the real "are you sure".
+
+      The `steading-*` class names are CSS hooks kept deliberately; they and the storage rule are
+      explained at length in gm-toolkit-tab-threats.hbs and in gm-prep-tabs.js. Every listener
+      this pane needs is scoped to `.steading-sites` rather than to a panel, which is why each move
+      it has made cost the mixin nothing. --}}
+<div class="tab sites{{#if stonetop.prep.panes.sites.active}} active{{/if}}" data-group="prep" data-tab="sites"
+     id="{{stonetop.prep.panes.sites.id}}" role="tabpanel" aria-labelledby="{{stonetop.prep.panes.sites.tabId}}">
+	<section class="sheet-tab steading-sites steading-prep-cards">
+
+		{{#if stonetop.hasSteading}}
+		<p class="steading-threats-intro">
+			Interesting places the PCs can explore (Book I, <em>Sites</em>): the destination of an expedition, a point of interest on the way, or an incidental discovery. Written up here for your eyes only. Drag a card onto a scene to pin it to the map.
+		</p>
+
+		{{#if stonetop.sites.length}}
+		<div class="steading-threats-grid">
+			{{#each stonetop.sites}}
+			<div class="threat-card-wrap" data-page-uuid="{{this.uuid}}">
+				{{> "stonetop.site-card" this}}
+				{{> "stonetop.gm-prep-card-tools" kind="site" uuid=uuid}}
+			</div>
+			{{/each}}
+		</div>
+		{{/if}}
+
+		{{> "stonetop.gm-prep-add-bar" kind="site" label="Create a site"}}
+		{{else}}
+		{{> "stonetop.gm-prep-no-steading" noun="Sites"}}
+		{{/if}}
+
+	</section>
+</div>

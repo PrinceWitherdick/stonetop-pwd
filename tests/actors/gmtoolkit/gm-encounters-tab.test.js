@@ -36,6 +36,7 @@ import { fakeEl, makeListHost, fakeRoot as sheetRoot } from "../../fakes/dom.js"
 const CSS         = readCss();
 const STONETOP_JS = read("stonetop.js");
 const SHEET_HBS   = read("templates/actor/gm-toolkit.hbs");
+const PREP_HBS    = read("templates/actor/partials/gm-toolkit-tab-prep.hbs");
 const TAB_HBS     = read("templates/actor/partials/gm-toolkit-tab-encounters.hbs");
 const CARD_HBS    = read("templates/actor/partials/gm-encounter-card.hbs");
 const SHEET_JS    = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
@@ -147,33 +148,50 @@ afterEach(() => {
 
 describe("the Encounters tab: wiring", () => {
 	// Each of these is a silent failure on its own, exactly as for the tabs beside it.
-	it("is registered, mounted, and has a rail button", () => {
+	// A VIEW of the Prep tab now, not a rail tab: mounted by the Prep panel rather than by the
+	// sheet, and reached by the switcher's segment rather than by a rail button of its own. A rail
+	// button left behind would point at a panel the rail's group no longer has.
+	it("is registered, mounted in the Prep tab, and has a switcher segment rather than a rail button", () => {
 		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-tab-encounters"');
-		expect(SHEET_HBS).toContain('{{> "stonetop.gm-toolkit-tab-encounters"}}');
-		expect(SHEET_HBS).toMatch(/\{\{>\s*"stonetop\.tab-rail-item"\s+tab="encounters"/);
+		expect(strip(PREP_HBS)).toContain('{{> "stonetop.gm-toolkit-tab-encounters"}}');
+		expect(SHEET_HBS).not.toContain('{{> "stonetop.gm-toolkit-tab-encounters"}}');
+		expect(SHEET_HBS).not.toMatch(/\{\{>\s*"stonetop\.tab-rail-item"\s+tab="encounters"/);
+		expect(read("module/actors/gmtoolkit/gm-prep-views.js")).toMatch(/key: "encounters"/);
 	});
 
-	it("binds to the same tab group as the rest of the sheet", () => {
-		expect(TAB_HBS).toMatch(/<div class="tab encounters\b[^"]*"[^>]*data-group="primary"/);
+	// The Prep tab's own group, which is what its switcher's controller shows and hides. On the
+	// rail's group it would be one more rail panel the rail has no button for — and the rail's
+	// controller would hide it whenever the Prep tab itself was showing.
+	it("binds to the Prep tab's view group, not the rail's", () => {
+		expect(TAB_HBS).toMatch(/<div class="tab encounters\b[^"]*"[^>]*data-group="prep"/);
 		expect(TAB_HBS).toContain('data-tab="encounters"');
+		expect(TAB_HBS).not.toMatch(/data-group="primary"/);
+		expect(TAB_HBS).toMatch(/role="tabpanel"/);
 	});
 
-	// The user asked for it beside the other prep tabs. The rail's order is the source order of
-	// these partial calls, and the body's is a second list that has to agree: a mismatch is
-	// invisible, because the panels are shown one at a time.
-	it("sits between Threats and Expeditions, in the rail and in the body", () => {
-		// The PANEL order. The rail carries one more entry after these eight — the shared
+	// The rail's order is the source order of these partial calls, and the body's is a second
+	// list that has to agree: a mismatch is invisible, because the panels are shown one at a time.
+	// Encounters sits inside Prep, which sits straight after Threats — the other half of "what is
+	// waiting out there" — and Encounters is the first of its views.
+	it("sits inside the Prep tab, between Threats and Wonder, as the first view", () => {
+		// The PANEL order. The rail carries one more entry after these six — the shared
 		// Preferences tab, whose panel comes from "stonetop.tab-preferences" rather than from a
 		// gm-toolkit-tab partial, so it is absent from the body list this regex builds.
-		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
+		const order = ["homefront", "moves", "threats", "prep", "wonder", "loop"];
 		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual([...order, "preferences"]);
 		expect([...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1])).toEqual(order);
+		expect([...strip(PREP_HBS).matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1]))
+			.toEqual(["encounters", "expeditions", "sites"]);
 	});
 
 	// A data-tab with no row in the icon table gets a mask with no image, which resolves to FULL
-	// coverage: a solid block where the glyph belongs, and nothing logged.
-	it("earns a rail glyph from the icon table, and the file it names exists", () => {
-		expect(CSS).toMatch(/\.stonetop-tab-rail \.item\[data-tab="encounters"\]\s*\{\s*--st-tab-icon:/);
+	// coverage: a solid block where the glyph belongs, and nothing logged. The stack is worn twice
+	// now — by the Prep rail button and by this view's switcher segment — and the rail's table no
+	// longer carries a row for a key no rail renders.
+	it("earns its stack glyph on the switcher segment and the Prep rail button, and the file exists", () => {
+		expect(CSS).toMatch(/\.stonetop-gm-prep-view\[data-tab="encounters"\]\s*\{\s*--st-prep-icon:\s*url\('[^']*prep-stack\.svg'\)/);
+		expect(CSS).toMatch(/\.stonetop-tab-rail \.item\[data-tab="prep"\]\s*\{\s*--st-tab-icon:\s*url\('[^']*prep-stack\.svg'\)/);
+		expect(CSS).not.toMatch(/\.stonetop-tab-rail \.item\[data-tab="encounters"\]/);
 		expect(repoFileExists("assets/icons/tabs/prep-stack.svg")).toBe(true);
 	});
 
@@ -192,16 +210,21 @@ describe("the Encounters tab: wiring", () => {
 		expect(game.i18n.localize("stonetop.gmToolkit.tabs.encounters")).toBe("Encounters");
 	});
 
-	it("gets its panel gutter from the shared tab-padding rule", () => {
-		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .sheet-body > .tab")).toMatch(/padding:/);
+	// The gutter comes from the Prep panel it sits in, which takes the frame's shared tab padding;
+	// the pane itself is flush, or its cards would sit twice as far in as the Threats tab's.
+	it("gets its panel gutter from the Prep tab around it, and adds none of its own", () => {
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .sheet-body > .tab")).toMatch(/padding: 0 12px 12px/);
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab")).toMatch(/padding: 0;/);
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab")).toMatch(/display: none/);
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab.active")).toMatch(/display: block/);
 	});
 
 	// The pencil is `position: absolute` against its section, and this panel only BECOMES that
 	// section's containing block by joining the shared `:is()`. Left out, the pencil floats
 	// against whatever positioned ancestor is next up the frame, with nothing logged.
 	it("is the positioning context its corner pencil floats in", () => {
-		expect(CSS).toMatch(/\.sheet-body > :is\(\.tab\.threats, \.tab\.encounters, \.tab\.expeditions\)\s*\{\s*position: relative/);
-		expect(TAB_HBS).toContain('class="tab encounters steading-edit-section"');
+		expect(CSS).toMatch(/\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\)\s*\{\s*position: relative/);
+		expect(TAB_HBS).toMatch(/class="tab encounters steading-edit-section[{"]/);
 	});
 
 	// Every field here is written by hand to `system.encounters`. A `name` on any of them would

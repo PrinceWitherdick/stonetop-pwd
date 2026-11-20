@@ -781,8 +781,10 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
-		// Not a tab any more: a folded section at the foot of the Expeditions panel.
-		"stonetop.gm-toolkit-sites-section": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-sites-section.hbs",
+		// The Prep tab: one rail button over three views, chosen by a switcher at its top
+		// (actors/gmtoolkit/gm-prep-views.js). The three after it are its panes, not rail tabs.
+		"stonetop.gm-toolkit-tab-prep":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-prep.hbs",
+		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",

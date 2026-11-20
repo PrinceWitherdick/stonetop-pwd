@@ -1,6 +1,7 @@
 # Tab Rail Icon Attribution
 
-The glyphs worn by the vertical tab rail on the character, steading, NPC and GM Toolkit sheets.
+The glyphs worn by the vertical tab rail on the character, steading, NPC and GM Toolkit sheets,
+and by the view switcher inside the GM Toolkit's Prep tab, which wears three of the same files.
 
 Icons sourced from [game-icons.net](https://github.com/game-icons/icons),
 licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
@@ -23,7 +24,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | relationship-map.svg | Relationship Map | checkbox-tree | Lorc | https://lorcblog.blogspot.com |
 | hourglass.svg | Timeline | hourglass | Lorc | https://lorcblog.blogspot.com |
 | crossed-swords.svg | Stats (NPC), Overview (character) | crossed-swords | Lorc | https://lorcblog.blogspot.com |
-| direction-signs.svg | Expeditions | direction-signs | Delapouite | https://delapouite.com |
+| direction-signs.svg | Expeditions (a view of the GM Toolkit's Prep tab) | direction-signs | Delapouite | https://delapouite.com |
 | settings-knobs.svg | Preferences | settings-knobs | Delapouite | https://delapouite.com |
 
 No artwork above is altered. Every rail icon is worn as a CSS *mask* (`-webkit-mask` /
@@ -85,7 +86,7 @@ the rays, the sun's centre hole, and the two flecks floating in the gap. A re-ru
 tracer undoes both edits, so redraw the ring and re-centre the sun if you re-run it.
 
 Also not from game-icons.net, and the project's own drawing: `site-mound.svg`, the Sites
-tab's glyph. A mound with an open way in, which is what most Stonetop sites look like from
+glyph (a view of the GM Toolkit's Prep tab now, and a tab of its own before that). A mound with an open way in, which is what most Stonetop sites look like from
 outside (a barrow, a cave mouth, a Maker-ruin gone to grass). Plain geometry: a dome and a
 semicircle-topped doorway in one `fill-rule="evenodd"` path, so the entrance is a hole and
 not a lighter shape, plus a rounded ground bar. Nothing to re-derive if it is ever redrawn.
@@ -106,7 +107,8 @@ down the hook's OUTER edge into the stem and back up into its INNER edge, which 
 tail out of the bowl rather than sticking it on. Both the band and the stem are sized so the
 stroke is 2.8px at the rail's 20px, below which a curve stops reading as one.
 
-Also the project's own drawing: `prep-stack.svg`, the GM Toolkit's Encounters tab glyph. A stack
+Also the project's own drawing: `prep-stack.svg`, the GM Toolkit's Prep tab glyph, worn by its
+Encounters view as well, which was the tab it was drawn for. A stack
 of sheets, because the tab is the pile of things gathered for tonight rather than a fight: it holds
 a scene, a journal page and a roll table as often as it holds monsters, and crossed swords (which
 were free, being worn only by tabs no GM Toolkit rail ever shows) would have named the smaller half

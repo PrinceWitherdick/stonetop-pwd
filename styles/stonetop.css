@@ -20969,9 +20969,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* A homebrew playbook's insert (tab-homebrew-insert.hbs): one tab each, keyed "hb-insert-<insert key>". */
 .stonetop-tab-rail .item[data-tab^="hb-insert-"]   { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/direction-signs.svg'); }
 .stonetop-tab-rail .item[data-tab="threats"]       { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hazard-sign.svg'); }
-/* No row for `sites`: it is a section at the foot of the Expeditions panel now, not a tab, so
-   nothing on any sheet renders `data-tab="sites"`. `site-mound.svg` itself stays in the tree —
-   it is also the map-pin icon a placed site wears (journal/gm-prep-page.js). */
+/* No row for `sites`, nor for `encounters` or `expeditions`: on the GM Toolkit those three are
+   the Prep tab's VIEWS now, not rail tabs, and their glyphs are worn by the view switcher's
+   segments instead (`.stonetop-gm-prep-view[data-tab]`, in the Prep tab block). Nothing on any
+   rail renders those keys, and a row here for a key nothing renders is a row that outlives what
+   it was for. */
 .stonetop-tab-rail .item[data-tab="relationships"] { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hearts.svg'); }
 .stonetop-tab-rail .item[data-tab="stats"]         { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/crossed-swords.svg'); }
 /* The monster's two tabs borrow glyphs already in the rail's vocabulary: its stat block is the
@@ -20983,14 +20985,10 @@ button.stonetop-mark-sign-btn.is-active:hover {
    in the same rail. `neighbors` and `followers` already share `three-friends.svg` on the same
    grounds. */
 .stonetop-tab-rail .item[data-tab="homefront"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
-.stonetop-tab-rail .item[data-tab="encounters"]    { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
-/* A signpost, not the treasure map the "Run an Expedition" hotbar macro wears. The map is the
-   better mark for the tab and the worse one for the rail: its route and its X are fine holes in
-   a filled sheet, and at the 20px this rail scales to they close up into a dark speck. The
-   signpost is four thick strokes and survives it, which is the same bar every other glyph here
-   clears. See assets/icons/tabs/ATTRIBUTION.md for the backing square punched transparent to
-   wear it as a mask. */
-.stonetop-tab-rail .item[data-tab="expeditions"]   { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/direction-signs.svg'); }
+/* The GM Toolkit's Prep tab — Encounters, Expeditions and Sites behind one button — wears the
+   stack the Encounters tab wore when it had a button of its own: a pile of gathered things is
+   what all three views hold. */
+.stonetop-tab-rail .item[data-tab="prep"]          { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
 .stonetop-tab-rail .item[data-tab="wonder"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/question-mark.svg'); }
 .stonetop-tab-rail .item[data-tab="loop"]          { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/flow-chart.svg'); }
 
@@ -46718,10 +46716,192 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    that rule being re-scoped to the steading later, which is now a thing someone might do.
 
    NOT the "I wonder..." tab, whose pencils are positioned against a section rather than a
-   panel: these two tabs put ONE pencil in the whole panel's corner, which is what makes the
-   panel the section here. */
-.stonetop-gm-toolkit-sheet .sheet-body > :is(.tab.threats, .tab.encounters, .tab.expeditions) {
+   panel: these put ONE pencil in the whole panel's corner, which is what makes the panel the
+   section here.
+
+   TWO SELECTORS because the panels are at two depths. Threats is a rail tab, a child of the
+   body; Encounters and Expeditions are views of the Prep tab, children of its pane box, and the
+   pencil belongs in the PANE's corner (under the switcher), not the Prep tab's. */
+.stonetop-gm-toolkit-sheet .sheet-body > .tab.threats,
+.stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) {
 	position: relative;
+}
+
+/* -- Prep tab: one rail button, three views -------------------------------
+   Encounters, Expeditions and Sites, chosen by a switcher at the top of the tab rather than by
+   three rail buttons (module/actors/gmtoolkit/gm-prep-views.js says why). The switcher and its
+   panes are a SECOND core tab group nested inside the rail's Prep panel, so the panes are not
+   children of `.sheet-body` and the two rules above that show and pad a tab never reach them.
+   They state their own here.
+
+   THE PANES ARE FLUSH. The Prep panel already carries the frame's tab gutter (`0 12px 12px`,
+   above); a pane padded again would sit its cards 24px in from the frame on both sides, and the
+   Threats tab beside it would be the odd one out. */
+.stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab {
+	display: none;
+	height: auto;
+	margin: 0;
+	padding: 0;
+}
+
+.stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab.active {
+	display: block;
+}
+
+/* THE SWITCHER — a segmented strip, three equal segments, each an icon, a label and a count of
+   what is live in that view. Equal rather than content-width so the three read as one control
+   with three positions, the way a GM thinks of them, rather than as three buttons that happen to
+   share a row; and so the active segment does not shift the other two when the counts change.
+
+   THE STRIP IS A WELL, the segments sit in it. A faint card fill and one hairline make the
+   control's edge; the ACTIVE segment is a slate wash with a slate rule along its foot, which is
+   the same mark the rail's active tab and every segmented picker in the system make with the same
+   colour. Not the solid slate fill those pickers use: this one carries three lines of type and a
+   pill, and a filled block that size reads as a call to action rather than as "you are here".
+
+   ALL TOKENS, so dark and high contrast come with it: `--st-quiet-ink` is the slate lifted to
+   4.5:1 on dark paper and darkened to 7.99:1 under high contrast, `--st-slate-hover-bg` re-points
+   to a bone wash on dark, and the rules and fills follow `--st-card-*`. The one thing a token
+   cannot say is "heavier", so high contrast has three rules of its own, in the accessibility
+   family at the foot of this file (search `.stonetop-gm-prep-switcher` there) because that family
+   has to be the last thing in the file.
+
+   Margin under it and none above: the Prep panel starts flush under the banner like every tab on
+   this frame, and the pane's own first line (its intro, or the pencil in its corner) wants the
+   gap. */
+.stonetop-gm-prep-switcher {
+	display: flex;
+	gap: 3px;
+	margin: 0 0 12px;
+	padding: 3px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-lg);
+	background: var(--st-card-fill);
+}
+
+/* Core's button rules are a full-width block with a border, a fill, a 28px line box and a glow
+   on hover; every one of them is stated away here rather than left to win in some theme. */
+.stonetop-gm-prep-switcher .stonetop-gm-prep-view {
+	flex: 1 1 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	width: auto;
+	min-width: 0;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 6px 10px;
+	border: 0;
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	box-shadow: none;
+	color: var(--st-text-secondary);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-md);
+	font-weight: 400;
+	line-height: 1.3;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.stonetop-gm-prep-switcher .stonetop-gm-prep-view:hover:not(.active) {
+	background: rgb(var(--st-ink-rgb) / 0.05);
+	box-shadow: none;
+	color: var(--st-text-body);
+}
+
+/* The rule along the foot is an INSET shadow, not a border, so the active segment is the same
+   height as the other two and nothing in the strip moves when the view changes. */
+.stonetop-gm-prep-switcher .stonetop-gm-prep-view.active {
+	background: var(--st-slate-hover-bg);
+	box-shadow: inset 0 -2px 0 var(--st-quiet-ink);
+	color: var(--st-heading-ink);
+	font-weight: 600;
+	cursor: default;
+}
+
+/* Keyboard focus is a ring INSIDE the segment (negative offset), because the strip's own padding
+   is 3px and a ring drawn outside would be cut by its neighbour. Mouse focus draws nothing, or a
+   click would leave a ring standing on the view it just chose. */
+.stonetop-gm-prep-switcher .stonetop-gm-prep-view:focus {
+	outline: none;
+	box-shadow: none;
+}
+.stonetop-gm-prep-switcher .stonetop-gm-prep-view.active:focus {
+	box-shadow: inset 0 -2px 0 var(--st-quiet-ink);
+}
+.stonetop-gm-prep-switcher .stonetop-gm-prep-view:focus-visible {
+	outline: 2px solid var(--st-quiet-ink);
+	outline-offset: -2px;
+}
+
+/* The glyph, worn as a MASK like the rail's (see `.stonetop-tab-icon`), so the one file takes the
+   segment's rest, hover and active ink from `currentColor` and core's `img` border never applies.
+   Each view's file is selected by data-tab below. */
+.stonetop-gm-prep-view-icon {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	background-color: currentColor;
+	-webkit-mask: var(--st-prep-icon) center / contain no-repeat;
+	mask: var(--st-prep-icon) center / contain no-repeat;
+}
+
+/* The label gives way before the pill does: at the sheet's narrowest, or the largest text size,
+   "Expeditions" ellipsizes and the number beside it stays whole, because the number is the part
+   that changes. */
+.stonetop-gm-prep-view-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The count. A soft pill, washed rather than outlined, and SLATE-FILLED on the active segment so
+   the number under the reader's eye is the loudest thing in the strip. Tabular figures, so a
+   count going from 9 to 10 widens the pill and not the gap around it. */
+.stonetop-gm-prep-view-count {
+	flex: 0 0 auto;
+	min-width: 1.7em;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: rgb(var(--st-ink-rgb) / 0.08);
+	color: var(--st-text-secondary);
+	font-family: var(--font-primary, Signika, sans-serif);
+	font-size: var(--st-fs-xs);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	line-height: 1.6;
+	text-align: center;
+}
+
+.stonetop-gm-prep-view.active .stonetop-gm-prep-view-count {
+	background: var(--st-accent-fill);
+	color: #fff;
+}
+
+/* Nothing in that view yet. Dimmed, not hidden: "0" is the answer to the question the pill asks,
+   and a pill that came and went would move the label beside it. */
+.stonetop-gm-prep-view:not(.active) .stonetop-gm-prep-view-count--zero {
+	opacity: 0.6;
+}
+
+/* One glyph per view. The two bundle views keep the glyphs they wore as rail tabs, so a GM who
+   learned them there finds them here; Sites wears the mound it wore as a tab of its own, which is
+   also the map pin a placed site carries (journal/gm-prep-page.js).
+
+   The signpost and not the treasure map the "Run an Expedition" hotbar macro wears: the map's
+   route and its X are fine holes in a filled sheet, and at this size they close up into a dark
+   speck. See assets/icons/tabs/ATTRIBUTION.md for the backing square punched transparent on each
+   of these to wear it as a mask. */
+.stonetop-gm-prep-view[data-tab="encounters"]  { --st-prep-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
+.stonetop-gm-prep-view[data-tab="expeditions"] { --st-prep-icon: url('/systems/stonetop-pwd/assets/icons/tabs/direction-signs.svg'); }
+.stonetop-gm-prep-view[data-tab="sites"]       { --st-prep-icon: url('/systems/stonetop-pwd/assets/icons/tabs/site-mound.svg'); }
+
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-gm-prep-switcher .stonetop-gm-prep-view { transition: none; }
 }
 
 /* -- Moves tab ------------------------------------------------------------
@@ -48746,13 +48926,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-gm-encounter-used:hover {
 	color: var(--st-green-text);
-}
-
-/* SITES, folded in at the foot of the Expeditions panel. A sibling of the card list rather than
-   a part of it, so it needs the gap that list's flex column would have given it. The grid and
-   the cards inside are dressed by the `.steading-prep-cards` block, unchanged by the move. */
-.stonetop-gm-expedition-sites {
-	margin-top: 14px;
 }
 
 /* THE EXPEDITIONS CARD'S FOOT, where the encounter card has a lone button. The body is a flex
@@ -57248,6 +57421,21 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-relmap-ink-rust:   hsl(25deg 32% 41%);
 	--st-relmap-ink-crimson:hsl(350deg 62% 34%);
 	--st-relmap-ink-slate:  hsl(215deg 16% 44%);
+}
+
+/* THE GM TOOLKIT'S PREP VIEW SWITCHER (its own block is with the toolkit's Prep tab): heavier,
+   not darker — its tokens are already re-pitched for this mode. The strip's hairline becomes a
+   real rule, the active segment's foot thickens, and an inactive count pill gains an edge so it
+   is not a wash the reader has to find. */
+:root.stonetop-high-contrast .stonetop-gm-prep-switcher {
+	border-color: var(--st-text-body);
+}
+:root.stonetop-high-contrast .stonetop-gm-prep-switcher .stonetop-gm-prep-view.active,
+:root.stonetop-high-contrast .stonetop-gm-prep-switcher .stonetop-gm-prep-view.active:focus {
+	box-shadow: inset 0 -3px 0 var(--st-quiet-ink);
+}
+:root.stonetop-high-contrast .stonetop-gm-prep-view:not(.active) .stonetop-gm-prep-view-count {
+	box-shadow: inset 0 0 0 1px currentColor;
 }
 
 /* AND THE EIGHT DASH PATTERNS, WHICH ONLY THIS MODE PAINTS.

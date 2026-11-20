@@ -19,7 +19,8 @@ const STEADING_JS  = read("module/actors/steading/StonetopSteadingSheet.js");
 const STEADING_HBS = read("templates/actor/steading.hbs");
 const TOOLKIT_HBS  = read("templates/actor/gm-toolkit.hbs");
 const THREATS_HBS  = read("templates/actor/partials/gm-toolkit-tab-threats.hbs");
-const SITES_HBS    = read("templates/actor/partials/gm-toolkit-sites-section.hbs");
+const SITES_HBS    = read("templates/actor/partials/gm-toolkit-tab-sites.hbs");
+const PREP_HBS     = read("templates/actor/partials/gm-toolkit-tab-prep.hbs");
 // The three kind-agnostic partials both tabs render through, so the tool classes, the add bar
 // and the no-steading sentence are each written once.
 const TOOLS_HBS      = read("templates/actor/partials/gm-prep-card-tools.hbs");
@@ -131,42 +132,51 @@ describe("the steading really lost them", () => {
 		expect(en.stonetop.steading.tabs.threats).toBeUndefined();
 		expect(en.stonetop.steading.tabs.sites).toBeUndefined();
 		expect(en.stonetop.gmToolkit.tabs.threats).toBe("Threats & Dangers");
-		// Sites lost its rail button when it was folded into the Expeditions panel, so its name
-		// is a section heading there rather than a tab label. Both halves asserted: a key left
-		// under `tabs` is a label for a button nothing draws.
-		expect(en.stonetop.gmToolkit.tabs.sites).toBeUndefined();
-		expect(en.stonetop.gmToolkit.expeditions.sites).toBe("Sites");
+		// Sites is a VIEW of the Prep tab now, a segment of its switcher, so its name is a tab
+		// label again — under the toolkit's `tabs`, read through gm-prep-views.js. The section
+		// heading it wore at the foot of Expeditions went with the section, and so did its two
+		// keys: a key left behind is a label for a heading nothing draws.
+		expect(en.stonetop.gmToolkit.tabs.sites).toBe("Sites");
+		expect(en.stonetop.gmToolkit.tabs.prep).toBe("Prep");
+		expect(read("module/actors/gmtoolkit/gm-prep-views.js")).toContain('"stonetop.gmToolkit.tabs.sites"');
+		expect(en.stonetop.gmToolkit.expeditions.sites).toBeUndefined();
+		expect(en.stonetop.gmToolkit.expeditions.sitesNote).toBeUndefined();
 	});
 });
 
 describe("the toolkit picked them up whole", () => {
-	it("mounts Threats as a tab, and Sites inside the Expeditions panel", () => {
+	it("mounts Threats as a tab, and Sites as a view of the Prep tab", () => {
 		expect(TOOLKIT_HBS).toMatch(/tab-rail-item"\s+tab="threats"/);
 		expect(TOOLKIT_HBS).toContain('{{> "stonetop.gm-toolkit-tab-threats"}}');
 		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-tab-threats":');
 
-		// Sites was a tab here and is now a section at the foot of Expeditions. Every leg of
-		// that move fails silently on its own: a rail button left behind points at a panel that
-		// no longer exists, an unregistered partial renders nothing at all, and the old file
-		// path left in the preload map throws on load.
+		// Sites was a tab here, then a section at the foot of Expeditions, and is now the Prep
+		// tab's third view. Every leg of that move fails silently on its own: a rail button left
+		// behind points at a panel the rail's group does not have, an unregistered partial renders
+		// nothing at all, and the old file path left in the preload map throws on load.
 		expect(TOOLKIT_HBS).not.toMatch(/tab-rail-item"\s+tab="sites"/);
 		expect(TOOLKIT_HBS).not.toContain('{{> "stonetop.gm-toolkit-tab-sites"}}');
-		expect(STONETOP_JS).not.toContain("gm-toolkit-tab-sites");
-		expect(repoFileExists("templates/actor/partials/gm-toolkit-tab-sites.hbs")).toBe(false);
-		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-sites-section":');
+		expect(stripComments(PREP_HBS)).toContain('{{> "stonetop.gm-toolkit-tab-sites"}}');
+		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-tab-sites":');
+		expect(repoFileExists("templates/actor/partials/gm-toolkit-tab-sites.hbs")).toBe(true);
+		expect(STONETOP_JS).not.toContain("gm-toolkit-sites-section");
+		expect(repoFileExists("templates/actor/partials/gm-toolkit-sites-section.hbs")).toBe(false);
 		expect(read("templates/actor/partials/gm-toolkit-tab-expeditions.hbs"))
-			.toContain('{{> "stonetop.gm-toolkit-sites-section"}}');
+			.not.toMatch(/gm-toolkit-(sites-section|tab-sites)/);
 	});
 
 	// Both keys already had a glyph from when the steading carried them, and the icon table is
 	// one flat unscoped list, so they follow the markup. Pin it: an unmapped data-tab paints a
 	// solid block of currentColor where the glyph should be, and nothing is logged.
-	it("the Threats rail key still maps to a mask icon, and Sites no longer needs one", () => {
+	it("the Threats rail key still maps to a mask icon, and Sites wears its mound on the switcher", () => {
 		expect(CSS).toMatch(
 			/\.stonetop-tab-rail \.item\[data-tab="threats"\]\s*\{\s*--st-tab-icon:\s*url\('[^']*hazard-sign\.svg'\)/);
-		// A row for a data-tab nothing renders is a row that outlives what it was for. The FILE
-		// stays: `site-mound.svg` is also the map-pin icon a placed site wears.
-		expect(CSS).not.toMatch(/\.item\[data-tab="sites"\]/);
+		// A row in the RAIL's table for a data-tab no rail renders is a row that outlives what it
+		// was for. The switcher's table is the one that answers for Sites now. The FILE is also
+		// the map-pin icon a placed site wears.
+		expect(CSS).not.toMatch(/\.stonetop-tab-rail \.item\[data-tab="sites"\]/);
+		expect(CSS).toMatch(
+			/\.stonetop-gm-prep-view\[data-tab="sites"\]\s*\{\s*--st-prep-icon:\s*url\('[^']*site-mound\.svg'\)/);
 		expect(repoFileExists("assets/icons/tabs/site-mound.svg")).toBe(true);
 		expect(read("module/journal/gm-prep-page.js")).toContain("tabs/site-mound.svg");
 	});
@@ -286,21 +296,26 @@ describe("the toolkit picked them up whole", () => {
 			expect(markup).not.toContain(`stonetop.edit.${kind}`);
 		});
 
-	// Threats is still a panel of its own; Sites is a folded section inside another one, and
-	// the box around its heading is what stops the fold walking on out of the tab.
+	// Threats is a panel of the rail's group; Sites is a pane of the Prep tab's view group, which
+	// its switcher shows and hides. Each container is what its own controller looks for: a pane
+	// on the rail's group would be a rail panel the rail has no button for.
 	it("wraps each one in the container its own machinery needs", () => {
 		expect(stripComments(THREATS_HBS))
 			.toContain('<div class="tab threats" data-group="primary" data-tab="threats">');
 		const sites = stripComments(SITES_HBS);
-		expect(sites).not.toContain('data-tab="sites"');
-		expect(sites).toContain('<div class="stonetop-gm-expedition-sites">');
-		// It folds, and starts OPEN like every other section on this sheet — a section shut on
-		// first open is one a GM never learns is there. `startCollapsed` is for reference
-		// sections, and its absence is also what makes a stored fold id here mean "this GM shut
-		// it" rather than "this GM pushed it open"; see utils/section-editing.js.
-		expect(sites).toContain('collapse="gm-expeditions-sites"');
-		expect(sites).not.toContain("startCollapsed");
-		expect(sites.match(/section-heading/g)).toHaveLength(1);
+		expect(sites).toMatch(/<div class="tab sites[{"][^>]*data-group="prep" data-tab="sites"/);
+		expect(sites).toMatch(/role="tabpanel"/);
+		expect(sites).not.toContain('data-group="primary"');
+		// NO heading and NO fold: the switcher segment IS its heading, and a fold over a whole
+		// view would be a second way to hide what the switcher already hides. The old fold's
+		// wrapper and collapse key go with it, so a stored "folded" from the old section cannot
+		// reach anything.
+		expect(sites).not.toContain("section-heading");
+		expect(sites).not.toContain("stonetop-gm-expedition-sites");
+		expect(sites).not.toContain("collapse=");
+		expect(CSS).not.toContain(".stonetop-gm-expedition-sites");
+		// The listener scope every site control is delegated through, kept as it was.
+		expect(sites).toContain('class="sheet-tab steading-sites steading-prep-cards"');
 	});
 
 	it("keeps the section-edit machinery out of the prep mixin", () => {

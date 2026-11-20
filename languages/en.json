@@ -317,9 +317,17 @@
         "moves": "GM Moves",
         "loop": "Core Loop",
         "threats": "Threats & Dangers",
+        "prep": "Prep",
         "encounters": "Encounters",
         "expeditions": "Expeditions",
+        "sites": "Sites",
         "wonder": "I Wonder..."
+      },
+      "prep": {
+        "switcherLabel": "Prep views",
+        "countEncounters": "{count} to run",
+        "countExpeditions": "{count} to run",
+        "countSites": "{count} written up"
       },
       "moves": {
         "basic": "GM Moves",
@@ -489,8 +497,6 @@
         "deployAndFight": "Put every monster in this encounter on the map and start a fight with them"
       },
       "expeditions": {
-        "sites": "Sites",
-        "sitesNote": "Where a trip is going, and what is on the way",
         "intro": "Trips prepped before the night they are run (Book I, p.340): the map of the route, the sites along the way, whatever waits at the end, and the page you mean to read aloud when they get there. Drag anything in from the sidebar or a compendium. Run one to open the expedition walkthrough on it.",
         "add": "Prep a new expedition",
         "newName": "New expedition",

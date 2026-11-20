@@ -6,22 +6,30 @@
       THE SAME SHAPE AS THE ENCOUNTERS TAB, which is where the reasoning lives
       (gm-toolkit-tab-encounters.hbs): two lists out of one array split in JS off each card's
       `used` flag, never off the DOM; writes that do not go through the form, so no field carries
-      a `name`; and one pencil in the panel's corner guarding exactly the two delete buttons.
+      a `name`; and one pencil in the pane's corner guarding exactly the two delete buttons.
 
       WHAT IT IS NOT is the walkthrough's log. The "Run an Expedition" window keeps its own record
       of what happened on each trip — the route, the requirements they were told, what they
       carried — in a world setting, and Run on a card opens that window on this card's trip. Prep
       here; what was played is recorded there.
 
-      SITES ARE AT THE FOOT OF THIS PANEL, having had a rail button of their own until they were
-      folded in here. A site is what a trip is FOR — its own intro says so — and a rail-click
-      between the two meant the sites for tonight's journey could never be read beside the
-      journey. The section is a SIBLING of the card list below rather than a part of it, and it
-      folds; gm-toolkit-sites-section.hbs says why on both counts.
+      THE SECOND OF THE PREP TAB'S THREE VIEWS (gm-toolkit-tab-prep.hbs), between Encounters and
+      Sites, and a pane of that tab's own group (`data-group="prep"`) rather than the rail's.
+      `tab expeditions` stays its class because `.tab.expeditions` is the scope of every listener
+      and the drop zone gm-expeditions-tab.js binds — the thing that keeps a drop on an
+      expedition card from being claimed by the Encounters engine, which prints the same class
+      names one pane over.
 
-      `data-tab="expeditions"` earns the rail's signpost glyph; the icon table in stonetop.css is
-      one flat list keyed by data-tab with no per-sheet scope. --}}
-<div class="tab expeditions steading-edit-section" data-group="primary" data-tab="expeditions">
+      SITES ARE THEIR OWN VIEW NOW, the third segment of the switcher, having sat at the foot of
+      this pane under a full card list. A site is what a trip is FOR, and that is exactly why it
+      should not need a scroll past every trip to reach: the switcher puts the two one click
+      apart, and the click is the same one a GM uses between any two kinds of prep.
+
+      `data-tab="expeditions"` is also what earns the switcher segment its signpost glyph (the
+      `.stonetop-gm-prep-view[data-tab]` rows in stonetop.css); the rail has no button by this
+      name any more. --}}
+<div class="tab expeditions steading-edit-section{{#if stonetop.prep.panes.expeditions.active}} active{{/if}}" data-group="prep" data-tab="expeditions"
+     id="{{stonetop.prep.panes.expeditions.id}}" role="tabpanel" aria-labelledby="{{stonetop.prep.panes.expeditions.tabId}}">
 	{{> "stonetop.steading-section-toggle" section="expeditions" editing=stonetop.edit.expeditions}}
 	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.expeditions}} stonetop-gm-encounters--reading{{/unless}}">
 
@@ -82,8 +90,4 @@
 		{{/if}}
 
 	</section>
-
-	{{!-- Outside the section above, so neither the tab's pencil nor the card column's flex
-	      spacing reaches it. --}}
-	{{> "stonetop.gm-toolkit-sites-section"}}
 </div>
