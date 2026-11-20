@@ -674,11 +674,11 @@ delete an entry when it is done.
 
 **Markup**
 
-10. **Native `title` tooltips remain in 13 templates** (43 of them: Death's Door, the people
-    gallery, the welcome guide, the arcanum editor and nine dialogs), and in a handful of markup
+10. **Native `title` tooltips remain in 12 templates** (35 of them: the people gallery, the
+    welcome guide, the arcanum editor and nine dialogs), and in a handful of markup
     strings and `.title =` writes in JS (the attack flow's 19, the ledger window, the book
-    reader). The character, NPC, monster and Steading sheets, every partial they draw, and the
-    bestiary and location journal pages are done. The list is `PENDING` in
+    reader). The character, NPC, monster and Steading sheets, every partial they draw, the
+    bestiary and location journal pages, and Death's Door are done. The list is `PENDING` in
     `tests/templates/tooltip-conventions.test.js`; convert a window and the code that rewrites
     its tooltips in one change, then take it off the list. The draggable improvement and threat
     cards in journal prose carry a `title` too, and are a change of their own: the markup is

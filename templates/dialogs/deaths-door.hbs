@@ -221,7 +221,7 @@
 				<p class="deaths-door-mark-label">{{{localize "stonetop.specialMoves.deathsDoor.result.debilityAsk"}}}</p>
 				<div class="deaths-door-debility-choices">
 					{{#each debilityChoices}}
-					<button type="button" class="deaths-door-debility-btn" data-debility="{{this.key}}" title="{{this.description}}">
+					<button type="button" class="deaths-door-debility-btn" data-debility="{{this.key}}" data-tooltip="{{this.description}}">
 						{{this.name}}
 					</button>
 					{{/each}}
@@ -403,18 +403,18 @@
 	    order) at full button size, and "Not yet" keeps the right edge. The label carries what is
 	    being rolled: with no stat choice on offer there is nothing else on the step that says
 	    "+nothing". }}
-	<button class="deaths-door-roll-btn is-primary" type="button" title="{{localize "stonetop.specialMoves.deathsDoor.buttons.rollTitle"}}">
+	<button class="deaths-door-roll-btn is-primary" type="button" data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.buttons.rollTitle"}}">
 		<i class="fas fa-dice-d6" aria-hidden="true"></i>
 		<span>{{#if hasStatChoice}}{{localize "stonetop.specialMoves.deathsDoor.buttons.rollDice"}}{{else}}{{localize "stonetop.specialMoves.deathsDoor.buttons.rollNothing"}}{{/if}}</span>
 	</button>
 	{{#if skipRollMove}}
-	<button class="deaths-door-skip-roll-btn" type="button" title="{{localize "stonetop.specialMoves.deathsDoor.buttons.skipTitle" move=skipRollMove}}">
+	<button class="deaths-door-skip-roll-btn" type="button" data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.buttons.skipTitle" move=skipRollMove}}">
 		<i class="fas fa-shield-heart" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.skip"}}</span>
 	</button>
 	{{/if}}
 	{{#if scalesOffer}}
-	<button class="deaths-door-boost-btn deaths-door-scales-btn" type="button" title="{{scalesOffer.title}}">
+	<button class="deaths-door-boost-btn deaths-door-scales-btn" type="button" data-tooltip-text="{{scalesOffer.title}}">
 		<i class="fas fa-shield-halved" aria-hidden="true"></i>
 		<span>{{scalesOffer.button}}</span>
 	</button>
@@ -432,14 +432,14 @@
 	</button>
 	{{#if canBurnBrightly}}
 	<button class="deaths-door-boost-btn deaths-door-burn-btn" type="button"
-	        title="{{localize "stonetop.specialMoves.deathsDoor.buttons.burnTitle" cost=burnBrightlyCost}}">
+	        data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.buttons.burnTitle" cost=burnBrightlyCost}}">
 		<i class="fas fa-fire" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.burn" cost=burnBrightlyCost}}</span>
 	</button>
 	{{/if}}
 	{{#if canGiveItAll}}
 	<button class="deaths-door-boost-btn deaths-door-give-all-btn" type="button"
-	        title="{{localize "stonetop.specialMoves.deathsDoor.buttons.giveAllTitle"}}">
+	        data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.buttons.giveAllTitle"}}">
 		<i class="fas fa-hand-fist" aria-hidden="true"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.giveAll"}}</span>
 	</button>
@@ -447,7 +447,7 @@
 	{{! The roll-card +1s this user presses for their own characters (Diligence, Sanction, Many Hands, a
 	    Blessing), labelled as the card labels them. Other players press theirs on the card. }}
 	{{#each plusOneButtons}}
-	<button class="deaths-door-boost-btn deaths-door-plus-one-btn" type="button" data-plus-one="{{this.key}}" title="{{this.title}}">
+	<button class="deaths-door-boost-btn deaths-door-plus-one-btn" type="button" data-plus-one="{{this.key}}" data-tooltip-text="{{this.title}}">
 		<i class="fas fa-plus" aria-hidden="true"></i>
 		<span>{{this.label}}</span>
 	</button>
@@ -464,9 +464,9 @@
 	{{/if}}
 
 	{{#if isChoices}}
-	{{! `title` because the line is clipped to one row now that it shares the footer with three
+	{{! A tooltip because the line is clipped to one row now that it shares the footer with three
 	    buttons, and on a Thrall with nothing answered it names four steps. }}
-	{{#if outstandingLabel}}<span class="deaths-door-outstanding" title="{{this.outstandingLabel}}">{{this.outstandingLabel}}</span>{{/if}}
+	{{#if outstandingLabel}}<span class="deaths-door-outstanding" data-tooltip="{{this.outstandingLabel}}">{{this.outstandingLabel}}</span>{{/if}}
 	{{! Back / Next walk the rail; Done leaves. A wizard keeps its forward action on the right (the
 	    one place our dialogs don't put the affirmative first), and Done sits past it because it is
 	    the way OUT of the walkthrough rather than the next step of it. }}
