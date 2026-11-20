@@ -32,7 +32,7 @@
 						       value="{{this.prompt}}" placeholder='{{localize "stonetop.bestiary.questionPlaceholder"}}'>
 						<textarea class="stonetop-entry-qa-input stonetop-entry-qa-answer"
 						          placeholder='{{localize "stonetop.bestiary.answerPlaceholder"}}'>{{this.answer}}</textarea>
-						<a class="stonetop-entry-remove-qa" title="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
+						<a class="stonetop-entry-remove-qa" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
 					</div>
 				</li>
 				{{/each}}
@@ -67,7 +67,7 @@
 					<prose-mirror class="stonetop-entry-rich-editor stonetop-entry-group-body"
 					              data-section-index="{{../index}}" data-group-index="{{@index}}"
 					              value="{{this.body}}" data-drawn-value="{{this.body}}">{{{this.enrichedBody}}}</prose-mirror>
-					<a class="stonetop-entry-remove-group" title="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
+					<a class="stonetop-entry-remove-group" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
 				</div>
 				{{/each}}
 			</div>

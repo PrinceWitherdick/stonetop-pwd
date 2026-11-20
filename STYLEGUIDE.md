@@ -674,12 +674,17 @@ delete an entry when it is done.
 
 **Markup**
 
-10. **Native `title` tooltips remain in 18 templates** (53 of them: the bestiary pages, Death's
-    Door, the people gallery, the welcome guide and a dozen dialogs), and in a handful of markup
+10. **Native `title` tooltips remain in 13 templates** (43 of them: Death's Door, the people
+    gallery, the welcome guide, the arcanum editor and nine dialogs), and in a handful of markup
     strings and `.title =` writes in JS (the attack flow's 19, the ledger window, the book
-    reader). The character, NPC, monster and Steading sheets and every partial they draw are
-    done. The list is `PENDING` in `tests/templates/tooltip-conventions.test.js`; convert a window
-    and the code that rewrites its tooltips in one change, then take it off the list.
+    reader). The character, NPC, monster and Steading sheets, every partial they draw, and the
+    bestiary and location journal pages are done. The list is `PENDING` in
+    `tests/templates/tooltip-conventions.test.js`; convert a window and the code that rewrites
+    its tooltips in one change, then take it off the list. The draggable improvement and threat
+    cards in journal prose carry a `title` too, and are a change of their own: the markup is
+    baked into the lore and location packs (7 pages) as well as built in
+    `steading-improvement-cards.js` and `threat-seed-cards.js`, and stored journal HTML goes
+    through core's editor, so check there that a `data-tooltip` survives a save.
 11. **About 195 `data-tooltip` attributes print a value from data**, which core draws as HTML.
     Most print strings the system builds. Any that can carry text a player typed should be
     `data-tooltip-text`; they have not been sorted one from the other.
