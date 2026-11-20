@@ -16,8 +16,8 @@ import { openingTags, templateSources } from "../fakes/hbs.js";
 // change as the code that rewrites it (the fold caret's, the header's edit switch). The character
 // sheet and every partial it draws went first, 2026-11-19, the NPC and monster sheets after it,
 // then the Steading sheet with its Add Resident dialog, then the bestiary and location journal
-// pages, then Death's Door, then the people gallery. PENDING is what is left, by exact path: take
-// a template off it when its titles are gone, and nothing new may be added to it.
+// pages, then Death's Door, the people gallery and the welcome guide. PENDING is what is left, by
+// exact path: take a template off it when its titles are gone, and nothing new may be added to it.
 
 const PENDING = new Set([
 	"templates/dialogs/arcana-inspire.hbs",
@@ -29,7 +29,6 @@ const PENDING = new Set([
 	"templates/dialogs/playbook-import-review.hbs",
 	"templates/dialogs/possession-choices.hbs",
 	"templates/dialogs/weather.hbs",
-	"templates/dialogs/welcome.hbs",
 	"templates/item/arcanum-sheet-edit.hbs",
 ]);
 
