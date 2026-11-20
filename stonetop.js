@@ -98,7 +98,7 @@ import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
+import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill, wireDescToggle } from "./module/utils/roll-engine.js";
 import { countedResult, rolledRecord, cardCountedTier, cardTierNow } from "./module/utils/counted-tier.js";
 import { burnBrightlyAffordable, burnBrightlyTooltipKey } from "./module/actors/character/burn-brightly.js";
 import { xpRules } from "./module/utils/xp.js";
@@ -1426,11 +1426,7 @@ function _chatWireRebuildCrops(message, html) {
 
 // -- MOVE DESCRIPTION TOGGLE -----------------------------------
 function _chatWireDescToggle(message, html) {
-	const toggle = html.querySelector(".stonetop-roll-card-desc-toggle");
-	if (!toggle) return;
-	toggle.addEventListener("click", () => {
-		toggle.closest(".stonetop-roll-card")?.classList.toggle("desc-revealed");
-	});
+	wireDescToggle(html);
 }
 
 // -- DEBILITY DISADVANTAGE ANNOTATION -------------------------
@@ -2765,6 +2761,7 @@ function _chatWireOptionDamageChoices(message, html, move, { usable = true } = {
 			btn.className = "stonetop-option-damage-roll";
 			const glyph = document.createElement("i");
 			glyph.className = "fas fa-dice-d6";
+			glyph.setAttribute("aria-hidden", "true");
 			btn.append(glyph, ` Roll ${dealt.formula} (${dealt.label})`);
 			btn.hidden = !box.checked;
 			item.appendChild(btn);

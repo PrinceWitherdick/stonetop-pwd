@@ -150,7 +150,8 @@ function _mount() {
 	// inherited `::before`, and this system sets `font-family` on `button` — put the fa class on
 	// the button and the glyph renders as a raw codepoint box.
 	const icon = document.createElement("i");
-	icon.className = "fa-solid fa-eye";
+	icon.className = "fas fa-eye";
+	icon.setAttribute("aria-hidden", "true");
 	button.append(icon);
 	button.addEventListener("click", _onClick);
 	button.addEventListener("contextmenu", _onClearOverride);
@@ -173,7 +174,7 @@ export function refreshMapPinNameToggle() {
 	button.hidden = !!view.hidden;
 	if (view.hidden) return;
 	const icon = button.querySelector("i");
-	if (icon) icon.className = `fa-solid ${view.icon}`;
+	if (icon) icon.className = `fas ${view.icon}`;
 	button.classList.toggle("is-quiet", !view.showing);
 	button.classList.toggle("is-overridden", !!view.overridden);
 	button.setAttribute("aria-pressed", String(view.pressed));

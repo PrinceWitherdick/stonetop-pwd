@@ -66,6 +66,37 @@ describe("an icon in markup built in JS", () => {
 		});
 		expect(bare).toEqual([]);
 	});
+
+	// The same rule for an `<i>` made with createElement, which the markup check above cannot see:
+	// the element it is assigned to must be given aria-hidden before it is used. Read a few lines on,
+	// where the class is set beside it.
+	it("is hidden from a screen reader when it is made with createElement", () => {
+		const MADE = /const (\w+) = [^;\n]*createElement\(\s*["']i["']\s*\);/g;
+		const unhidden = [];
+		let made = 0;
+		for (const file of FILES) {
+			const source = fs.readFileSync(file, "utf8");
+			for (const m of source.matchAll(MADE)) {
+				made++;
+				const after = source.slice(m.index, m.index + 400).split("\n").slice(0, 6).join("\n");
+				if (!new RegExp(`${m[1]}\\.setAttribute\\(\\s*["']aria-hidden["']`).test(after)) {
+					unhidden.push(`${path.relative(repoPath("."), file)}:${source.slice(0, m.index).split("\n").length}`);
+				}
+			}
+		}
+		expect(made, "found the createElement icons").toBeGreaterThan(5);
+		expect(unhidden).toEqual([]);
+	});
+
+	// Except a window header's control, which core draws from the class on the button itself and
+	// spells `fa-solid` (STYLEGUIDE.md, Known gaps 12).
+	it("is written `fas` when it is made with createElement", () => {
+		const SOLID = /\.className = ["'`][^"'`]*\bfa-solid\b/;
+		const solid = FILES.flatMap(file => fs.readFileSync(file, "utf8").split("\n")
+			.map((line, i) => SOLID.test(line) && !/header-control/.test(line) ? `${path.relative(repoPath("."), file)}:${i + 1}` : null)
+			.filter(Boolean));
+		expect(solid).toEqual([]);
+	});
 });
 
 describe("a control that is only an icon", () => {

@@ -237,6 +237,7 @@ export function injectHeaderToggle(sheet, noun, { editLabel, lockLabel, onChange
 	thumb.className = "stonetop-toggle-thumb";
 	const icon = document.createElement("i");
 	icon.className = locked ? "fas fa-lock" : "fas fa-wrench";
+	icon.setAttribute("aria-hidden", "true");
 	thumb.appendChild(icon);
 	track.appendChild(thumb);
 	label.appendChild(checkbox);

@@ -11,8 +11,9 @@
       default, so an id saved for one of these means the user pushed it open; see
       utils/section-editing.js.
 
-      The aria-expanded and title below are the un-wired defaults. Both are restated
-      by `_wireSectionCollapse` at wire time, before paint, from the section's actual
-      state, so a default-collapsed caret does not announce itself as expanded. --}}
+      The aria-expanded, data-tooltip and aria-label below are the un-wired defaults. All
+      three are restated by `_wireSectionCollapse` at wire time, before paint, from the
+      section's actual state, so a default-collapsed caret does not announce itself as
+      expanded (tests/utils/section-collapse.test.js). --}}
 <a class="stonetop-section-collapse" data-section="{{this.collapse}}"{{#if defaultCollapsed}} data-default-collapsed="true"{{/if}} role="button" tabindex="0"
    aria-expanded="true" data-tooltip="Collapse section" aria-label="Collapse section"><i class="fas fa-caret-down" aria-hidden="true"></i></a>

@@ -564,7 +564,11 @@ What that means for a new component:
 - One glyph per meaning: **`fa-pencil`** edit · **`fa-xmark`** remove from a list or close ·
   **`fa-trash`** delete for good · **`fa-plus`** add · **`fa-check`** done ·
   **`fa-dice-d6`** roll (the game rolls d6s) · **`fa-rotate-left`** reset / undo.
-- Decorative icons are `aria-hidden="true"`, in templates and in markup built in JS alike.
+- Decorative icons are `aria-hidden="true"`, in templates and in markup built in JS alike, and
+  an `<i>` made with `createElement` gets `setAttribute("aria-hidden", "true")` beside its class
+  (`tests/templates/icon-conventions.test.js` checks all three).
+- A control whose label or state changes says so in its name: the roll card's "?" reads "Hide
+  move description" and `aria-expanded="true"` once the description is open (`wireDescToggle`).
 - A control that holds only an icon has an **`aria-label`** saying what it does (usually the same
   words as its tooltip). One that is not a control at all, like the fading "done" check, is
   `aria-hidden` itself.
