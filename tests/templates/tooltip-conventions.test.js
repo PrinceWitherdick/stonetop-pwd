@@ -16,16 +16,12 @@ import { openingTags, templateSources } from "../fakes/hbs.js";
 // change as the code that rewrites it (the fold caret's, the header's edit switch). The character
 // sheet and every partial it draws went first, 2026-11-19, the NPC and monster sheets after it,
 // then the Steading sheet with its Add Resident dialog, then the bestiary and location journal
-// pages, then Death's Door, the people gallery, the welcome guide, and the character-creation and
-// small dialogs. PENDING is what is left, by exact path: take a template off it when its titles
-// are gone, and nothing new may be added to it.
+// pages, then Death's Door, the people gallery, the welcome guide, the character-creation and
+// small dialogs, and last the expedition, weather, import review and arcanum editor windows,
+// 2026-11-20. PENDING is empty now and stays empty: the test forbids any new `title`, and nothing
+// may be added to the list to get one past it.
 
-const PENDING = new Set([
-	"templates/dialogs/expedition.hbs",
-	"templates/dialogs/playbook-import-review.hbs",
-	"templates/dialogs/weather.hbs",
-	"templates/item/arcanum-sheet-edit.hbs",
-]);
+const PENDING = new Set([]);
 
 // An <iframe> and an <abbr> are named and expanded by their title, which is what it is for there.
 const titled = source => openingTags(source)

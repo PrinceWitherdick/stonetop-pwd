@@ -42,11 +42,11 @@
       </select>
       {{/if}}
       {{#if expedition.hasAny}}
-      <button type="button" class="stonetop-exp-delete" title="Delete this expedition" aria-label="Delete this expedition">
+      <button type="button" class="stonetop-exp-delete" data-tooltip="Delete this expedition" aria-label="Delete this expedition">
         <i class="fas fa-trash" aria-hidden="true"></i>
       </button>
       {{/if}}
-      <button type="button" class="stonetop-exp-new" title="Start a new expedition">
+      <button type="button" class="stonetop-exp-new" data-tooltip="Start a new expedition">
         <i class="fas fa-plus" aria-hidden="true"></i> New
       </button>
     </div>
@@ -576,7 +576,7 @@
               The click is wired in ExpeditionDialog off
               `.stonetop-guide-moves-sidebar .stonetop-section-randomize`, a descendant
               selector, so it does not care which of the two places the button sits in. --}}
-        {{> "stonetop.section-heading" title="Exploration moves" note="once they leave town"
+        {{> "stonetop.section-heading" data-tooltip="Exploration moves" note="once they leave town"
             randomize=movesRandomize randomizeTitle=movesRandomizeTitle}}
         <ol class="items-list stonetop-guide-moves-list">
           {{#each explorationMoves}}
