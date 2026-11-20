@@ -1,3 +1,4 @@
+import { resourceCheckName } from "../../utils/resource-checks.js";
 import {
 	AppearanceLineSnapshot,
 	AppearanceOptionSnapshot,
@@ -6292,7 +6293,8 @@ export class StonetopCharacter {
 			// Big Damn Hero's "don't roll to Defend", while it is still there to make in this fight
 			// (fight/hero-moves.js#leapInOpen): the row's Leap in button.
 			leapIn: leapInOpen(this._actor),
-			pips: Array.from({ length: count }, (_, i) => ({ index: i, filled: i < value })),
+			// Named one by one ("Readiness 2 of 3"): the sheet draws each as an empty button.
+			pips: Array.from({ length: count }, (_, i) => ({ index: i, filled: i < value, label: `Readiness ${i + 1} of ${count}` })),
 		};
 	}
 
@@ -9145,9 +9147,11 @@ function _buildPlaybookSection(playbookData, background, instinct, appearance, o
 					max,
 					// The moves that empty it (background-tracks.js): Auspicious Birth's circle.
 					clearsOn: Array.isArray(r.clearsOn) ? [...r.clearsOn] : [],
+					// Named one by one: the tab draws each circle as an empty button.
 					checks: Array.from({ length: max }, (_, i) => ({
 						index: i,
 						checked: i < current,
+						name: resourceCheckName(r.label ?? r.key, i, max),
 					})),
 				};
 			}))

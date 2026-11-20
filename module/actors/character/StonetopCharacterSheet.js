@@ -986,8 +986,11 @@ function _animalCompanionTraitTooltip(trait) {
 		?? null;
 }
 
+// Each pip carries its own spoken name ("Loyalty 2 of 3"): a pip is an empty button, and its
+// tooltip ("Set Loyalty") is the same on every one, so the name is what tells them apart for a
+// screen reader. tests/templates/icon-conventions.test.js keeps every empty control named.
 function _makeLoyaltyPips(val, max = 3) {
-	return Array.from({ length: max }, (_, i) => ({ index: i, filled: i < val }));
+	return Array.from({ length: max }, (_, i) => ({ index: i, filled: i < val, label: `Loyalty ${i + 1} of ${max}` }));
 }
 
 
@@ -997,7 +1000,7 @@ function _makeLoyaltyPips(val, max = 3) {
 // pool (e.g. shield dropped mid-fight) stays spendable.
 function _makeReadinessPips(val, max = 3) {
 	const count = Math.max(max, val);
-	return Array.from({ length: count }, (_, i) => ({ index: i, filled: i < val }));
+	return Array.from({ length: count }, (_, i) => ({ index: i, filled: i < val, label: `Readiness ${i + 1} of ${count}` }));
 }
 
 // An Order button's tag and move lists: trimmed text, blanks dropped.

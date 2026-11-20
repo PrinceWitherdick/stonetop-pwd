@@ -99,6 +99,10 @@ describe("an icon in markup built in JS", () => {
 	});
 });
 
+// A CONTROL WITH NO WORDS OF ITS OWN HAS A NAME. That is an icon-only button, and also an EMPTY one
+// (a Loyalty pip, a resource circle: the look is all CSS), and a field whose only explanation is
+// its hover help. A native `title` used to double as the name for all of these; `data-tooltip`
+// does not, and a screen reader read them as a bare "button" or "edit text" once the titles went.
 describe("a control that is only an icon", () => {
 	// Named at runtime instead: the relationship map's group bar writes both buttons' aria-label
 	// with the count in it each time it changes (relmap-group-bar.js#_sayCount).
@@ -111,10 +115,11 @@ describe("a control that is only an icon", () => {
 			if (tag.name !== "button" && tag.name !== "a") continue;
 			const close = source.indexOf(`</${tag.name}>`, tag.end);
 			if (close < 0) continue;
-			const inner = source.slice(tag.end, close).replace(/\{\{!--[\s\S]*?--\}\}/g, "").replace(BLOCKS, "");
+			const inner = source.slice(tag.end, close).replace(/\{\{!--[\s\S]*?--\}\}/g, "").replace(/\{\{![^}]*\}\}/g, "").replace(BLOCKS, "");
 			// A mustache left outside the <i> is a label printed from data: not icon-only.
 			if (/\{\{/.test(inner.replace(/<i\b[^>]*>/g, ""))) continue;
-			if (!/^(?:\s*<i\b[^>]*>\s*<\/i>\s*)+$/.test(inner)) continue;
+			// Nothing but icons, or nothing at all.
+			if (!/^(?:\s*<i\b[^>]*>\s*<\/i>\s*)*$/.test(inner)) continue;
 			seen++;
 			const has = name => tag.attrs.some(a => a.name === name);
 			if (has("aria-label") || has("aria-labelledby") || has("aria-hidden")) continue;
@@ -128,6 +133,36 @@ describe("a control that is only an icon", () => {
 	});
 
 	it("says what it does", () => {
+		expect(unnamed).toEqual([]);
+	});
+});
+
+describe("a field explained only by its tooltip", () => {
+	// An input with hover help and nothing else naming it: no aria-label, no id a <label for> could
+	// point at, and not inside a <label>. Its tooltip is the only thing that says what it is for,
+	// and a screen reader never hears a tooltip.
+	const unnamed = [];
+	let seen = 0;
+	for (const { rel, source } of TEMPLATES) {
+		for (const tag of openingTags(source)) {
+			if (tag.name !== "input") continue;
+			const has = name => tag.attrs.some(a => a.name === name);
+			const type = tag.attrs.find(a => a.name === "type")?.raw ?? "text";
+			if (["hidden", "submit", "button"].includes(type)) continue;
+			if (!has("data-tooltip") && !has("data-tooltip-text")) continue;
+			seen++;
+			if (has("aria-label") || has("aria-labelledby") || has("id")) continue;
+			const before = source.slice(0, tag.start);
+			if (before.lastIndexOf("<label") > before.lastIndexOf("</label>")) continue;
+			unnamed.push(`${rel}:${before.split("\n").length}`);
+		}
+	}
+
+	it("found them", () => {
+		expect(seen).toBeGreaterThan(10);
+	});
+
+	it("has a name besides", () => {
 		expect(unnamed).toEqual([]);
 	});
 });

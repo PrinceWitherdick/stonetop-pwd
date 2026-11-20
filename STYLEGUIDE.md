@@ -570,7 +570,11 @@ What that means for a new component:
 - A control whose label or state changes says so in its name: the roll card's "?" reads "Hide
   move description" and `aria-expanded="true"` once the description is open (`wireDescToggle`).
 - A control that holds only an icon has an **`aria-label`** saying what it does (usually the same
-  words as its tooltip). One that is not a control at all, like the fading "done" check, is
+  words as its tooltip). So does an **empty** one, whose look is all CSS (a Loyalty pip, a resource
+  circle): there each one's name says which it is ("Loyalty 2 of 3", built with its data), since
+  the tooltip is the same on every one. And so does a field whose only explanation is its hover
+  help. A tooltip is never a name: a native `title` used to stand in as one, `data-tooltip` does
+  not. `tests/templates/icon-conventions.test.js` checks all three. One that is not a control at all, like the fading "done" check, is
   `aria-hidden` itself.
 - A button that *is* the icon element (`<button class="fas fa-xmark">`) must not be given our serif;
   the `:not([class*="fa-"])` guard on the base button rule exists for that.

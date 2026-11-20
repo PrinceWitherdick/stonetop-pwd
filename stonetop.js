@@ -98,6 +98,7 @@ import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
+import { resourceCheckGroups, resourceCheckItems } from "./module/utils/resource-checks.js";
 import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill, wireDescToggle } from "./module/utils/roll-engine.js";
 import { countedResult, rolledRecord, cardCountedTier, cardTierNow } from "./module/utils/counted-tier.js";
 import { burnBrightlyAffordable, burnBrightlyTooltipKey } from "./module/actors/character/burn-brightly.js";
@@ -414,26 +415,15 @@ Hooks.once("init", () => {
 	};
 	Handlebars.registerHelper("statLabel", key => game.i18n.localize(_STAT_LABEL_KEYS[String(key)] ?? String(key)));
 
-	Handlebars.registerHelper("resourceChecks", resource => {
-		if (!resource) return [];
-		const { current, max, labels } = resource;
-		return Array.from({ length: max }, (_, i) => ({ checked: i < current, label: labels[i] || null }));
-	});
+	// A resource track's circles, each with the spoken name its empty button carries
+	// (utils/resource-checks.js).
+	Handlebars.registerHelper("resourceChecks", resource => resourceCheckItems(resource));
 
 	// Same circles as resourceChecks, but chunked into fixed-size groups (default 5)
 	// so a long track (e.g. a fully-upgraded sacred pouch's Stock) reads in fives.
 	// Each item keeps its absolute index; groups stay atomic so they never split
 	// across a wrapped row and every wrapped row aligns under the first circle.
-	Handlebars.registerHelper("resourceGroups", (resource, size) => {
-		if (!resource) return [];
-		const { current, max } = resource;
-		const labels = resource.labels || [];
-		const n = Number(size) > 0 ? Number(size) : 5;
-		const items = Array.from({ length: max }, (_, i) => ({ checked: i < current, label: labels[i] || null, index: i }));
-		const groups = [];
-		for (let i = 0; i < items.length; i += n) groups.push(items.slice(i, i + n));
-		return groups;
-	});
+	Handlebars.registerHelper("resourceGroups", (resource, size) => resourceCheckGroups(resource, size));
 
 	const _flatPoolItems = pool => {
 		if (!pool) return [];

@@ -10,7 +10,7 @@
 	        {{#if ../../slug}}data-slug="{{../../slug}}"{{/if}}
 	        {{#if ../../resourceKind}}data-resource-kind="{{../../resourceKind}}"{{/if}}
 	        {{#if ../../choiceSlug}}data-choice-slug="{{../../choiceSlug}}"{{/if}}
-	        data-index="{{this.index}}"></button>
+	        data-index="{{this.index}}" aria-label="{{this.name}}"></button>
 	{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 	{{/each}}
 	</span>
@@ -24,7 +24,7 @@
         {{#if ../slug}}data-slug="{{../slug}}"{{/if}}
         {{#if ../resourceKind}}data-resource-kind="{{../resourceKind}}"{{/if}}
         {{#if ../choiceSlug}}data-choice-slug="{{../choiceSlug}}"{{/if}}
-        data-index="{{@index}}"></button>
+        data-index="{{@index}}" aria-label="{{this.name}}"></button>
 {{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 {{/each}}
 {{/if}}

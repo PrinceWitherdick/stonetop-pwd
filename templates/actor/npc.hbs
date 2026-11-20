@@ -226,7 +226,7 @@
 					<input class="stonetop-npc-stat-input" type="text" name="system.attributes.damage.value"
 					       value="{{system.attributes.damage.value}}" placeholder="knife 1d6 (hand)">
 					<input class="stonetop-npc-stat-input stonetop-npc-damage-formula-input" type="text"
-					       name="system.attributes.damage.rollFormula" value="{{system.attributes.damage.rollFormula}}"
+					       name="system.attributes.damage.rollFormula" value="{{system.attributes.damage.rollFormula}}" aria-label="Damage roll formula"
 					       data-tooltip='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
 					{{else}}
 					{{#if system.attributes.damage.rollFormula}}
@@ -289,7 +289,7 @@
 									       data-field="name" value="{{this.name}}"
 									       placeholder='{{localize "stonetop.npc.moveNamePlaceholder"}}'>
 									<input class="stonetop-npc-move-formula-input stonetop-npc-move-field" type="text"
-									       data-field="system.rollFormula" value="{{system.rollFormula}}"
+									       data-field="system.rollFormula" value="{{system.rollFormula}}" aria-label="Move roll formula"
 									       data-tooltip='{{localize "stonetop.npc.moveFormulaHint"}}' placeholder="d6">
 									<a class="stonetop-npc-delete-move" data-tooltip='{{localize "stonetop.npc.deleteMove"}}' aria-label='{{localize "stonetop.npc.deleteMove"}}'>
 										<i class="fas fa-trash" aria-hidden="true"></i>

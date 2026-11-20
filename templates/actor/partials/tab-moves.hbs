@@ -226,6 +226,7 @@
 							      answer to the authoring gate, exactly as the delete affordance does. --}}
 							<input type="checkbox" class="stonetop-item-check stonetop-other-move-learned"
 							       data-item-id="{{this.ownedId}}"
+							       aria-label="{{localize 'stonetop.character.moves.learnedTitle'}}"
 							       data-tooltip="{{localize 'stonetop.character.moves.learnedTitle'}}"
 							       {{#if learned}}checked{{/if}}
 							       {{#unless (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}disabled{{/unless}}>
@@ -245,7 +246,7 @@
 								<span class="stonetop-item-resource-entry">
 									<button type="button" class="stonetop-item-resource-check{{#if checked}} is-checked{{/if}}"
 									        data-move-name="{{../resourceKey}}"
-									        data-index="{{@index}}"></button>
+									        data-index="{{@index}}" aria-label="{{this.name}}"></button>
 									{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 								</span>
 								{{/each}}

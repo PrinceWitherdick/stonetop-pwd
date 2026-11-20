@@ -43,7 +43,7 @@
 		<div class="threat-list" data-list="grimPortents">
 			{{#each grimPortents}}
 			<div class="threat-list-row threat-list-row--portent stonetop-field-btns" data-index="{{this.index}}">
-				<input type="checkbox" class="threat-list-done" data-field="done"{{#if done}} checked{{/if}} data-tooltip="Come to pass">
+				<input type="checkbox" class="threat-list-done" data-field="done"{{#if done}} checked{{/if}} aria-label="This portent has come to pass" data-tooltip="Come to pass">
 				<input type="text" class="threat-list-text" data-field="text" value="{{this.text}}" placeholder="A concrete, observable milestone">
 				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 			</div>
@@ -55,7 +55,7 @@
 	<div class="threat-edit__field">
 		<span class="threat-edit__label">Impending doom</span>
 		<div class="threat-doom-edit">
-			<input type="checkbox" class="threat-list-done" data-doc-field="system.impendingDoom.done"{{#if system.impendingDoom.done}} checked{{/if}} data-tooltip="Come to pass">
+			<input type="checkbox" class="threat-list-done" data-doc-field="system.impendingDoom.done"{{#if system.impendingDoom.done}} checked{{/if}} aria-label="The impending doom has come to pass" data-tooltip="Come to pass">
 			<input type="text" data-doc-field="system.impendingDoom.text" value="{{system.impendingDoom.text}}" placeholder="The irreversible outcome, if the PCs never intervene">
 		</div>
 	</div>

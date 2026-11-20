@@ -173,7 +173,7 @@
 					       placeholder="claws, rocks, choking d6 (hand)">
 					<input class="stonetop-monster-stat-input stonetop-monster-damage-formula-input" type="text"
 					       name="system.attributes.damage.rollFormula" value="{{system.attributes.damage.rollFormula}}"
-					       data-tooltip="Rollable dice formula (e.g. d6, 1d8+2)" placeholder="d6">
+					       aria-label="Damage roll formula" data-tooltip="Rollable dice formula (e.g. d6, 1d8+2)" placeholder="d6">
 					{{else}}
 					{{!-- One line per damage mode; the leading dice icon doubles as a bullet and rolls that mode. --}}
 					<ul class="stonetop-monster-damage-modes{{#if stonetop.multiDamage}} stonetop-monster-damage-modes--stacked{{/if}}">
@@ -266,7 +266,7 @@
 								      in ways HP does not track ("foes that are engaged by individual PCs aren't really
 								      part of a group", p.416). Sized like the rows' count boxes below it. Once they
 								      are hurt, the bodies still on their feet sit beside it. --}}
-								<input class="stonetop-monster-group-count" type="number" name="system.count" value="{{system.count}}" min="0" data-tooltip="How many are in this group">
+								<input class="stonetop-monster-group-count" type="number" name="system.count" value="{{system.count}}" min="0" aria-label="How many are in this group" data-tooltip="How many are in this group">
 								{{#if stonetop.casualtyNote}}<span class="stonetop-monster-casualties">{{stonetop.casualtyNote}}</span>{{/if}}
 								{{/if}}
 							</span>
@@ -287,7 +287,7 @@
 							{{!-- The fields wrap like text, not like flex items: a count stays with its word, a
 							      readout breaks only between its clauses, and the die stays with its formula. --}}
 							<span class="stonetop-monster-numbers-fields">
-								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-swarm-count" data-numbers-count="attackers" type="number" min="1" value="{{stonetop.swarmCount}}" data-tooltip="How many of them pile onto that one foe"> <span class="stonetop-outnumber-vs">attackers</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-swarm-count" data-numbers-count="attackers" type="number" min="1" value="{{stonetop.swarmCount}}" aria-label="How many of them pile onto that one foe" data-tooltip="How many of them pile onto that one foe"> <span class="stonetop-outnumber-vs">attackers</span></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.swarmClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
 								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (swarm)" data-tooltip="Roll the swarm's damage against that foe" aria-label="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
 							</span>
@@ -299,7 +299,7 @@
 							      data-tooltip="Abstracting group exchanges (optional): each side fights as ONE combatant, with the HP, armor and damage of a single member. The larger side gets +1 damage and +1 armor for each whole multiple it outnumbers the other by (3:1 → +2). Damage is casualties; at 0 HP the group is routed."
 							      data-tooltip-direction="UP">Group vs group:</span>
 							<span class="stonetop-monster-numbers-fields">
-								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-outnumber-yours" data-numbers-count="yours" type="number" min="1" value="{{stonetop.swarmCount}}" data-tooltip="How many of this group"> <span class="stonetop-outnumber-vs">vs</span> <input class="stonetop-monster-outnumber-theirs" data-numbers-count="theirs" type="number" min="1" value="1" data-tooltip="How many they face"></span>
+								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-outnumber-yours" data-numbers-count="yours" type="number" min="1" value="{{stonetop.swarmCount}}" aria-label="How many of this group" data-tooltip="How many of this group"> <span class="stonetop-outnumber-vs">vs</span> <input class="stonetop-monster-outnumber-theirs" data-numbers-count="theirs" type="number" min="1" value="1" aria-label="How many they face" data-tooltip="How many they face"></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.exchangeClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
 								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (group)" data-tooltip="Roll the group's damage in an abstracted exchange" aria-label="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6" aria-hidden="true"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
 							</span>
@@ -330,7 +330,7 @@
 								       data-field="name" value="{{this.name}}"
 								       placeholder='{{localize "stonetop.monster.moveNamePlaceholder"}}'>
 								<input class="stonetop-monster-move-formula-input stonetop-monster-move-field" type="text"
-								       data-field="system.rollFormula" value="{{system.rollFormula}}"
+								       data-field="system.rollFormula" value="{{system.rollFormula}}" aria-label="Move roll formula"
 								       data-tooltip='{{localize "stonetop.monster.moveFormulaHint"}}' placeholder="d6">
 								<span class="stonetop-monster-move-controls">
 									<a class="stonetop-monster-delete-move" data-tooltip='{{localize "stonetop.monster.deleteMove"}}' aria-label='{{localize "stonetop.monster.deleteMove"}}'>

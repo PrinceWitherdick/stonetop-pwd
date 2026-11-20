@@ -43,11 +43,15 @@ export function ledgerRowsHtml(items, canDelete = () => true) {
 			? `<li class="stonetop-ledger-date-header" data-date-key="${escHtml(date.key)}">${escHtml(date.label)}</li>`
 			: "";
 		const locked = !canDelete(entry);
+		// The box has no words of its own, so it is named for the entry it selects; a locked one
+		// says why it is locked too, since its tooltip only shows to someone hovering it.
+		const LOCKED = "Only the GM can delete an entry the GM made";
+		const boxName = `Select: ${entry.action}${locked ? `. ${LOCKED}` : ""}`;
 		// Subject and category are stamped here, from the entry itself, so the filter can read
 		// them back off the row instead of re-deriving them from the rendered text — and so the
 		// noun it matches on is character-for-character the one the dropdown offers.
 		return `${header}<li class="stonetop-ledger-entry" data-id="${escHtml(entry.id)}" data-timestamp="${entry.timestamp ?? 0}" data-noun="${escHtml(ledgerSubject(entry))}" data-category="${escHtml(categoryForEntry(entry))}" data-date-key="${escHtml(date.key)}" data-date-label="${escHtml(date.label)}">
-			<input type="checkbox" class="stonetop-ledger-row-check"${locked ? ` disabled data-tooltip="Only the GM can delete an entry the GM made"` : ""}>
+			<input type="checkbox" class="stonetop-ledger-row-check" aria-label="${escHtml(boxName)}"${locked ? ` disabled data-tooltip="${LOCKED}"` : ""}>
 			<div class="stonetop-ledger-entry-content">
 				<div class="stonetop-ledger-entry-main">${escHtml(entry.action)}${entry.move ? ` <span class="stonetop-ledger-entry-move">via ${escHtml(entry.move)}</span>` : ""}</div>
 				<div class="stonetop-ledger-entry-user">Changed by ${escHtml(entry.userName)}</div>

@@ -158,7 +158,7 @@
 					<span class="stonetop-item-resource-entry">
 						<button type="button" class="stonetop-item-resource-check{{#if checked}} is-checked{{/if}}"
 						        data-move-name="{{../name}}"
-						        data-index="{{@index}}"></button>
+						        data-index="{{@index}}" aria-label="{{this.name}}"></button>
 						{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 					</span>
 					{{/each}}

@@ -36,4 +36,22 @@ describe("the ledger dialog's selection (#10, #21c)", () => {
 		tick("b");
 		expect(selectedLedgerIds(list)).toEqual(["b"]);
 	});
+
+	// The box is the only control on its row and holds no words: without a name a screen reader
+	// reads every row as the same unlabelled checkbox.
+	it("names each row's box for its entry, and a locked one for why it is locked", () => {
+		const { row } = render(entry => !entry.byGM);
+		expect(row("b").querySelector(".stonetop-ledger-row-check").getAttribute("aria-label"))
+			.toBe("Select: Longsword selected");
+		expect(row("a").querySelector(".stonetop-ledger-row-check").getAttribute("aria-label"))
+			.toBe("Select: HP changed from 6 to 4. Only the GM can delete an entry the GM made");
+	});
+
+	it("escapes an entry's words in the name", () => {
+		const list = document.createElement("ol");
+		list.innerHTML = ledgerRowsHtml([{ id: "x", action: `Named "<b>Pim</b>"`, timestamp: 1 }]);
+		const box = list.querySelector(".stonetop-ledger-row-check");
+		expect(box.getAttribute("aria-label")).toBe(`Select: Named "<b>Pim</b>"`);
+		expect(list.querySelector("b")).toBeNull();
+	});
 });

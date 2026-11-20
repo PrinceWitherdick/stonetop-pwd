@@ -408,7 +408,7 @@
 					      it rather than the boxed skin the multi-line Moves / Notes fields use. Both
 					      classes are in the change handler's selector list, so the swap is
 					      style-only. --}}
-					<input class="stonetop-follower-stat-input stonetop-follower-armor-source-input" type="text" data-ftype="{{this.ftype}}" data-slug="{{this.slug}}" data-field="armorSource" value="{{this.armorSource}}" placeholder="from… (leather, shield…)" data-tooltip="Where their armor comes from: leather, a shield, thick hides. Optional, and it never changes the number." data-tooltip-direction="UP">
+					<input class="stonetop-follower-stat-input stonetop-follower-armor-source-input" type="text" data-ftype="{{this.ftype}}" data-slug="{{this.slug}}" data-field="armorSource" value="{{this.armorSource}}" aria-label="Where their armor comes from" placeholder="from… (leather, shield…)" data-tooltip="Where their armor comes from: leather, a shield, thick hides. Optional, and it never changes the number." data-tooltip-direction="UP">
 				</div>
 				{{else}}
 				<span class="stonetop-follower-field-value">{{this.armor}}{{#if armorSource}} <span class="stonetop-follower-armor-source">({{this.armorSource}})</span>{{/if}}{{#if armorGateNote}} <span class="stonetop-follower-armor-source stonetop-follower-armor-gate">({{this.armorGateNote}})</span>{{/if}}</span>
@@ -464,7 +464,7 @@
 			<span class="stonetop-follower-field-label">Loyalty</span>
 			<div class="stonetop-loyalty-pips">
 				{{#each loyalty}}
-				<button type="button" class="stonetop-loyalty-pip{{#if filled}} is-filled{{/if}}" data-loyalty="{{../ftype}}" data-slug="{{../loyaltySlug}}" data-index="{{this.index}}" data-tooltip="Set Loyalty"></button>
+				<button type="button" class="stonetop-loyalty-pip{{#if filled}} is-filled{{/if}}" data-loyalty="{{../ftype}}" data-slug="{{../loyaltySlug}}" data-index="{{this.index}}" aria-pressed="{{#if filled}}true{{else}}false{{/if}}" aria-label="{{this.label}}" data-tooltip="Set Loyalty"></button>
 				{{/each}}
 			</div>
 			{{#unless edit.stats}}
@@ -517,7 +517,7 @@
 			<span class="stonetop-follower-field-label">Readiness</span>
 			<div class="stonetop-readiness-pips" data-tooltip="{{#if readinessIsPool}}Crew ordered to Defend, 7+ (p.473): common pool. 7–9: hold 1{{#if readinessHasShield}} ({{#if readinessShieldWall}}3 with Shield Wall{{else}}2 with shields{{/if}}){{/if}}. 10+: hold 3{{#if readinessHasShield}} ({{#if readinessShieldWall}}5 with Shield Wall{{else}}4 with shields{{/if}}){{/if}}.{{else}}Ordered to Defend, 7+ (p.469). 7–9: hold 1{{#if readinessHasShield}} (2 with their shield){{/if}}. 10+: hold 3{{#if readinessHasShield}} (4 with their shield){{/if}}.{{/if}} Click a circle to set how much they hold." data-tooltip-direction="UP">
 				{{#each readinessPips}}
-				<button type="button" class="stonetop-readiness-pip{{#if filled}} is-filled{{/if}}" data-ftype="{{../readinessFollower}}" data-slug="{{../readinessSlug}}" data-index="{{this.index}}" data-tooltip="Set Readiness"></button>
+				<button type="button" class="stonetop-readiness-pip{{#if filled}} is-filled{{/if}}" data-ftype="{{../readinessFollower}}" data-slug="{{../readinessSlug}}" data-index="{{this.index}}" aria-pressed="{{#if filled}}true{{else}}false{{/if}}" aria-label="{{this.label}}" data-tooltip="Set Readiness"></button>
 				{{/each}}
 			</div>
 			<button type="button" class="stonetop-spend-readiness stonetop-inline-btn"
