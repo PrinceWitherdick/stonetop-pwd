@@ -199,7 +199,9 @@ function _resultTableLadder(resultTable, tier) {
 }
 
 // The title row's "?" that reveals a hidden move description, shared by every card that carries one.
-const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" title="Show move description"><i class="fas fa-circle-question" aria-hidden="true"></i></button>`;
+// It is saved into the message's flavor, so a card posted before 2026-11-20 keeps the native
+// `title` it was posted with; only new cards carry Foundry's tooltip.
+const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" aria-label="Show move description" data-tooltip="Show move description"><i class="fas fa-circle-question" aria-hidden="true"></i></button>`;
 
 // The die-faces readouts live with the card pieces (utils/chat.js); re-exported for the callers that
 // have always taken them from here.

@@ -674,8 +674,10 @@ delete an entry when it is done.
 
 **Markup**
 
-10. **Native `title` tooltips remain in JS**: a handful of markup strings and `.title =`
-    writes (the attack flow's 19, the ledger window, the book reader). Every template is done,
+10. **Native `title` tooltips remain in JS**: the attack flow's 19 `.title =` writes. The
+    ledger window, the journal roll-table die and the roll card's "?" are done; the book
+    reader's bookmarks tab keeps its titles on purpose, because it is drawn inside pdf.js's
+    iframe, where Foundry's tooltips do not reach. Every template is done,
     and `tests/templates/tooltip-conventions.test.js` now forbids a new `title` in one; its
     `PENDING` list is empty and stays that way. The draggable improvement and threat
     cards in journal prose carry a `title` too, and are a change of their own: the markup is

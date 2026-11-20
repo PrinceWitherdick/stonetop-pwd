@@ -47,7 +47,7 @@ export function ledgerRowsHtml(items, canDelete = () => true) {
 		// them back off the row instead of re-deriving them from the rendered text — and so the
 		// noun it matches on is character-for-character the one the dropdown offers.
 		return `${header}<li class="stonetop-ledger-entry" data-id="${escHtml(entry.id)}" data-timestamp="${entry.timestamp ?? 0}" data-noun="${escHtml(ledgerSubject(entry))}" data-category="${escHtml(categoryForEntry(entry))}" data-date-key="${escHtml(date.key)}" data-date-label="${escHtml(date.label)}">
-			<input type="checkbox" class="stonetop-ledger-row-check"${locked ? ` disabled title="Only the GM can delete an entry the GM made"` : ""}>
+			<input type="checkbox" class="stonetop-ledger-row-check"${locked ? ` disabled data-tooltip="Only the GM can delete an entry the GM made"` : ""}>
 			<div class="stonetop-ledger-entry-content">
 				<div class="stonetop-ledger-entry-main">${escHtml(entry.action)}${entry.move ? ` <span class="stonetop-ledger-entry-move">via ${escHtml(entry.move)}</span>` : ""}</div>
 				<div class="stonetop-ledger-entry-user">Changed by ${escHtml(entry.userName)}</div>
@@ -92,20 +92,20 @@ export function openLedgerDialog(actor, ledger) {
 
 	const content = `<div class="stonetop-ledger-container">
 		<div class="stonetop-ledger-toolbar stonetop-field-btns">
-			${mayEdit ? `<label class="stonetop-edit-toggle stonetop-ledger-edit-toggle" title="Edit entries">
-				<input type="checkbox" class="stonetop-ledger-edit-check">
+			${mayEdit ? `<label class="stonetop-edit-toggle stonetop-ledger-edit-toggle" data-tooltip="Edit entries">
+				<input type="checkbox" class="stonetop-ledger-edit-check" aria-label="Edit entries">
 				<span class="stonetop-toggle-track">
 					<span class="stonetop-toggle-thumb"><i class="fas fa-pencil" aria-hidden="true"></i></span>
 				</span>
 			</label>
-			<label class="stonetop-ledger-select-all-label" title="Select all">
-				<input type="checkbox" class="stonetop-ledger-select-all">
+			<label class="stonetop-ledger-select-all-label" data-tooltip="Select all">
+				<input type="checkbox" class="stonetop-ledger-select-all" aria-label="Select all">
 			</label>
 			<button type="button" class="stonetop-ledger-delete-selected">
 				<i class="fas fa-trash" aria-hidden="true"></i> Delete
 			</button>` : ""}
 			<input type="search" class="stonetop-ledger-search" placeholder="Filter entries…">
-			<select class="stonetop-ledger-noun" title="Filter by subject">
+			<select class="stonetop-ledger-noun" aria-label="Filter by subject" data-tooltip="Filter by subject">
 				<option value="">All changes</option>
 				${nounOptions}
 			</select>
