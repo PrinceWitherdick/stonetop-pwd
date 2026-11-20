@@ -837,16 +837,20 @@ describe("the Encounters tab: the pane around the cards", () => {
 	const PANE_BAR = strip(read("templates/actor/partials/gm-prep-pane-bar.hbs"));
 	const EMPTY    = strip(read("templates/actor/partials/gm-prep-empty.hbs"));
 
-	// One muted line, the full intro as its tooltip, and "New encounter" at the right: the add
-	// button moved up from the foot of the list, still wearing the handler's hook.
-	it("opens on a one-line bar, the old intro as its tooltip", () => {
+	// One muted line, a "?" that opens the full intro under it, and "New encounter" at the right:
+	// the add button moved up from the foot of the list, still wearing the handler's hook.
+	it("opens on a one-line bar, the old intro behind its \"?\"", () => {
 		expect(TAB_MARKUP).not.toContain("steading-threats-intro");
 		expect(TAB_MARKUP).toMatch(/\{\{> "stonetop\.gm-prep-pane-bar" kind="stonetop-gm-encounter"[^}]*lead=\(localize "stonetop\.gmToolkit\.encounters\.lead"\)[^}]*intro=\(localize "stonetop\.gmToolkit\.encounters\.intro"\)/);
 		expect(TAB_MARKUP).not.toContain("stonetop.gm-prep-add-bar");
-		expect(PANE_BAR).toMatch(/<p class="stonetop-gm-pane-lead" data-tooltip="\{\{this\.intro\}\}"/);
+		expect(TAB_MARKUP).toContain("pane=stonetop.prep.panes.encounters");
+		// The lead is words and nothing else now: no tooltip a keyboard could never open, no help
+		// cursor promising one.
+		expect(PANE_BAR).toMatch(/<p class="stonetop-gm-pane-lead">\{\{this\.lead\}\}<\/p>/);
 		const lead = declarations(CSS, ".stonetop-gm-pane-lead");
 		expect(lead).toMatch(/white-space:\s*nowrap/);
 		expect(lead).toMatch(/text-overflow:\s*ellipsis/);
+		expect(lead).not.toMatch(/cursor:\s*help/);
 		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
 		expect(en.encounters.add).toBe("New encounter");
 		expect(en.expeditions.add).toBe("New expedition");
@@ -869,11 +873,35 @@ describe("the Encounters tab: the pane around the cards", () => {
 		expect(strip(read("templates/actor/partials/gm-toolkit-tab-threats.hbs"))).not.toContain("stonetop-gm-pane-add");
 	});
 
-	// The pencil floats in the pane's top-right corner, which is exactly where the bar's button
-	// ends: the bar gives up the pencil's width.
-	it("leaves the corner pencil its room at the end of the bar", () => {
-		expect(declarations(CSS, ".stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) .stonetop-gm-pane-bar"))
-			.toMatch(/padding-right:\s*2\dpx/);
+	// The pencil floats in the pane's corner, which is where the bar's button ends. The button
+	// runs to the cards' right edge, and the pencil is anchored just LEFT of it, in a gap the bar
+	// keeps there; only a browser without anchor positioning falls back to the reserved notch.
+	it("puts the pane's pencil just left of the bar's button, not in a notch at its end", () => {
+		const supports = CSS.slice(CSS.indexOf("@supports (anchor-name: --a)"));
+		expect(supports).toMatch(/\.tab\.encounters\s+\.stonetop-gm-pane-bar > \.stonetop-gm-pane-add\s*\{\s*anchor-name:\s*--st-gm-encounters-add;/);
+		expect(supports).toMatch(/\.tab\.expeditions\s+\.stonetop-gm-pane-bar > \.stonetop-gm-pane-add\s*\{\s*anchor-name:\s*--st-gm-expeditions-add;/);
+		// Each pane's pencil reads its OWN pane's anchor, with a fallback for a bare bar.
+		expect(supports).toMatch(/\.tab\.encounters > \.steading-section-edit-toggle\s*\{[^}]*right:\s*calc\(anchor\(--st-gm-encounters-add left, -?\d+px\)/);
+		expect(supports).toMatch(/\.tab\.expeditions > \.steading-section-edit-toggle\s*\{[^}]*right:\s*calc\(anchor\(--st-gm-expeditions-add left, -?\d+px\)/);
+		// The bar reserves nothing at its right while anchors work...
+		const anchored = supports.slice(0, supports.indexOf("@supports not (anchor-name: --a)"));
+		expect(anchored).not.toMatch(/padding-right/);
+		// ...and the old notch is kept only for a browser without them.
+		expect(CSS).toMatch(/@supports not \(anchor-name: --a\)\s*\{\s*\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\) \.stonetop-gm-pane-bar\s*\{\s*padding-right:\s*2\dpx;/);
+	});
+
+	// The full intro is a disclosure every reader can reach: a real button with aria-expanded and
+	// aria-controls over a paragraph that is `hidden` until asked for, open where it was left.
+	it("opens the full intro from a real button, for the keyboard and a screen reader too", () => {
+		expect(PANE_BAR).toMatch(/<button type="button" class="stonetop-gm-pane-help" data-prep-intro="\{\{pane\.key\}\}"/);
+		expect(PANE_BAR).toContain('aria-expanded="{{#if pane.introOpen}}true{{else}}false{{/if}}" aria-controls="{{pane.id}}-intro"');
+		expect(PANE_BAR).toContain('aria-label="{{localize "stonetop.gmToolkit.prep.aboutView"}}"');
+		expect(PANE_BAR).toMatch(/<p class="stonetop-gm-pane-intro" id="\{\{pane\.id\}\}-intro"\{\{#unless pane\.introOpen\}\} hidden\{\{\/unless\}\}>\{\{this\.intro\}\}<\/p>/);
+		// `display` on the paragraph would beat the UA's [hidden] rule, so it is stated back.
+		expect(declarations(CSS, ".stonetop-gm-pane-intro[hidden]")).toMatch(/display:\s*none/);
+		expect(CSS).toMatch(/:is\([^)]*\.stonetop-gm-pane-help[^)]*\):focus-visible/);
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
+		expect(en.prep.aboutView).toBeTruthy();
 	});
 
 	// A view that has never held anything: a centred block with the view's glyph, a heading, the
@@ -933,6 +961,32 @@ describe("the Encounters tab: the pane around the cards", () => {
 		expect(listOf(actor)).toHaveLength(1);
 	});
 
+	// A click also ends a drag-select. Copying a line out of a shut card's peek must not fly the
+	// card open under the selection; a click with nothing selected still opens it.
+	it("leaves a card shut when the click on its head finished a text selection", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [] }]);
+		const root = fakeRoot();
+		host._activateGmEncountersListeners(root);
+		const li = fakeEl({ cls: ["stonetop-gm-encounter", "is-collapsed"], parent: root.panel, dataset: { encounterId: "e1" } });
+		const head = fakeEl({ cls: ["stonetop-gm-encounter-head"], parent: li });
+		const peek = fakeEl({ cls: ["stonetop-gm-encounter-peek"], parent: head });
+		fakeEl({ cls: ["stonetop-gm-encounter-toggle"], parent: head });
+		const text = { parent: peek };
+		const was = globalThis.document;
+		globalThis.document = { getSelection: () => ({ isCollapsed: false, anchorNode: text, focusNode: text, toString: () => "the reeds" }) };
+		try {
+			await root.emit("click", peek);
+			expect(li.classes).toContain("is-collapsed");
+			// A selection somewhere else on the page is not this head's business.
+			const elsewhere = {};
+			globalThis.document = { getSelection: () => ({ isCollapsed: false, anchorNode: elsewhere, focusNode: elsewhere, toString: () => "x" }) };
+			await root.emit("click", peek);
+			expect(li.classes).not.toContain("is-collapsed");
+		} finally {
+			globalThis.document = was;
+		}
+	});
+
 	// `:hover` does not follow a drag, so the card under the pointer is marked by hand as the drag
 	// moves, and unmarked when it leaves the pane or lands.
 	it("lights the one card a drag is over, and clears it on the drop", async () => {
@@ -951,7 +1005,63 @@ describe("the Encounters tab: the pane around the cards", () => {
 		expect(b.classes).toContain("is-drop-target");
 		await root.panel.dropEvent(dt, inB);
 		expect(b.classes).not.toContain("is-drop-target");
-		expect(declarations(CSS, ".stonetop-gm-encounter.is-drop-target")).toMatch(/border-color:\s*var\(--st-bundle-edge\)/);
+		// In the system's drop colour, the gold every drop zone's outline is drawn in, not the
+		// card's own accent: a lit card must not read as the card's edge, or as another cue.
+		expect(declarations(CSS, ".stonetop-gm-encounter.is-drop-target")).toMatch(/border-color:\s*var\(--stonetop-improvement-accent\)/);
+	});
+
+	// ONE CUE AT A TIME. Over a card the card lights and the pane does not; over bare pane a
+	// document from outside lights the pane (it will start a new card); a card dragged by its grip
+	// lights neither, because it only reorders, and neither does one of our own rows over bare
+	// pane, which `onDrop` ignores.
+	it("lights the pane only when a drop will start a new card", async () => {
+		const { host } = makeHost([{ id: "e1", name: "A", entries: [] }]);
+		const root = fakeRoot();
+		host._activateGmEncountersListeners(root);
+		const card = fakeEl({ cls: ["stonetop-gm-encounter"], parent: root.panel, dataset: { encounterId: "e1" } });
+		const head = fakeEl({ cls: ["stonetop-gm-encounter-head"], parent: card });
+		const grip = fakeEl({ cls: ["stonetop-gm-encounter-grip"], parent: head });
+		const bare = fakeEl({ cls: ["stonetop-gm-encounter-list"], parent: root.panel });
+		const dt = () => ({ types: ["text/plain"], effectAllowed: "copy", dropEffect: "", getData: () => "", setData() {} });
+
+		// From the sidebar: over bare pane, the pane; over a card, the card and not the pane.
+		await root.panel.dragoverEvent(dt(), bare);
+		expect(root.panel.classes).toContain("is-drop-new");
+		expect(card.classes).not.toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt(), head);
+		expect(root.panel.classes).not.toContain("is-drop-new");
+		expect(card.classes).toContain("is-drop-target");
+		await root.panel.dropEvent(dt(), head);
+		expect(card.classes).not.toContain("is-drop-target");
+		expect(root.panel.classes).not.toContain("is-drop-new");
+
+		// A card by its grip: neither cue, over the card or off it.
+		host._encounters.noteDragSource(grip, "card");
+		await root.panel.dragoverEvent(dt(), head);
+		expect(card.classes).not.toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt(), bare);
+		expect(root.panel.classes).not.toContain("is-drop-new");
+		// The source's own dragend clears it, even with the source already out of the page.
+		for (const fn of grip.handlers.dragend ?? []) fn({});
+		expect(host._encounters.dragFrom).toBe(null);
+
+		// One of our own rows: lands IN a card, but over bare pane it lands nowhere.
+		host._encounters.noteDragSource(grip, "entry");
+		await root.panel.dragoverEvent(dt(), head);
+		expect(card.classes).toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt(), bare);
+		expect(card.classes).not.toContain("is-drop-target");
+		expect(root.panel.classes).not.toContain("is-drop-new");
+		await root.panel.dropEvent(dt(), bare);
+		expect(host._encounters.dragFrom).toBe(null);
+
+		// A drag that carries no text (a file) is not one the zone takes, and lights nothing.
+		await root.panel.dragoverEvent({ types: ["Files"] }, bare);
+		expect(root.panel.classes).not.toContain("is-drop-new");
+
+		// The CSS half: the system's pane outline is suppressed unless the drop starts a new card.
+		expect(declarations(CSS, ".stonetop-gm-prep-panes > .tab.stonetop-card-drag-over:not(.is-drop-new)"))
+			.toMatch(/outline-color:\s*transparent/);
 	});
 });
 
@@ -1175,11 +1285,19 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		// And the CSS no longer describes two columns that are not emitted.
 		expect(CSS).not.toContain(".stonetop-gm-encounter-entry-icon");
 		expect(CSS).not.toContain(".stonetop-gm-encounter-entry-kind");
-		// ONE LINE when the card is wide: [picture + name] [note] [cross], the columns set once on
-		// the group's <ul> and each row a subgrid of it, so every note in a group starts on one x.
-		expect(declarations(CSS, ".stonetop-gm-encounter-entries"))
-			.toMatch(/grid-template-columns:\s*fit-content\(45%\) minmax\(0, 1fr\) auto/);
-		expect(declarations(CSS, ".stonetop-gm-encounter-entry")).toMatch(/grid-template-columns:\s*subgrid/);
+		// ONE LINE when the card is wide: [picture + name] [note] [cross]. The columns are declared
+		// ONCE, on the card's body, and the group's <section>, its <ul> and each row are subgrids of
+		// them, so every note IN THE CARD starts on one x -- not one x per group, which zig-zagged
+		// down an open card from Monsters to Arcana to Journals.
+		expect(declarations(CSS, ".stonetop-gm-encounter-body"))
+			.toMatch(/grid-template-columns:\s*fit-content\(40%\) minmax\(0, 1fr\) auto/);
+		for (const sel of [".stonetop-gm-entry-card", ".stonetop-gm-encounter-entries", ".stonetop-gm-encounter-entry"]) {
+			expect(declarations(CSS, sel), sel).toMatch(/grid-template-columns:\s*subgrid/);
+		}
+		// Nothing below the body declares columns of its own (outside the no-subgrid fallback).
+		expect(declarations(CSS, ".stonetop-gm-encounter-entries")).not.toMatch(/fit-content/);
+		// Everything else in the body spans the three columns.
+		expect(declarations(CSS, ".stonetop-gm-encounter-body > *")).toMatch(/grid-column:\s*1 \/ -1/);
 		// NARROW (by the card's width, not the window's): the note wraps under the name.
 		expect(declarations(CSS, ".stonetop-gm-encounter-body")).toMatch(/container-type:\s*inline-size/);
 		expect(CSS).toMatch(/@container \(max-width: 520px\)\s*\{[\s\S]*?\.stonetop-gm-encounter-entry-note\s*\{[^}]*grid-row:\s*2/);
@@ -1344,7 +1462,8 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		expect(head).toMatch(/letter-spacing:\s*0\.08em/);
 		expect(head).toMatch(/color:\s*var\(--st-text-secondary\)/);
 		expect(declarations(CSS, ".stonetop-gm-entry-card-head > i")).toMatch(/color:\s*var\(--st-bundle-edge\)/);
-		expect(declarations(CSS, ".stonetop-gm-entry-card-count")).toMatch(/color:\s*var\(--st-text-muted\)/);
+		// Secondary, not muted: muted ink is under 4.5:1 on the card's paper in the light theme.
+		expect(declarations(CSS, ".stonetop-gm-entry-card-count")).toMatch(/color:\s*var\(--st-text-secondary\)/);
 		// The hairline to the edge, a span of its own in the markup.
 		expect(CARD_MARKUP).toContain('<span class="stonetop-gm-entry-card-rule" aria-hidden="true"></span>');
 		expect(declarations(CSS, ".stonetop-gm-entry-card-rule")).toMatch(/height:\s*1px/);
@@ -1488,7 +1607,7 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// both called "the bridge". The head of the note rides the row to tell them apart. Only
 	// while it is shut: open, the real note is two pixels below it.
 	it("rides the head of the note beside the name, and only while the row is shut", () => {
-		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{this\.notesPeek\}\}/);
+		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*><span class="stonetop-gm-encounter-peek-text">\{\{this\.notesPeek\}\}<\/span><\/span>/);
 		const peek = declarations(CSS, ".stonetop-gm-encounter-peek");
 		expect(peek).toMatch(/display:\s*none/);
 		expect(peek).toMatch(/white-space:\s*nowrap/);
@@ -1501,6 +1620,15 @@ describe("the Encounters tab: notes, used and delete", () => {
 		expect(peek).toMatch(/max-width:\s*\d+%/);
 		// WITH it, the name is as wide as its words and the peek takes the rest of the row.
 		expect(CSS).toMatch(/@supports \(field-sizing: content\)\s*\{[\s\S]*?\.stonetop-gm-encounter-peek\s*\{[^}]*flex:\s*1 1 0/);
+		// Squeezed to a sliver it hides its words rather than drawing one letter: the peek is a size
+		// container for them, inside that `@supports` only (a container's content does not size it,
+		// which would collapse the fallback's content-sized peek to nothing).
+		const sized = CSS.slice(CSS.indexOf("@supports (field-sizing: content)"));
+		expect(sized).toMatch(/\.stonetop-gm-encounter-peek\s*\{[^}]*container-type:\s*inline-size/);
+		expect(sized).toMatch(/@container \(max-width: \d+em\)\s*\{\s*\.stonetop-gm-encounter-peek-text\s*\{\s*visibility:\s*hidden/);
+		expect(CSS.slice(0, CSS.indexOf("@supports (field-sizing: content)")))
+			.not.toMatch(/\.stonetop-gm-encounter-peek\s*\{[^}]*container-type/);
+		expect(declarations(CSS, ".stonetop-gm-encounter-peek-text")).toMatch(/text-overflow:\s*ellipsis/);
 		expect(declarations(CSS, ".stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek"))
 			.toMatch(/display:\s*block/);
 	});

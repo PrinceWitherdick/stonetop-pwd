@@ -26,14 +26,14 @@
       `name` on an input inside this sheet's <form> puts it in core's submit data, where the array
       indices would expand into an OBJECT keyed "0", "1", ... and quietly replace the list with it.
 
-      ONE PENCIL for the whole pane, in the pane's corner, and it guards exactly the two delete
-      buttons — in BOTH lists, because the `--reading` class sits on the <section> that wraps
-      them. Everything else stays live while it is off, which is the point rather than an
-      oversight: the reason this tab exists is to be dropped into and noted on mid-session, and a
-      tab that has to be unlocked first is one nobody uses. What the pencil is FOR is that "delete
-      this encounter" is one press on the head of a shut row, and now the ONLY button on that head:
-      a lone 22px square, at the end of a row a GM drags things onto and types in constantly, whose
-      one press throws a session's prep away.
+      ONE PENCIL for the whole pane, beside the bar's New button (stonetop.css anchors it there),
+      and it guards exactly the two delete buttons — in BOTH lists, because the `--reading` class
+      sits on the <section> that wraps them. Everything else stays live while it is off, which is
+      the point rather than an oversight: the reason this tab exists is to be dropped into and noted
+      on mid-session, and a tab that has to be unlocked first is one nobody uses. What the pencil is
+      FOR is that "delete this encounter" is one press on the head of a shut row, and now the ONLY
+      button on that head: a lone 22px square, at the end of a row a GM drags things onto and types
+      in constantly, whose one press throws a session's prep away.
 
       NOT `stonetop-readonly`. That class is the sheet-wide lock (pointer-events off every input,
       textarea and button, then an allow-list), and on this tab it would put out exactly the fields
@@ -48,12 +48,13 @@
 	{{> "stonetop.steading-section-toggle" section="encounters" editing=stonetop.edit.encounters}}
 	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.encounters}} stonetop-gm-encounters--reading{{/unless}}">
 
-		{{!-- THE PANE BAR: a one-line lead (the full intro is its tooltip) and "New encounter" at
-		      the right. On a view with nothing in it at all the button moves into the empty state
+		{{!-- THE PANE BAR: a one-line lead, the "?" that opens the full intro under it, and "New
+		      encounter" at the right. On a view with nothing in it at all the button moves into the empty state
 		      below, larger, and the bar is drawn `bare` (gm-prep-pane-bar.hbs says why). --}}
 		{{> "stonetop.gm-prep-pane-bar" kind="stonetop-gm-encounter"
 		    lead=(localize "stonetop.gmToolkit.encounters.lead")
 		    intro=(localize "stonetop.gmToolkit.encounters.intro")
+		    pane=stonetop.prep.panes.encounters
 		    label=(localize "stonetop.gmToolkit.encounters.add")
 		    bare=(not (or stonetop.encounters.active.length stonetop.encounters.completed.length))}}
 

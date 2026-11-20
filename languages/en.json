@@ -327,7 +327,8 @@
         "switcherLabel": "Prep views",
         "countEncounters": "{count} to run",
         "countExpeditions": "{count} to run",
-        "countSites": "{count} written up"
+        "countSites": "{count} written up",
+        "aboutView": "About this view"
       },
       "moves": {
         "basic": "GM Moves",
@@ -441,7 +442,7 @@
         "removeEncounter": "Delete this encounter",
         "removeEntry": "Take this out of the encounter",
         "removeTitle": "Delete Encounter",
-        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the monsters, pages and maps themselves stay exactly where they are. To take an encounter off the list but keep what is in it, mark it complete with the tick instead and it moves to Completed.",
+        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the monsters, pages and maps themselves stay exactly where they are. To take an encounter off the list but keep what is in it, use Mark complete instead and it moves to Completed.",
         "removeUnnamed": "this encounter",
         "removeYes": "Delete the encounter",
         "removeNo": "Keep it",
@@ -528,7 +529,7 @@
         "removeEncounter": "Delete this expedition",
         "removeEntry": "Take this out of the expedition",
         "removeTitle": "Delete Expedition",
-        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the maps, sites and monsters themselves stay exactly where they are, and so does anything the walkthrough has recorded about the trip. To take an expedition off the list but keep what is in it, mark it complete with the tick instead and it moves to Completed.",
+        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the maps, sites and monsters themselves stay exactly where they are, and so does anything the walkthrough has recorded about the trip. To take an expedition off the list but keep what is in it, use Mark complete instead and it moves to Completed.",
         "removeUnnamed": "this expedition",
         "removeYes": "Delete the expedition",
         "removeNo": "Keep it",

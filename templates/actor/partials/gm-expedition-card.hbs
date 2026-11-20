@@ -35,7 +35,7 @@
 		</span>
 		<input type="text" class="stonetop-gm-encounter-name" value="{{this.name}}" maxlength="120"
 		       aria-label="{{localize "stonetop.gmToolkit.expeditions.nameLabel"}}">
-		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{this.notesPeek}}</span>{{/if}}
+		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek"><span class="stonetop-gm-encounter-peek-text">{{this.notesPeek}}</span></span>{{/if}}
 		{{!-- ON THE ROAD: this card is bound to a trip in the walkthrough's log, so Run will
 		      reopen that trip rather than start one. Said on the shut row, before the pills,
 		      because "which of these is under way" is the question a column of expeditions is

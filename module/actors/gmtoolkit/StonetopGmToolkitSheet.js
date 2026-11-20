@@ -41,7 +41,7 @@ import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
 import {
 	PREP_TAB_GROUP, PREP_INITIAL_VIEW, PREP_SWITCHER_SELECTOR, PREP_PANES_SELECTOR,
-	prepViewsContext, syncPrepSwitcher, wirePrepSwitcherKeys,
+	prepViewsContext, syncPrepSwitcher, wirePrepSwitcherKeys, wirePrepIntros,
 } from "./gm-prep-views.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { localizedRunningReference } from "../../gm-toolkit/gm-agenda-view.js";
@@ -470,7 +470,11 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The view comes from core's controller for the switcher's group, which outlives every
 			// render; this only stamps the markup to match it, so the first paint already shows
 			// the right pane and `aria-selected` is right before core binds anything.
-			context.stonetop.prep = prepViewsContext(context.stonetop, this._tabs?.[PREP_TAB_GROUP]?.active, this.id);
+			//
+			// `_prepIntroOpen` is which views' pane-bar "?" the GM has opened, kept on the sheet so a
+			// repaint draws the full intro the way it was left (gm-prep-views.js#wirePrepIntros).
+			this._prepIntroOpen ??= new Set();
+			context.stonetop.prep = prepViewsContext(context.stonetop, this._tabs?.[PREP_TAB_GROUP]?.active, this.id, this._prepIntroOpen);
 
 			return context;
 		}
@@ -515,6 +519,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// click is core's (the switcher is a tab group of its own; see `tabs` above), and so
 			// is the class flip; this only moves focus and asks core's controller to follow it.
 			wirePrepSwitcherKeys(html[0], (view) => this._tabs?.[PREP_TAB_GROUP]?.activate(view, { triggerCallback: true }));
+			// Each view's pane-bar "?", which shows its full intro in place (no render).
+			this._prepIntroOpen ??= new Set();
+			wirePrepIntros(html[0], this._prepIntroOpen);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).

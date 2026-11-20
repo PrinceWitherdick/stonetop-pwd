@@ -61,8 +61,10 @@
 		      bridge" are told apart by what was written about them, and a column of eight shut
 		      cards otherwise says nothing at all. Plain text rather than the enriched HTML below:
 		      this is one clipped line, and a content link or a paragraph in it would fight the
-		      ellipsis. --}}
-		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{this.notesPeek}}</span>{{/if}}
+		      ellipsis. The words sit in a span of their own so the peek can be a size container
+		      for them: squeezed to a sliver by a long name and a run of pills it hides them,
+		      rather than drawing one letter with no ellipsis (stonetop.css). --}}
+		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek"><span class="stonetop-gm-encounter-peek-text">{{this.notesPeek}}</span></span>{{/if}}
 		{{!-- WHAT IS IN IT, BY KIND, and the one thing on the shut row that is about the bundle
 		      rather than about the GM's own words. "12 gathered" said how MUCH was here and
 		      nothing about what: three monsters and a map read at a glance where twelve of

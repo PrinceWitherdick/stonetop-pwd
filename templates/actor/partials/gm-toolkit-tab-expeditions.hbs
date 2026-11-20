@@ -6,7 +6,7 @@
       THE SAME SHAPE AS THE ENCOUNTERS TAB, which is where the reasoning lives
       (gm-toolkit-tab-encounters.hbs): two lists out of one array split in JS off each card's
       `used` flag, never off the DOM; writes that do not go through the form, so no field carries
-      a `name`; and one pencil in the pane's corner guarding exactly the two delete buttons.
+      a `name`; and one pencil beside the bar's New button guarding exactly the two delete buttons.
 
       WHAT IT IS NOT is the walkthrough's log. The "Run an Expedition" window keeps its own record
       of what happened on each trip — the route, the requirements they were told, what they
@@ -33,12 +33,13 @@
 	{{> "stonetop.steading-section-toggle" section="expeditions" editing=stonetop.edit.expeditions}}
 	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.expeditions}} stonetop-gm-encounters--reading{{/unless}}">
 
-		{{!-- THE PANE BAR, as on Encounters (gm-toolkit-tab-encounters.hbs): the lead, its tooltip
-		      the full intro, and "New expedition" — moved into the empty state, and the bar drawn
+		{{!-- THE PANE BAR, as on Encounters (gm-toolkit-tab-encounters.hbs): the lead, the "?"
+		      that opens the full intro, and "New expedition" — moved into the empty state, and the bar drawn
 		      `bare`, while the view has never held anything. --}}
 		{{> "stonetop.gm-prep-pane-bar" kind="stonetop-gm-encounter"
 		    lead=(localize "stonetop.gmToolkit.expeditions.lead")
 		    intro=(localize "stonetop.gmToolkit.expeditions.intro")
+		    pane=stonetop.prep.panes.expeditions
 		    label=(localize "stonetop.gmToolkit.expeditions.add")
 		    bare=(not (or stonetop.expeditions.active.length stonetop.expeditions.completed.length))}}
 

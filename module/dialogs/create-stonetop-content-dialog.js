@@ -75,7 +75,7 @@ const DANGER_OPTIONS = [
 		label: "Site",
 		icon: "fa-mountain-sun",
 		gmOnly: true,
-		hint: "Walk through Book I's Creating Sites process. The write-up lands at the foot of the GM Toolkit's Expeditions tab, ready to pin to a scene.",
+		hint: "Walk through Book I's Creating Sites process. The write-up lands under Sites, on the GM Toolkit's Prep tab, ready to pin to a scene.",
 		create: () => openCreateSite(),
 	},
 	// Book II, The Things Below. Thing + corrupted site become draggable threat cards; corrupted

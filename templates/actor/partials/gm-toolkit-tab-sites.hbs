@@ -41,10 +41,11 @@
 		{{#if stonetop.hasSteading}}
 		{{!-- THE PANE BAR the other two views open on (gm-prep-pane-bar.hbs), inside
 		      `.steading-sites` because that is the scope the "New site" handler is bound to. The
-		      intro that used to stand here in full is the lead's tooltip now. --}}
+		      intro that used to stand here in full is behind the bar's "?" now. --}}
 		{{> "stonetop.gm-prep-pane-bar" kind="site"
 		    lead=(localize "stonetop.gmToolkit.sites.lead")
 		    intro=(localize "stonetop.gmToolkit.sites.intro")
+		    pane=stonetop.prep.panes.sites
 		    label=(localize "stonetop.gmToolkit.sites.add")
 		    bare=(not stonetop.sites.length)}}
 

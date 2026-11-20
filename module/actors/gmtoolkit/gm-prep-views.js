@@ -92,10 +92,13 @@ export function prepViewCounts(stonetop = {}) {
  * The ids are prefixed with the APPLICATION'S id, not the actor's, because they have to be unique in
  * the document and a GM can have the toolkit open twice through two windows on one actor.
  *
+ * `introOpen` is the set of views whose pane-bar "?" the GM has opened (`wirePrepIntros`), so a
+ * repaint draws the full intro open where it was left open. Absent, every intro is drawn shut.
+ *
  * An unknown `active` falls back to the first view, which is also what core's controller does with
  * a name its nav does not carry — so the two cannot disagree about which pane is showing.
  */
-export function prepViewsContext(stonetop, active, idBase = "stonetop-gm-toolkit") {
+export function prepViewsContext(stonetop, active, idBase = "stonetop-gm-toolkit", introOpen = null) {
 	const current = PREP_VIEWS.some(v => v.key === active) ? active : PREP_INITIAL_VIEW;
 	const counts = prepViewCounts(stonetop);
 	const views = PREP_VIEWS.map(view => {
@@ -110,7 +113,10 @@ export function prepViewsContext(stonetop, active, idBase = "stonetop-gm-toolkit
 			paneId:   `${idBase}-prep-${view.key}`,
 		};
 	});
-	const panes = Object.fromEntries(views.map(v => [v.key, { id: v.paneId, tabId: v.tabId, active: v.active }]));
+	const panes = Object.fromEntries(views.map(v => [v.key, {
+		key: v.key, id: v.paneId, tabId: v.tabId, active: v.active,
+		introOpen: !!introOpen?.has?.(v.key),
+	}]));
 	return { views, panes, label: localize("stonetop.gmToolkit.prep.switcherLabel") };
 }
 
@@ -159,5 +165,41 @@ export function wirePrepSwitcherKeys(root, activate) {
 		const next = buttons[to];
 		next.focus();
 		activate(next.dataset.tab);
+	});
+}
+
+/** The pane bar's "?" (gm-prep-pane-bar.hbs). */
+export const PREP_INTRO_TOGGLE_SELECTOR = ".stonetop-gm-pane-help";
+
+/**
+ * The pane bar's "?": show or hide the view's full intro under its one-line lead, in place.
+ *
+ * A DISCLOSURE AND NOT A TOOLTIP, because core's tooltip opens on pointerenter and nothing else: a
+ * keyboard user tabbing onto the old lead saw nothing, and a screen reader heard only the lead. A
+ * button with `aria-expanded` over a paragraph it `aria-controls` is reachable by every one of them.
+ *
+ * A CLASS-AND-ATTRIBUTE FLIP, NEVER A RENDER, like the card carets: the intro is in the markup
+ * already, `hidden` until asked for. What is kept is the CHOICE, in `open` (a Set of view keys the
+ * sheet holds for its lifetime and hands back to `prepViewsContext`), so the sheet's frequent
+ * repaints draw it the way the GM left it instead of snapping it shut mid-sentence.
+ *
+ * Delegated on the sheet's root, re-bound every render with the root it is handed, so nothing
+ * outlives the markup it listens to.
+ */
+export function wirePrepIntros(root, open) {
+	if (!root?.addEventListener) return;
+	root.addEventListener("click", (ev) => {
+		const button = ev.target?.closest?.(PREP_INTRO_TOGGLE_SELECTOR);
+		if (!button || !root.contains(button)) return;
+		ev.preventDefault();
+		const intro = button.closest(".stonetop-gm-pane-bar")?.querySelector(".stonetop-gm-pane-intro");
+		if (!intro) return;
+		const show = button.getAttribute("aria-expanded") !== "true";
+		button.setAttribute("aria-expanded", show ? "true" : "false");
+		intro.hidden = !show;
+		const view = button.dataset.prepIntro;
+		if (view && open) {
+			if (show) open.add(view); else open.delete(view);
+		}
 	});
 }

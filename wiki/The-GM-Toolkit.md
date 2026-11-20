@@ -13,8 +13,7 @@ The tabs are an icon strip hanging off the right edge of the window (it moves to
 | **Homefront** | The GM playbook's Homefront page, for when the party gets home. |
 | **GM Moves** | Your move lists, to read, post or draw at random. The sheet opens here. |
 | **Threats & Dangers** | Your threats, hazards and the book's guidance on writing them. |
-| **Encounters** | Named bundles of what you gathered for a session or scene. |
-| **Expeditions** | Trips prepared ahead, plus your Sites. |
+| **Prep** | Your encounters, expeditions and sites, each one click apart. |
 | **I Wonder...** | Your list of open questions, and the players' wishes. |
 | **Core Loop** | The GM playbook's two flowcharts, plus agenda and principles. |
 | **Preferences** | Your own text size and other personal settings, at the foot of the rail. See [Preferences and Accessibility](Preferences-and-Accessibility). |
@@ -70,41 +69,51 @@ This tab holds your threats on proximity trackers, each with a button to write o
 
 Everything about this tab, from writing a threat to rolling a hazard's damage, is on [Threats and Hazards](Threats-and-Hazards).
 
-## Encounters
+## Prep
+
+Everything you prepare ahead of the night lives on one tab, **Prep**. A switcher across its top picks what you are looking at: **Encounters**, **Expeditions** or **Sites**, each with a count of what is waiting in it (encounters and expeditions still to run, sites written up). Use the arrow keys to move along the switcher. The toolkit remembers which one you were on for as long as the window is open, and opens on **Encounters**.
+
+Each view starts with a one-line description and its button: **New encounter**, **New expedition** or **New site**. The **?** beside the description opens the longer explanation of what the view is for. A view with nothing in it yet shows what it takes and a larger button to start the first one.
+
+### Encounters
 
 An encounter is a named bundle of pointers to things you mean to use in one session or one scene: the monsters, the battle map, the page you will read aloud, the table you will roll on.
 
 ![The GM Toolkit's Encounters tab with two prepared encounters, a Completed section, and the Start a new encounter button](images/the-gm-toolkit-encounters.webp)
 
-- **Start one.** Click **Start a new encounter**, or simply drop something onto the empty tab and an encounter is started for you.
-- **Gather things.** Drag anything in from the sidebar or a compendium: actors, items, arcana, journals, journal pages, scenes, roll tables and macros. What is stored is a pointer, never a copy, so the original stays where it is.
-- **Name it** in the box at the top of the card ("What you call this encounter").
-- **Note what each entry is for** in the small field beside it ("What this one is for").
-- **Write notes** for the whole encounter with the pencil button ("Write the notes for this encounter"). The notes open in a pop-up rich-text editor; press **Done** to keep them. A collapsed card shows a short peek of its notes. Links in the notes always show the target's current name, so renaming a linked monster renames the link too.
-- **Open an entry** by clicking its name. Drag the name onto the map to drop it there.
-- **Put every monster in this encounter on the current map.** The deploy button places every monster and NPC in the encounter as tokens on the scene you are viewing. A monster that only exists in a compendium is imported into the world first, so the token has an actor to point at.
-- **Put every monster in this encounter on the map and start a fight with them.** Next to deploy, this places them and then opens the start-a-fight window with those tokens ticked as foes and the party on the map ticked beside them. It appears only while **Fight tab (replaces the Combat tracker)** is on (it is on by default). See [Running Fights](Running-Fights).
-- **Mark complete.** The **Mark complete** button files a run encounter into the **Completed** fold at the foot of the tab, with everything still gathered. **Put back on the list** lifts it back up.
+Each encounter is a card. Shut, it is one line: the name, the start of its notes, and a small count of what is in it by kind (monsters, arcana, journals, maps, tables, macros). Click anywhere on that line, or the arrow at its end, to open it.
 
-An entry whose document has since been deleted stays on the card under the name it had, marked as no longer in the world.
+- **Start one.** Click **New encounter**, or simply drop something onto the tab outside any card and an encounter is started for you.
+- **Gather things.** Drag anything in from the sidebar or a compendium: actors, items, arcana, journals, journal pages, scenes, roll tables and macros. Drop it on a card to add it to that card; the card lights up to show where it will land. What is stored is a pointer, never a copy, so the original stays where it is.
+- **Name it** by clicking its name and typing.
+- **Write notes** for the whole encounter: click **Add notes...** on an empty card, or the pencil at the corner of its notes. The notes open in a pop-up rich-text editor; press **Done** to keep them. Links in the notes always show the target's current name, so renaming a linked monster renames the link too.
+- **What you gathered** is listed under its kind (**Monsters and NPCs**, **Maps**, and so on), one line each, with the thing's own picture where it has one. Hover a line and click beside the name to **add a note** on what it is for.
+- **Open an entry** by clicking its name. Drag the name onto the map to drop it there.
+- **Deploy**, at the end of the **Monsters and NPCs** line, puts every monster and NPC in the encounter on the scene you are viewing as tokens. A monster that only exists in a compendium is imported into the world first, so the token has an actor to point at.
+- **Deploy & fight**, beside it, places them and then opens the start-a-fight window with those tokens ticked as foes and the party on the map ticked beside them. It appears only while **Fight tab (replaces the Combat tracker)** is on (it is on by default). See [Running Fights](Running-Fights).
+- **Mark complete**, at the foot of an open card, files a run encounter into the **Completed** fold at the foot of the view, with everything still gathered. **Put back on the list** lifts it back up.
+
+An entry whose document has since been deleted stays on the card under the name it had, struck through, so you can see what went and put it back.
 
 > **Did you know?**
-> - Drag a card by the grip at its left to reorder the list, or click in its name box and press `Alt` with the `Up` or `Down` arrow.
+> - Drag a card by the grip at its left to reorder the list, or click its name and press `Alt` with the `Up` or `Down` arrow.
 > - You can drag an entry from one encounter onto another to move it.
-> - The two delete buttons (deleting a whole encounter, and taking an entry out) only appear once you unlock the tab with the pencil in its top-right corner. Everything else works while it is locked.
+> - The two delete buttons (deleting a whole encounter, and taking an entry out) only appear once you unlock the view with the pencil beside its **New encounter** button. Everything else works while it is locked.
 > - Deleting an encounter never touches the monsters, pages or maps it points at. To clear one off the list but keep it, mark it complete instead.
 > - The list lives on the toolkit, so every GM in the world sees the same encounters.
 
-## Expeditions
+### Expeditions
 
-The Expeditions tab uses the same cards as Encounters, for trips you prepare before the night you run them: the map of the route, the sites on the way, whatever waits at the end, the page to read when they arrive. Everything above about gathering, notes, deploying, reordering and **Completed** applies here too. Each card adds two buttons:
+**Expeditions** uses the same cards as Encounters, for trips you prepare before the night you run them: the map of the route, the sites on the way, whatever waits at the end, the page to read when they arrive. Everything above about gathering, notes, deploying, reordering and **Completed** applies here too. Each open card ends with one more button, beside **Mark complete**:
 
-- **Run it**: opens the **Run an Expedition** walkthrough on a new trip, named after this card.
-- **Open the walkthrough**: opens the walkthrough on this card's trip, with everything already noted in it.
+- **Run the expedition**: opens the **Run an Expedition** walkthrough on a new trip, named after this card.
+- **Open the walkthrough**: once a card's trip is under way, the same button opens the walkthrough on that trip, with everything already noted in it. The card's line says **On the road** while it is.
 
 A bar at the top offers **Call for Struggle as One**. While one is under way the button reads **Open the Struggle as One** and shows how many have rolled.
 
-The **Sites** section sits at the foot of the tab: where a trip is going, and what is on the way.
+### Sites
+
+**Sites** holds your site write-ups: where a trip is going, and what is on the way. **New site** starts the write-up wizard.
 
 For the walkthrough, journey tools and sites, see [Expeditions and Sites](Expeditions-and-Sites).
 

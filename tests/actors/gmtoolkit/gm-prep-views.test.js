@@ -4,7 +4,7 @@ import { readRepo as read, readCss, declarations } from "../../fakes/css.js";
 import { systemHandlebars } from "../../fakes/hbs.js";
 import {
 	PREP_VIEWS, PREP_TAB_GROUP, PREP_GROUP, PREP_INITIAL_VIEW, PREP_SWITCHER_SELECTOR, PREP_PANES_SELECTOR,
-	prepViewCounts, prepViewsContext, syncPrepSwitcher, wirePrepSwitcherKeys,
+	prepViewCounts, prepViewsContext, syncPrepSwitcher, wirePrepSwitcherKeys, wirePrepIntros,
 } from "../../../module/actors/gmtoolkit/gm-prep-views.js";
 
 // The GM Toolkit's Prep tab: one rail button over three views (Encounters, Expeditions, Sites),
@@ -88,8 +88,47 @@ describe("the Prep tab's views", () => {
 	it("join each segment to its pane by ids prefixed with the window's own", () => {
 		const { views, panes } = prepViewsContext({}, "expeditions", "app-7");
 		expect(views[1]).toMatchObject({ tabId: "app-7-prep-expeditions-tab", paneId: "app-7-prep-expeditions" });
-		expect(panes.expeditions).toEqual({ id: "app-7-prep-expeditions", tabId: "app-7-prep-expeditions-tab", active: true });
+		expect(panes.expeditions).toEqual({ key: "expeditions", id: "app-7-prep-expeditions", tabId: "app-7-prep-expeditions-tab", active: true, introOpen: false });
 		expect(panes.encounters.active).toBe(false);
+	});
+
+	// The pane bar's "?" opens the view's full intro IN PLACE, and the sheet keeps the choice per
+	// view, so a repaint draws it the way the GM left it rather than snapping it shut.
+	it("open a view's full intro from its pane bar, and remember it across a repaint", () => {
+		const open = new Set();
+		const draw = () => {
+			const host = renderPrep({ active: "encounters", encounters: [{ id: "a" }] });
+			// Re-stamp with the remembered set, as getData does.
+			return { host, ctx: prepViewsContext({}, "encounters", "app-7", open) };
+		};
+		const { host } = draw();
+		wirePrepIntros(host, open);
+		const help  = host.querySelector(".tab.encounters .stonetop-gm-pane-help");
+		const intro = host.querySelector(".tab.encounters .stonetop-gm-pane-intro");
+		expect(help.getAttribute("aria-expanded")).toBe("false");
+		expect(help.getAttribute("aria-controls")).toBe(intro.id);
+		expect(intro.id).toBe("app-7-prep-encounters-intro");
+		expect(intro.hidden).toBe(true);
+		expect(intro.textContent).toBe(game.i18n.localize("stonetop.gmToolkit.encounters.intro"));
+
+		help.click();
+		expect(help.getAttribute("aria-expanded")).toBe("true");
+		expect(intro.hidden).toBe(false);
+		expect([...open]).toEqual(["encounters"]);
+		expect(draw().ctx.panes.encounters.introOpen).toBe(true);
+		expect(draw().ctx.panes.expeditions.introOpen).toBe(false);
+
+		help.click();
+		expect(intro.hidden).toBe(true);
+		expect(open.size).toBe(0);
+	});
+
+	it("draw a remembered intro open on the first paint", () => {
+		const hb = renderPrep({ active: "sites" });
+		expect(hb.querySelector(".tab.sites .stonetop-gm-pane-intro")?.hidden).toBe(true);
+		const stonetop = { encounters: { active: [], completed: [] }, expeditions: { active: [], completed: [] }, sites: [] };
+		const ctx = prepViewsContext(stonetop, "sites", "app-7", new Set(["sites"]));
+		expect(ctx.panes.sites.introOpen).toBe(true);
 	});
 });
 

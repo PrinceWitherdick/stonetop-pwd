@@ -407,6 +407,20 @@ export function normalizeBundle(enc = {}) {
 export { moveWithin, insertionIndexIn };
 
 /**
+ * Does the page hold a non-empty text selection that starts or ends inside `el`?
+ *
+ * For the click-anywhere-on-the-head disclosure: a click that finishes a drag-select is still a
+ * `click`, and opening the card under it would throw the selection's context away. Reads the
+ * document's own selection, so it is false wherever there is no DOM (and in the unit tests' fakes,
+ * which have none).
+ */
+export function selectionWithin(el) {
+	const sel = globalThis.document?.getSelection?.();
+	if (!sel || sel.isCollapsed || !String(sel).trim()) return false;
+	return !!(el?.contains?.(sel.anchorNode) || el?.contains?.(sel.focusNode));
+}
+
+/**
  * Is this picture a stand-in rather than art somebody chose?
  *
  * A row's thumbnail is there to say WHICH monster or WHICH map at a glance, and a stock glyph says
@@ -417,8 +431,8 @@ export { moveWithin, insertionIndexIn };
  *  - anything in core's `icons/svg/` folder, which is Foundry's generic glyph set (mystery-man,
  *    item-bag, the d20 a new table wears, the dice-target a new macro wears) and never anybody's
  *    portrait;
- *  - the document class's own `DEFAULT_ICON` and core's `DEFAULT_TOKEN`, read at call time so a
- *    core version that moves them is followed;
+ *  - the document class's own `DEFAULT_ICON`, read at call time so a core version that moves it is
+ *    followed (core's `DEFAULT_TOKEN`, the mystery-man, is in `icons/svg/` and so caught above);
  *  - this system's stand-ins: the people silhouette an art-less NPC is stamped with (`isDefaultImg`
  *    knows it, see utils/person-portrait.js) and the creature-type mark a seeded bestiary monster
  *    wears until book art is imported (`isBestiaryPlaceholderImg`). Both are marks for a KIND of
@@ -583,6 +597,10 @@ export class GmBundleTab {
 		// HEADING_SELECTOR siblings, so a per-row caret wearing that class would be swallowed
 		// before this file saw it and would fold the wrong run of nodes.
 		this.openIds = new Set();
+
+		// What a drag that started in this pane carries ("card" | "entry"), for the drop-target cue;
+		// null when none is under way. See `noteDragSource`.
+		this.dragFrom = null;
 
 		// Each card's enriched notes, keyed by id, against the prose they were built from. Read
 		// and pruned by `addContext`; see `notesFor` for why.
@@ -1126,6 +1144,7 @@ export class GmBundleTab {
 				const encounterId = grip.closest("[data-encounter-id]")?.dataset?.encounterId;
 				if (!encounterId) { ev.preventDefault(); return; }
 				ev.stopPropagation();
+				this.noteDragSource(grip, "card");
 				ev.dataTransfer.setData("text/plain", JSON.stringify({ type: this.cfg.dragType, encounterId }));
 				ev.dataTransfer.effectAllowed = "move";
 				return;
@@ -1136,6 +1155,7 @@ export class GmBundleTab {
 			const { uuid, docType } = handle.dataset;
 			if (!uuid || !docType) { ev.preventDefault(); return; }
 			ev.stopPropagation();
+			this.noteDragSource(handle, "entry");
 			ev.dataTransfer.setData("text/plain", JSON.stringify({
 				type: docType,
 				uuid,
@@ -1353,8 +1373,14 @@ export class GmBundleTab {
 			// box and the grip are excluded by name because they have gestures of their own (a
 			// caret, a drag) that a click must not also open the card under. The caret stays the one REAL control -- focusable,
 			// with its `aria-expanded` -- and this is the mouse's wider way to it.
+			//
+			// NOT AFTER A SELECTION. A click also ends a drag-select of the peek's words, and a GM
+			// copying a line out of a shut card's note should not have the card fly open under the
+			// selection they just made: a click that leaves text selected inside this head was a
+			// selection, not a press.
 			const head = ev.target.closest(".stonetop-gm-encounter-head");
-			if (head && !ev.target.closest("input, button, a, .stonetop-gm-encounter-name, .stonetop-gm-encounter-grip")) {
+			if (head && !ev.target.closest("input, button, a, .stonetop-gm-encounter-name, .stonetop-gm-encounter-grip")
+				&& !selectionWithin(head)) {
 				const caret = head.querySelector(".stonetop-gm-encounter-toggle");
 				if (caret) this.toggleCard(caret);
 			}
@@ -1436,14 +1462,44 @@ export class GmBundleTab {
 	}
 
 	/**
-	 * Light the ONE card a drag is over, as the drag moves (`.is-drop-target`).
+	 * What a drag that started IN this pane is carrying, while it lasts: "card" (an encounter by
+	 * its grip) or "entry" (a gathered row by its name), else null.
 	 *
-	 * The drop zone is the whole pane, and its wash says only "this pane takes it". Which card a
-	 * let-go lands in is decided by the card under the pointer (`onDrop`), and `:hover` does not
-	 * follow a drag in Chromium, so CSS alone cannot show it. Listeners on the panel and not on
-	 * each card, so a re-render costs nothing to re-wire, and the class is moved only when the card
-	 * under the pointer CHANGES, so a dragover firing every few milliseconds touches the DOM a
-	 * handful of times per gesture. Purely visual: nothing reads the class back.
+	 * Mid-drag the payload is protected, so the drop-target cue below cannot read it, and the cue
+	 * has to differ: a row or a document lands IN the card it is over, while a card dragged by its
+	 * grip only takes a place in the list. The source is the one thing that knows, so it says so
+	 * here. Cleared by a `dragend` bound to the SOURCE NODE ITSELF, once, rather than to the
+	 * root: a drop re-renders this sheet, the source is then out of the page, and a dragend
+	 * bubbling from a detached node never reaches a root listener -- a flag cleared there would
+	 * stick and mislabel the next drag in from the sidebar. `wireDropTarget` clears it on a drop as
+	 * well.
+	 */
+	noteDragSource(node, kind) {
+		this.dragFrom = kind;
+		node?.addEventListener?.("dragend", () => { this.dragFrom = null; }, { once: true });
+	}
+
+	/**
+	 * Say where a let-go will land, as the drag moves: ONE cue, in one place, at a time.
+	 *
+	 *  - Over a card, with a document or a row: the card lights (`.is-drop-target` -- its edge and
+	 *    its drop strip), because that is the card `onDrop` adds it to.
+	 *  - Over the bare pane, with a document from outside: the PANE lights (`.is-drop-new`, which
+	 *    lets the system's dashed drop-zone outline through, stonetop.css), because that drop
+	 *    starts a NEW card.
+	 *  - A card dragged by its grip, or a row of ours let go over bare pane: neither. The first only
+	 *    reorders the list and the second does nothing at all (`onDrop`), and a lit card or pane
+	 *    would promise a landing that is not going to happen.
+	 *
+	 * Before this the pane's outline and the card's ring showed together, in two colours, on every
+	 * drag: one saying "new card" and one saying "this card" about the same pointer.
+	 *
+	 * `:hover` does not follow a drag in Chromium, so CSS alone cannot show the card. Listeners on
+	 * the panel and not on each card, so a re-render costs nothing to re-wire: the panel is
+	 * re-emitted with the sheet, and its listeners go with it. The class is moved only when the
+	 * card under the pointer CHANGES, so a dragover firing every few milliseconds touches the DOM a
+	 * handful of times per gesture. A drag that carries no `text/plain` (a file, a selection) is not
+	 * one the zone will take, and is left unlit. Purely visual: nothing reads these classes back.
 	 */
 	wireDropTarget(panel) {
 		if (!panel?.addEventListener) return;
@@ -1454,10 +1510,22 @@ export class GmBundleTab {
 			current = card ?? null;
 			current?.classList?.add("is-drop-target");
 		};
-		panel.addEventListener("dragover", ev => mark(ev.target?.closest?.("[data-encounter-id]") ?? null));
-		panel.addEventListener("dragleave", ev => { if (!panel.contains?.(ev.relatedTarget)) mark(null); });
-		panel.addEventListener("drop", () => mark(null));
-		panel.addEventListener("dragend", () => mark(null));
+		const clear = () => {
+			mark(null);
+			panel.classList?.remove("is-drop-new");
+		};
+		panel.addEventListener("dragover", ev => {
+			if (!Array.from(ev.dataTransfer?.types ?? []).includes("text/plain")) return clear();
+			const card = ev.target?.closest?.("[data-encounter-id]") ?? null;
+			const reorder = this.dragFrom === "card";
+			mark(reorder ? null : card);
+			panel.classList?.toggle("is-drop-new", !card && !this.dragFrom);
+		});
+		// The containment test the drop-zone helper uses: `dragleave` also fires on crossing onto a
+		// child, and only a leave to somewhere outside the pane is the drag going away.
+		panel.addEventListener("dragleave", ev => { if (!panel.contains?.(ev.relatedTarget)) clear(); });
+		panel.addEventListener("drop", () => { clear(); this.dragFrom = null; });
+		panel.addEventListener("dragend", clear);
 	}
 
 	/** The encounter an element sits in. */
