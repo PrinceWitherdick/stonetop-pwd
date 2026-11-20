@@ -48,11 +48,10 @@ palette and at a larger Sheet Text Size. The ones most worth a look:
 ## Next jobs
 
 - **Gap 11** is the same judgement at scale: about 195 existing `data-tooltip` attributes print a
-  value from data and have not been sorted into text and HTML. One known case: the taken-asset
-  name in `templates/actor/partials/steading-tab-overview.hbs` prints `{{this.takenTooltip}}`,
-  which contains an expedition's title or a character's name, so it should be
-  `data-tooltip-text` (and `steading-assets-taken.test.js` asserts the current spelling). For
-  each, trace the value: built only from our own strings, leave it; can carry typed text, change
+  value from data and have not been sorted into text and HTML. The one known case, the
+  taken-asset name in `templates/actor/partials/steading-tab-overview.hbs` (an expedition's title
+  or a character's name), is done: it is `data-tooltip-text`, and `steading-assets-taken.test.js`
+  renders a title carrying markup to hold it there. For each of the rest, trace the value: built only from our own strings, leave it; can carry typed text, change
   the spelling; deliberately HTML, leave it and say why in a comment.
 - **Gap 12**: icon-only controls built in JS are not checked for an `aria-label`. The tooltip
   work found two (the journal roll-table die, the roll card's "?") and fixed them; there will be

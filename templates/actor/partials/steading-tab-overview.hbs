@@ -73,13 +73,17 @@
 					{{#if name}}
 					{{!-- An asset out on requisition reads struck through, and its tooltip names
 					      where it went (a character, an expedition, or both). Clicking the name
-					      brings it home: see _onReturnAsset in StonetopSteadingSheet.js. --}}
+					      brings it home: see _onReturnAsset in StonetopSteadingSheet.js.
+
+					      `-text`, never a plain data-tooltip: the line carries an expedition's title or a
+					      character's name, both typed by players, and core draws a plain data-tooltip as
+					      HTML. Guarded by tests/actors/steading/steading-assets-taken.test.js. --}}
 					<li class="steading-list-item{{#if takenBy}} is-taken{{/if}}">
 						<span class="steading-list-bullet" aria-hidden="true"></span>
 						{{#if takenBy}}
 						<span class="steading-list-name steading-asset-name steading-asset-taken"
 						      data-index="{{@index}}"
-						      data-tooltip="{{this.takenTooltip}}"
+						      data-tooltip-text="{{this.takenTooltip}}"
 						      data-tooltip-direction="UP">{{this.name}}</span>
 						{{else}}
 						<span class="steading-list-name steading-asset-name">{{this.name}}</span>

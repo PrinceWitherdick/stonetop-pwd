@@ -687,7 +687,9 @@ delete an entry when it is done.
     journal HTML goes through core's editor, so check there that a `data-tooltip` survives a save.
 11. **About 195 `data-tooltip` attributes print a value from data**, which core draws as HTML.
     Most print strings the system builds. Any that can carry text a player typed should be
-    `data-tooltip-text`; they have not been sorted one from the other.
+    `data-tooltip-text`; they have not been sorted one from the other. Sorted so far: the
+    Steading sheet's taken-asset line (an expedition's title or a character's name) is
+    `data-tooltip-text`, held there by `steading-assets-taken.test.js`.
 12. **Icon-only controls built in JS** are not checked for an `aria-label`, and `fa-solid` remains
     where a class string is handed to a Foundry API (header controls, context menus), which is
     core's own spelling.
