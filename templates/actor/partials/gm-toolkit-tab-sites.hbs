@@ -39,9 +39,14 @@
 	<section class="sheet-tab steading-sites steading-prep-cards">
 
 		{{#if stonetop.hasSteading}}
-		<p class="steading-threats-intro">
-			Interesting places the PCs can explore (Book I, <em>Sites</em>): the destination of an expedition, a point of interest on the way, or an incidental discovery. Written up here for your eyes only. Drag a card onto a scene to pin it to the map.
-		</p>
+		{{!-- THE PANE BAR the other two views open on (gm-prep-pane-bar.hbs), inside
+		      `.steading-sites` because that is the scope the "New site" handler is bound to. The
+		      intro that used to stand here in full is the lead's tooltip now. --}}
+		{{> "stonetop.gm-prep-pane-bar" kind="site"
+		    lead=(localize "stonetop.gmToolkit.sites.lead")
+		    intro=(localize "stonetop.gmToolkit.sites.intro")
+		    label=(localize "stonetop.gmToolkit.sites.add")
+		    bare=(not stonetop.sites.length)}}
 
 		{{#if stonetop.sites.length}}
 		<div class="steading-threats-grid">
@@ -52,9 +57,14 @@
 			</div>
 			{{/each}}
 		</div>
+		{{else}}
+		{{!-- No `accepts`: a site is written up in the wizard, not dragged in, so there is no row
+		      of kinds to promise. --}}
+		{{> "stonetop.gm-prep-empty" view="sites" kind="site"
+		    title=(localize "stonetop.gmToolkit.sites.emptyTitle")
+		    text=(localize "stonetop.gmToolkit.sites.empty")
+		    label=(localize "stonetop.gmToolkit.sites.add")}}
 		{{/if}}
-
-		{{> "stonetop.gm-prep-add-bar" kind="site" label="Create a site"}}
 		{{else}}
 		{{> "stonetop.gm-prep-no-steading" noun="Sites"}}
 		{{/if}}

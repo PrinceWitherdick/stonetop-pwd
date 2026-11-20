@@ -78,7 +78,8 @@ import { clusterPoint, placeActors } from "../../utils/token-drop.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
 import { worldActorsBySource, resolveDeployableActor } from "../../utils/deployable-actor.js";
 import { isFightTabEnabled } from "../../settings.js";
-import { escHtml, joinNames, stripHtmlToText } from "../../utils/strings.js";
+import { escHtml, joinNames, stripHtmlToText, isDefaultImg } from "../../utils/strings.js";
+import { isBestiaryPlaceholderImg } from "../../bestiary/monster-portrait.js";
 import { moveWithin, insertionIndexIn } from "../../utils/list-reorder.js";
 import { localize, format } from "../../utils/i18n.js";
 import { openBundleNotesDialog } from "./bundle-notes-dialog.js";
@@ -248,6 +249,16 @@ export const BUNDLE_TALLY_KINDS = Object.freeze([
 ]);
 
 /**
+ * Every kind a bundle takes, glyph and plural name, for the empty pane's "drop any of these" row.
+ *
+ * `unknown` is left off: it is how a row this build cannot name is COUNTED, not something a GM can
+ * drag in. Held like `bundleKinds`, because it is constant and the sheet repaints often.
+ */
+const acceptedKinds = localizedOnce(() => BUNDLE_TALLY_KINDS
+	.filter(kind => kind.key !== "unknown")
+	.map(kind => ({ key: kind.key, icon: kind.icon, label: localize(`stonetop.gmToolkit.encounters.tally.other.${kind.key}`) })));
+
+/**
  * Which tally a row falls under, from its stored `type` alone. Arcana are settled on top of this
  * by `resolveBundleEntry`, which is the only place that has the document to ask.
  */
@@ -396,6 +407,54 @@ export function normalizeBundle(enc = {}) {
 export { moveWithin, insertionIndexIn };
 
 /**
+ * Is this picture a stand-in rather than art somebody chose?
+ *
+ * A row's thumbnail is there to say WHICH monster or WHICH map at a glance, and a stock glyph says
+ * nothing of the kind: a column of six identical mystery-men is worse than six kind glyphs, because
+ * it looks like information and is not. So every placeholder this world can hand us answers "no
+ * art", and the row falls back to its kind-glyph medallion:
+ *
+ *  - anything in core's `icons/svg/` folder, which is Foundry's generic glyph set (mystery-man,
+ *    item-bag, the d20 a new table wears, the dice-target a new macro wears) and never anybody's
+ *    portrait;
+ *  - the document class's own `DEFAULT_ICON` and core's `DEFAULT_TOKEN`, read at call time so a
+ *    core version that moves them is followed;
+ *  - this system's stand-ins: the people silhouette an art-less NPC is stamped with (`isDefaultImg`
+ *    knows it, see utils/person-portrait.js) and the creature-type mark a seeded bestiary monster
+ *    wears until book art is imported (`isBestiaryPlaceholderImg`). Both are marks for a KIND of
+ *    thing, which is exactly what the medallion already says.
+ *
+ * Exported for its test: the list is the whole of the logic, and a placeholder that slips through
+ * is a regression nobody would see until a world full of seeded monsters opened the tab.
+ */
+export function isPlaceholderArt(src, documentName = "") {
+	const bare = typeof src === "string" ? src.trim().replace(/^\//, "") : "";
+	if (!bare) return true;
+	if (bare.startsWith("icons/svg/")) return true;
+	const classDefault = globalThis.CONFIG?.[documentName]?.documentClass?.DEFAULT_ICON;
+	if (classDefault && bare === String(classDefault).replace(/^\//, "")) return true;
+	return isDefaultImg(bare) || isBestiaryPlaceholderImg(bare);
+}
+
+/**
+ * The picture a gathered row wears beside its name, or "" when it should wear its kind's glyph.
+ *
+ * A Scene's is its `thumb`, the small render core keeps for the navigation bar, and never its
+ * `background.src`: that is the whole battle map, megabytes of it, and this is a 28px square. Every
+ * other kind collected here that has a picture keeps it in `img`. Journals and their pages have
+ * neither and fall through to "".
+ *
+ * Reads only fields a pack INDEX entry carries as well as a full document does (`img` is in every
+ * index; `thumb` is in the Scene index), so a pack row on the sync path costs no pack load here
+ * either. See `resolveBundleEntry`.
+ */
+export function bundleEntryImage(doc, documentName = "") {
+	if (!doc) return "";
+	const src = documentName === "Scene" ? doc.thumb : doc.img;
+	return isPlaceholderArt(src, documentName) ? "" : String(src).trim();
+}
+
+/**
  * One stored entry, in the shape the row renders from.
  *
  * NEVER DROPS A SLOT — the rule `resolvePersonRow` states on the steading. Every control on a row
@@ -429,6 +488,10 @@ export async function resolveBundleEntry(entry) {
 		// context builder, because the ARCANUM case needs the resolved document and this is the
 		// one place that has it — see BUNDLE_TALLY_KINDS.
 		tally: TALLY_BY_DOC_TYPE[entry?.type] ?? "unknown",
+		// The thumbnail. Empty until the document is in hand: an unresolved row wears the
+		// broken-link medallion instead, and the stored row never carries a picture of its own
+		// (see `normalizeEntry` -- a cached path would go stale the moment the art changed).
+		img: "",
 		unresolved: true,
 		inPack: false,
 	};
@@ -462,6 +525,7 @@ export async function resolveBundleEntry(entry) {
 		icon: shown.icon,
 		typeLabel: shown.typeLabel,
 		tally: arcanum ? "arcanum" : base.tally,
+		img: bundleEntryImage(doc, base.type),
 		unresolved: false,
 		inPack: !!doc.pack,
 	};
@@ -920,6 +984,10 @@ export class GmBundleTab {
 		context.stonetop[this.cfg.contextKey] = {
 			active:    cards.filter(enc => !enc.used),
 			completed: cards.filter(enc => enc.used),
+			// The row of glyphs on the empty state: what this pane will take. Drawn from the same
+			// table the badges and the body's eyebrows are, so the promise the empty pane makes
+			// cannot name a kind the drop filter refuses.
+			accepts:   acceptedKinds(),
 		};
 		// Rows the list no longer holds, so a session of adding and removing cannot grow the
 		// enrich cache without bound.
@@ -1161,6 +1229,26 @@ export class GmBundleTab {
 	 * Delegated rather than bound per element because every one of these nodes is re-emitted
 	 * whenever the tab re-renders, which a structural write does on purpose.
 	 */
+	/**
+	 * Open or shut the card this caret belongs to, IN PLACE.
+	 *
+	 * Expanding is a CLASS TOGGLE, not a render. The body is in the DOM either way, so there is
+	 * nothing to fetch and nothing to rebuild — and a render here would be one that could land
+	 * while a note box two rows down had focus. One method because two gestures reach it: the
+	 * caret itself, and a click anywhere else on the bare head.
+	 */
+	toggleCard(toggle) {
+		const row = toggle.closest("[data-encounter-id]");
+		const id = row?.dataset?.encounterId;
+		if (!id) return;
+		const collapsed = row.classList.toggle("is-collapsed");
+		// Both, and by hand: nothing re-renders here, so the markup's own conditional never runs
+		// again and a screen reader would keep reading the state it opened in.
+		toggle.setAttribute("aria-expanded", String(!collapsed));
+		toggle.setAttribute("aria-label", this.t(collapsed ? "expand" : "collapse"));
+		if (collapsed) this.openIds.delete(id); else this.openIds.add(id);
+	}
+
 	activateListeners(root) {
 		if (!root) return;
 
@@ -1178,21 +1266,11 @@ export class GmBundleTab {
 				return this.onAdd();
 			}
 
-			// Expanding is a CLASS TOGGLE, not a render. The body is in the DOM either way, so
-			// there is nothing to fetch and nothing to rebuild — and a render here would be one
-			// that could land while a note box two rows down had focus.
+			// The caret: a class toggle, never a render (see `toggleCard`).
 			const toggle = ev.target.closest(".stonetop-gm-encounter-toggle");
 			if (toggle) {
 				ev.preventDefault();
-				const row = toggle.closest("[data-encounter-id]");
-				const id = row?.dataset?.encounterId;
-				if (!id) return;
-				const collapsed = row.classList.toggle("is-collapsed");
-				// Both, and by hand: nothing re-renders here, so the markup's own conditional
-				// never runs again and a screen reader would keep reading the state it opened in.
-				toggle.setAttribute("aria-expanded", String(!collapsed));
-				toggle.setAttribute("aria-label", this.t(collapsed ? "expand" : "collapse"));
-				if (collapsed) this.openIds.delete(id); else this.openIds.add(id);
+				this.toggleCard(toggle);
 				return;
 			}
 
@@ -1268,6 +1346,18 @@ export class GmBundleTab {
 				if (id) await action.run(this, id);
 				return;
 			}
+
+			// THE REST OF THE HEAD IS THE CARET TOO. A shut card is one row, and the row is what a
+			// GM aims at: the note's first line, the badges, the air between them. Every control
+			// on the head was claimed above, so what reaches here is the bare head, and the name
+			// box and the grip are excluded by name because they have gestures of their own (a
+			// caret, a drag) that a click must not also open the card under. The caret stays the one REAL control -- focusable,
+			// with its `aria-expanded` -- and this is the mouse's wider way to it.
+			const head = ev.target.closest(".stonetop-gm-encounter-head");
+			if (head && !ev.target.closest("input, button, a, .stonetop-gm-encounter-name, .stonetop-gm-encounter-grip")) {
+				const caret = head.querySelector(".stonetop-gm-encounter-toggle");
+				if (caret) this.toggleCard(caret);
+			}
 		});
 
 		root.addEventListener("keydown", async ev => {
@@ -1340,7 +1430,34 @@ export class GmBundleTab {
 		});
 
 		this.wireDrag(root);
-		wireDocumentDropZone(root.querySelector(this.cfg.panel), (data, target) => this.onDrop(data, target));
+		const panel = root.querySelector(this.cfg.panel);
+		wireDocumentDropZone(panel, (data, target) => this.onDrop(data, target));
+		this.wireDropTarget(panel);
+	}
+
+	/**
+	 * Light the ONE card a drag is over, as the drag moves (`.is-drop-target`).
+	 *
+	 * The drop zone is the whole pane, and its wash says only "this pane takes it". Which card a
+	 * let-go lands in is decided by the card under the pointer (`onDrop`), and `:hover` does not
+	 * follow a drag in Chromium, so CSS alone cannot show it. Listeners on the panel and not on
+	 * each card, so a re-render costs nothing to re-wire, and the class is moved only when the card
+	 * under the pointer CHANGES, so a dragover firing every few milliseconds touches the DOM a
+	 * handful of times per gesture. Purely visual: nothing reads the class back.
+	 */
+	wireDropTarget(panel) {
+		if (!panel?.addEventListener) return;
+		let current = null;
+		const mark = card => {
+			if (card === current) return;
+			current?.classList?.remove("is-drop-target");
+			current = card ?? null;
+			current?.classList?.add("is-drop-target");
+		};
+		panel.addEventListener("dragover", ev => mark(ev.target?.closest?.("[data-encounter-id]") ?? null));
+		panel.addEventListener("dragleave", ev => { if (!panel.contains?.(ev.relatedTarget)) mark(null); });
+		panel.addEventListener("drop", () => mark(null));
+		panel.addEventListener("dragend", () => mark(null));
 	}
 
 	/** The encounter an element sits in. */

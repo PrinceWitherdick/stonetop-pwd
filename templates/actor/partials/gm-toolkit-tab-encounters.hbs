@@ -48,49 +48,57 @@
 	{{> "stonetop.steading-section-toggle" section="encounters" editing=stonetop.edit.encounters}}
 	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.encounters}} stonetop-gm-encounters--reading{{/unless}}">
 
-		<p class="steading-threats-intro">{{localize "stonetop.gmToolkit.encounters.intro"}}</p>
+		{{!-- THE PANE BAR: a one-line lead (the full intro is its tooltip) and "New encounter" at
+		      the right. On a view with nothing in it at all the button moves into the empty state
+		      below, larger, and the bar is drawn `bare` (gm-prep-pane-bar.hbs says why). --}}
+		{{> "stonetop.gm-prep-pane-bar" kind="stonetop-gm-encounter"
+		    lead=(localize "stonetop.gmToolkit.encounters.lead")
+		    intro=(localize "stonetop.gmToolkit.encounters.intro")
+		    label=(localize "stonetop.gmToolkit.encounters.add")
+		    bare=(not (or stonetop.encounters.active.length stonetop.encounters.completed.length))}}
 
-		{{!-- THE LIVE LIST CARRIES NO HEADING OF ITS OWN. It is what the tab IS, sitting directly
-		      under the tab's own intro, and a "Prepared" heading over it would only be there to
-		      make a pair with the fold below — which is rendered at all only once something has
-		      been run. A heading that exists to balance a section that is usually absent is a
-		      heading that reads as a section boundary on an empty tab. --}}
+		{{!-- THE LIVE LIST CARRIES NO HEADING OF ITS OWN. It is what the pane IS, directly under
+		      the pane's own bar, and a "Prepared" heading over it would only be there to make a
+		      pair with the fold below — which is rendered at all only once something has been
+		      run. --}}
 		{{#if stonetop.encounters.active.length}}
 		<ul class="stonetop-gm-encounter-list">
 			{{#each stonetop.encounters.active}}
 			{{> "stonetop.gm-encounter-card"}}
 			{{/each}}
 		</ul>
-		{{else}}
+		{{else if stonetop.encounters.completed.length}}
 		{{!-- Two empty states, because "nothing here yet" and "you have run everything you
 		      prepared" are different facts and the second one is wrong advice: there is no need
 		      to tell a GM to drag something in when what they most likely want is to lift one
-		      back out of the fold two inches below. --}}
-		<p class="stonetop-gm-encounter-empty">
-			{{#if stonetop.encounters.completed.length}}{{localize "stonetop.gmToolkit.encounters.emptyAllDone"}}{{else}}{{localize "stonetop.gmToolkit.encounters.empty"}}{{/if}}
-		</p>
+		      back out of the fold two inches below. This one is a quiet line, not the centred
+		      block: the pane is not empty, its fold is right there. --}}
+		<p class="stonetop-gm-encounter-empty">{{localize "stonetop.gmToolkit.encounters.emptyAllDone"}}</p>
+		{{else}}
+		{{> "stonetop.gm-prep-empty" view="encounters" kind="stonetop-gm-encounter"
+		    title=(localize "stonetop.gmToolkit.encounters.emptyTitle")
+		    text=(localize "stonetop.gmToolkit.encounters.empty")
+		    label=(localize "stonetop.gmToolkit.encounters.add")
+		    accepts=stonetop.encounters.accepts}}
 		{{/if}}
 
-		{{!-- The add bar stays with the LIVE list, above the fold rather than at the true foot of
-		      the tab: what it adds is a new encounter, which lands on that list, and a bar sitting
-		      under a season's worth of completed ones would be a bar a GM has to scroll past a
-		      history to reach. --}}
-		{{> "stonetop.gm-prep-add-bar" kind="stonetop-gm-encounter"
-		    label=(localize "stonetop.gmToolkit.encounters.add")}}
-
-		{{!-- COMPLETED, and rendered only when there is something in it, so an untouched tab shows
+		{{!-- COMPLETED, and rendered only when there is something in it, so an untouched pane shows
 		      one list and not two.
 
 		      It folds, and starts OPEN like every other section on this sheet: a section shut on
 		      first open is one a GM never learns is there. Folding it is a choice the caret offers
-		      and the sheet then remembers per user — which is exactly what a GM three sessions in
-		      will want, and exactly what a GM one session in must not have chosen for them.
+		      and the sheet then remembers per user.
+
+		      ITS HEADING IS AN EYEBROW, not a section title: small caps, the count beside it (the
+		      heading's `note`, styled as a count in stonetop.css), and a hairline to the edge — the
+		      same line the open card's groups are named with, one size up. A history at the foot of
+		      the pane should not shout as loud as the work above it.
 
 		      The caret rides ON THE HEADING (via `section-heading`) rather than in a corner,
-		      because this section has no pencil of its own: the tab's single pencil in the panel's
-		      top-right corner already reaches the delete buttons inside here, and a second one
-		      would be two controls for one lock. A lone caret floating in an otherwise empty
-		      corner is what the wonder tab's guidance section avoids the same way.
+		      because this section has no pencil of its own: the pane's single pencil already
+		      reaches the delete buttons inside here, and a second one would be two controls for
+		      one lock. `stonetop-move-group-title` stays on it because that is what the sheet's
+		      fold wiring counts as a heading (HEADING_SELECTOR in StonetopGmToolkitSheet.js).
 
 		      The heading's FOLLOWING SIBLINGS are what the fold hides (`_sectionFoldTargets`), so
 		      the box around this pair is load-bearing: without it the walk would run on past the
@@ -99,7 +107,8 @@
 		{{#if stonetop.encounters.completed.length}}
 		<div class="stonetop-gm-encounters-completed">
 			{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.encounters.completed")
-			    note=(localize "stonetop.gmToolkit.encounters.completedNote")
+			    note=stonetop.encounters.completed.length
+			    headingClass="stonetop-move-group-title stonetop-gm-fold-eyebrow"
 			    collapse="gm-encounters-completed"}}
 			<ul class="stonetop-gm-encounter-list stonetop-gm-encounter-list--completed">
 				{{#each stonetop.encounters.completed}}

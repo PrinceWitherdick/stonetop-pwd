@@ -797,6 +797,10 @@ Hooks.once("init", () => {
 		"stonetop.gm-expedition-card":        "systems/stonetop-pwd/templates/actor/partials/gm-expedition-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
+		// The Prep tab's three views open on the same one-line bar and, with nothing in them, the
+		// same centred empty state; the Threats tab keeps its own foot-of-section add bars above.
+		"stonetop.gm-prep-pane-bar":          "systems/stonetop-pwd/templates/actor/partials/gm-prep-pane-bar.hbs",
+		"stonetop.gm-prep-empty":             "systems/stonetop-pwd/templates/actor/partials/gm-prep-empty.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
 		"stonetop.gm-prep-guide-items":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-guide-items.hbs",
 		"stonetop.monster-sheet":             "systems/stonetop-pwd/templates/actor/monster.hbs",

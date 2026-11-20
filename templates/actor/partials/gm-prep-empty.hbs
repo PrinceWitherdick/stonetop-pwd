@@ -1,0 +1,38 @@
+{{!-- A PREP VIEW WITH NOTHING IN IT: a centred block in the pane — the view's own glyph in a washed
+      circle, a heading, the sentence that says how things get here, a row of the kinds the view
+      will take, and the button that starts one.
+
+      WHY A BLOCK AND NOT A LINE. A new world opens every one of these views empty, and one grey
+      sentence over a dashed bar in an otherwise empty window read as a pane that had failed to
+      load. The glyph is the switcher segment's own (the same mask files, selected off `view` in
+      stonetop.css), so the empty pane is recognisably the place the segment named.
+
+      THE KINDS ROW IS A PROMISE THE DROP FILTER KEEPS. `accepts` is built in JS from the same
+      table the drop zone and the card's pills read (gm-bundle-tab.js#acceptedKinds), so it cannot
+      show a kind the pane refuses. Decoration for a sighted reader, `aria-hidden`: the sentence
+      above it already says what to drag in, in words. Sites pass none, and the row is left out.
+
+      THE BUTTON IS THE PANE BAR'S, moved here and made primary: the bar above an empty view is
+      drawn `bare`. Same two classes, same handler hook, so it is the same act wherever it is
+      pressed (gm-prep-pane-bar.hbs says why the hook has to stay inside the pane's scope).
+
+      ONLY FOR A VIEW THAT HAS NEVER HAD ANYTHING. "You have run everything you prepared" is a
+      different fact, and it keeps its own smaller line in the tab template: the advice there is
+      to lift one back out of the fold, not to start from nothing.
+
+      Hash parameters, rendered at the top of a pane and never inside an `{{#each}}` of the
+      caller's, so they shadow nothing. Inside its own `{{#each accepts}}` every lookup is written
+      `this.`, so the hash's `label` cannot answer for an item's. --}}
+<div class="stonetop-gm-prep-empty stonetop-gm-prep-empty--{{this.view}}">
+	<span class="stonetop-gm-prep-empty-glyph" aria-hidden="true"></span>
+	<h3 class="stonetop-gm-prep-empty-title">{{this.title}}</h3>
+	<p class="stonetop-gm-prep-empty-text">{{this.text}}</p>
+	{{#if accepts.length}}
+	<ul class="stonetop-gm-prep-empty-kinds" aria-hidden="true">
+		{{#each accepts}}
+		<li data-tooltip="{{this.label}}" data-tooltip-direction="UP"><i class="{{this.icon}}"></i></li>
+		{{/each}}
+	</ul>
+	{{/if}}
+	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add stonetop-gm-pane-add--primary {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> {{this.label}}</button>
+</div>

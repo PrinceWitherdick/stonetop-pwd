@@ -184,11 +184,46 @@ describe("the Expeditions tab: wiring", () => {
 		expect(PANEL_MARKUP).not.toMatch(/<(?:input|textarea|prose-mirror)[^>]*\sname=/);
 	});
 
-	// There is no <img> on this tab, so the `draggable="false"` opt-out every portrait in the
-	// system carries has nothing to apply to. Pinned so that adding one without it is a failure
-	// rather than a Gecko drag that hands over the image instead of the document.
-	it("has no portrait, which is why nothing here carries the image drag opt-out", () => {
-		expect(PANEL_MARKUP).not.toMatch(/<img/);
+	// A row's thumbnail is an <img> inside the draggable name button, so it carries the
+	// `draggable="false"` opt-out every portrait in the system wears, or Gecko hands over the
+	// picture instead of the document.
+	it("puts the drag opt-out on every picture it draws", () => {
+		const imgs = PANEL_MARKUP.match(/<img\b[^>]*>/g) ?? [];
+		expect(imgs.length, "the row thumbnail went missing").toBeGreaterThan(0);
+		for (const img of imgs) {
+			expect(img).toContain('draggable="false"');
+			expect(img).toContain('alt=""');
+		}
+	});
+
+	// ON THE ROAD: a card bound to a trip says so on its shut row, before the pills, off the same
+	// `tripId` that turns Run into "Open the walkthrough" -- and not once the card is filed.
+	it("says a bound, live card is on the road", () => {
+		expect(PANEL_MARKUP).toMatch(/\{\{#if tripId\}\}\{\{#unless used\}\}\s*<span class="stonetop-gm-expedition-road"/);
+		const head = PANEL_MARKUP.slice(PANEL_MARKUP.indexOf("stonetop-gm-encounter-head"), PANEL_MARKUP.indexOf("stonetop-gm-encounter-body"));
+		expect(head.indexOf("stonetop-gm-expedition-road")).toBeGreaterThan(-1);
+		expect(head.indexOf("stonetop-gm-expedition-road")).toBeLessThan(head.indexOf("stonetop-gm-encounter-count"));
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit.expeditions;
+		expect(en.onTheRoad).toBe("On the road");
+		expect(en.onTheRoadTip).toBeTruthy();
+		// The road's teal, as a mark: washed under the words, worn by the glyph.
+		expect(declarations(CSS, ".stonetop-gm-expedition-road")).toMatch(/var\(--st-timeline-kind-expedition\)/);
+	});
+
+	// Quiet "Mark complete" first, then the primary Run at the right-hand end of the foot.
+	it("ends the foot on Run, after the quiet toggle", () => {
+		const foot = PANEL_MARKUP.slice(PANEL_MARKUP.indexOf('<div class="stonetop-gm-card-foot">'));
+		expect(foot.indexOf("stonetop-gm-encounter-used")).toBeGreaterThan(-1);
+		expect(foot.indexOf("stonetop-gm-encounter-used")).toBeLessThan(foot.indexOf("stonetop-gm-expedition-run"));
+		expect(JSON.parse(read("languages/en.json")).stonetop.gmToolkit.expeditions.run).toBe("Run the expedition");
+	});
+
+	// The views' accent: the road's teal on this pane, the quiet slate on Encounters.
+	it("edges its cards in the road's teal", () => {
+		expect(declarations(CSS, ".stonetop-gm-prep-panes > .tab.expeditions"))
+			.toMatch(/--st-bundle-accent:\s*var\(--st-timeline-kind-expedition\)/);
+		expect(declarations(CSS, ".stonetop-gm-prep-panes > .tab.encounters"))
+			.toMatch(/--st-bundle-accent:\s*var\(--st-quiet-ink\)/);
 	});
 
 	// The fold's open/shut state is stored per user against the id in `collapse=`. Shared with the

@@ -1,0 +1,30 @@
+{{!-- THE BAR AT THE TOP OF A PREP VIEW: one muted line saying what the view is for, and the one
+      act it exists for ("New encounter", "New expedition", "New site") at the right.
+
+      IT REPLACES TWO THINGS. A three-line italic intro, which was the loudest thing on the pane
+      and was read once and never again; it is now the LEAD's tooltip (`intro`), so it is still
+      there for the GM who wonders what the pane is, and out of the way of the one who knows. And
+      the dashed add bar at the foot of the list, which on a pane of eight cards was a scroll away
+      from the top a GM opens onto. Up here the button is in the same place on all three views,
+      the way the switcher above it is.
+
+      THE BUTTON KEEPS BOTH OF ITS CLASSES' JOBS. `{{kind}}-add-btn` is the hook the handlers
+      match (`.stonetop-gm-encounter-add-btn` in gm-bundle-tab.js, `.site-add-btn` through
+      gm-prep-tabs.js's PREP_TOOLS), so a view's bar has to stay INSIDE the scope that handler is
+      bound to (`.tab.encounters`, `.tab.expeditions`, `.steading-sites`). `stonetop-prep-add-btn`
+      is the system's "write one up" look; `stonetop-gm-pane-add` turns it from that full-width
+      dashed strip into a compact outlined button, in stonetop.css, without touching the Threats
+      tab's own add bars, which wear the base class alone (gm-prep-add-bar.hbs).
+
+      `bare` drops the button: an EMPTY view carries the same button, larger, in its empty state
+      (gm-prep-empty.hbs), and two identical buttons a hand apart read as two different acts.
+
+      Hash parameters, merged into the caller's context like every partial's (section-heading.hbs
+      states the trap). Only ever rendered at the top of a pane, never inside an `{{#each}}`, so
+      there is no view-model field for them to shadow. --}}
+<div class="stonetop-gm-pane-bar">
+	<p class="stonetop-gm-pane-lead" data-tooltip="{{this.intro}}" data-tooltip-direction="DOWN">{{this.lead}}</p>
+	{{#unless bare}}
+	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> {{this.label}}</button>
+	{{/unless}}
+</div>

@@ -237,7 +237,14 @@ describe("the toolkit picked them up whole", () => {
 		["threat", THREATS_HBS], ["hazard", THREATS_HBS], ["site", SITES_HBS],
 	])("renders every %s tool the handler table listens for", (kind, hbs) => {
 		expect(hbs, `card tools for ${kind}`).toContain(`{{> "stonetop.gm-prep-card-tools" kind="${kind}"`);
-		expect(hbs, `add bar for ${kind}`).toContain(`{{> "stonetop.gm-prep-add-bar" kind="${kind}"`);
+		// Threats keep the foot-of-section bar; the Sites VIEW opens on the Prep tab's pane bar
+		// instead, and its empty state carries the same button. Both emit the handler's word.
+		const addVia = kind === "site"
+			? ["stonetop.gm-prep-pane-bar", "stonetop.gm-prep-empty"]
+			: ["stonetop.gm-prep-add-bar"];
+		for (const partial of addVia) {
+			expect(hbs, `${partial} for ${kind}`).toMatch(new RegExp(`\\{\\{> "${partial.replace(/\./g, "\\.")}"[^}]*\\bkind="${kind}"`));
+		}
 		expect(stripComments(PREP_JS)).toContain(`kind: "${kind}"`);
 	});
 
@@ -381,11 +388,25 @@ describe("the toolkit picked them up whole", () => {
 		expect(exempt).toMatch(/pointer-events:\s*auto/);
 	});
 
-	// One partial serves all four bars, so a new prep kind inherits the look by construction.
-	it("routes every add bar through the one partial", () => {
+	// One partial serves the three foot-of-section bars, so a new prep kind inherits the look by
+	// construction. The Sites view left it for the Prep tab's pane bar, which is held to the same
+	// two class words below, so the site handler still finds its button.
+	it("routes every foot-of-section add bar through the one partial", () => {
 		for (const [hbs, kind] of [[THREATS_HBS, "threat"], [THREATS_HBS, "hazard"],
-			[SITES_HBS, "site"], [IMPROVEMENTS_HBS, "steading-improvement"]]) {
+			[IMPROVEMENTS_HBS, "steading-improvement"]]) {
 			expect(hbs, `${kind} add bar`).toContain(`{{> "stonetop.gm-prep-add-bar" kind="${kind}"`);
+		}
+		expect(SITES_HBS, "the Sites view went back to a foot-of-section bar").not.toContain("stonetop.gm-prep-add-bar");
+	});
+
+	it("gives the Prep views' pane bar and empty state the shared look word and the handler's hook", () => {
+		for (const file of ["gm-prep-pane-bar.hbs", "gm-prep-empty.hbs"]) {
+			const hbs = stripComments(read(`templates/actor/partials/${file}`));
+			expect(hbs, file).toMatch(/class="stonetop-prep-add-btn stonetop-gm-pane-add[^"]* \{\{this\.kind\}\}-add-btn"/);
+		}
+		// Both registered, or the views render nothing where their bar should be.
+		for (const name of ["gm-prep-pane-bar", "gm-prep-empty"]) {
+			expect(read("stonetop.js")).toContain(`"stonetop.${name}":`);
 		}
 	});
 });

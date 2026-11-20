@@ -295,6 +295,20 @@
 	   paper, which never moves --st-page, needs it named again (see .stonetop-past-death). */
 	--st-card-veil: color-mix(in srgb, var(--st-page) 50%, transparent);
 
+	/* THE GM TOOLKIT'S PREP CARDS — an encounter or an expedition in the Prep tab's views. Warm
+	   paper a step lighter than the site card's (`--tc-paper`, which they sit one segment away
+	   from and are meant to look related to), its own hairline, and a shadow that deepens on hover.
+	   `-line`, not `-rule`: these are a card's own soft edge, not a boundary a reader has to find,
+	   and the high-contrast skins turn them into the card rule they already pitch at 4.76:1. The
+	   dark palette turns them over in terms of the panel and the ink channel, so Slate gets cool
+	   paper from the same declarations. */
+	--st-prep-card-paper:        #fcfaf4;
+	--st-prep-card-paper-lo:     #f6f1e6;
+	--st-prep-card-line:         #e3d9c6;
+	--st-prep-card-line-hover:   #cdbd9f;
+	--st-prep-card-shadow:       0 1px 2px rgb(40 28 12 / 0.06), 0 2px 6px rgb(40 28 12 / 0.05);
+	--st-prep-card-shadow-hover: 0 1px 3px rgb(40 28 12 / 0.09), 0 6px 16px rgb(40 28 12 / 0.09);
+
 	/* The warm rule drawn around a piece of printed BOOK ART — a journal illustration, a GM
 	   playbook flowchart. Not `--st-card-rule`: that one separates our own surfaces, while this
 	   frames somebody else's picture and is deliberately warmer and heavier.
@@ -23893,10 +23907,12 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	padding: 4px 2px;
 	margin-top: 8px;
 }
-/* Every "write one up" bar wears this: Improvements' "Create improvement", the
-   Threats tab's "Write up a threat" and "Make a hazard", and the Sites tab's
-   "Create a site". ONE class, emitted by templates/actor/partials/gm-prep-add-bar.hbs
-   alongside the per-kind `.<kind>-add-btn` that keeps their JS handlers separate.
+/* Every "write one up" bar wears this: Improvements' "Create improvement" and the
+   Threats tab's "Write up a threat" and "Make a hazard". ONE class, emitted by
+   templates/actor/partials/gm-prep-add-bar.hbs alongside the per-kind `.<kind>-add-btn`
+   that keeps their JS handlers separate. The GM Toolkit's Prep views wear it too, on a
+   compact button in their pane bar, and restate everything below with
+   `.stonetop-gm-pane-add` (with the Encounters & Expeditions block). */
    This used to be a list of kind names kept here, in a file nobody opens when
    adding a tab, and it shipped once without `.site-add-btn` on it: the Sites tab
    drew a bare core button and nothing failed. */
@@ -46767,7 +46783,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    has to be the last thing in the file.
 
    Margin under it and none above: the Prep panel starts flush under the banner like every tab on
-   this frame, and the pane's own first line (its intro, or the pencil in its corner) wants the
+   this frame, and the pane's own first line (its pane bar, with the pencil beside it) wants the
    gap. */
 .stonetop-gm-prep-switcher {
 	display: flex;
@@ -47440,11 +47456,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    draws a soft rounded box whatever the border says. Without this the ruled
    column renders as a stack of form fields — no error, nothing logged, and the
    two look near enough alike in a thumbnail to pass a glance. */
-/* The quiet-field treatment, shared by every in-place text box on this sheet: the wonder
-   tab's questions and the encounters tab's names and entry notes. Grouped rather than
-   given one short class of its own, ON PURPOSE — a selector list applies these at each
-   selector's OWN specificity, and the PbtA base sheet styles inputs hard enough that a
-   single class would lose the cascade to them.
+/* The quiet-field treatment of the wonder tab's questions. (The Encounters and Expeditions
+   cards' names and entry notes used to share it; they now read as a title and as plain text
+   rather than as a field that lights a box, and carry their own rules with that block.) Kept as
+   a compound selector ON PURPOSE — the PbtA base sheet styles inputs hard enough that a single
+   class would lose the cascade to it.
 
    `box-shadow: none` is the load-bearing line, and a transparent border alone is NOT
    enough: core paints every input an inset ring
@@ -47452,9 +47468,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    rounded box whatever the border says. Without this a ruled column renders as a stack of
    form fields — no error, nothing logged, and the two look near enough alike in a
    thumbnail to pass a glance. Layout and type stay with each field below. */
-.stonetop-gm-wonder-item .stonetop-gm-wonder-question,
-.stonetop-gm-encounter-name,
-.stonetop-gm-encounter-entry-note {
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question {
 	height: auto;
 	border: 1px solid transparent;
 	border-radius: var(--st-radius-sm);
@@ -47462,15 +47476,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: none;
 }
 
-.stonetop-gm-wonder-item .stonetop-gm-wonder-question:hover,
-.stonetop-gm-encounter-name:hover,
-.stonetop-gm-encounter-entry-note:hover {
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question:hover {
 	border-color: var(--st-card-rule);
 }
 
-.stonetop-gm-wonder-item .stonetop-gm-wonder-question:focus,
-.stonetop-gm-encounter-name:focus,
-.stonetop-gm-encounter-entry-note:focus {
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question:focus {
 	border-color: var(--st-btn-primary-border);
 	background: var(--st-warm-hover-bg);
 }
@@ -48311,36 +48321,143 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    "Expedition" a sibling of "Preparations" when it is the thing they sit under. The
    numbering stays off for the reason above, so the stage names simply run unmarked. */
 
-/* ── Encounters & Expeditions tabs ────────────────────────────────────────────
+/* ── Encounters & Expeditions views (and the Prep tab's shared pane chrome) ─────
    actors/gmtoolkit/gm-bundle-tab.js: named bundles of whatever a GM gathered — for a session
-   or a scene on the Encounters tab, for a trip out of the village on the Expeditions tab —
+   or a scene in the Encounters view, for a trip out of the village in the Expeditions view —
    each row holding pointers to documents rather than copies of them.
 
-   ONE BLOCK FOR TWO TABS. The two draw the same card and print the same class names on
+   ONE BLOCK FOR TWO VIEWS. The two draw the same card and print the same class names on
    purpose, so `stonetop-gm-encounter-*` is the shared card vocabulary here, named for the tab
-   it was written for. Only the Expeditions card's own Run button and the foot row that holds
-   it carry names of their own, at the end of this block.
+   it was written for. Only the Expeditions card's own pill and Run button carry names of their
+   own.
 
-   Every rule here is scoped to its own class rather than to the panel, because the tab is one
-   list and the list is the tab: there is no second thing on this panel for a panel-wide rule to
-   catch by accident.
+   A SIBLING OF THE SITE CARD. The Sites view one segment over draws its cards on warm paper with
+   a soft shadow and a stone-coloured edge inset down the left (`.stonetop .threat-card` and
+   `.threat-card__edge`); these are the same family at a lighter weight, because a bundle is a
+   working list and a site is a page to read. Paper, line and shadow are `--st-prep-card-*`, set
+   in the token block at the top and turned over by the dark and high-contrast palettes, so no
+   colour below is a literal. The EDGE is the view's own accent, `--st-bundle-accent`, set on
+   each pane right below: the system's quiet slate for encounters, the road's teal (the
+   timeline's expedition kind) for expeditions, the map's blue for sites, and green on any card
+   filed as complete.
 
-   The drag-over highlight is NOT here. It is `.stonetop-card-drag-over` (see the drop-zone
-   helper), which is deliberately unscoped so every drop zone in the system paints the same. */
+   NOTHING HERE LEANS ON CORE'S CONTROL LOOK. Core paints every input an inset ring and a fill,
+   every button a border, a fill, a min-height and a glow on hover; each control below states its
+   border, background, box-shadow, padding and height outright, so a core or theme change cannot
+   put a box back round a name that is meant to read as a title.
+
+   The pane-wide drag-over wash is NOT here. It is `.stonetop-card-drag-over` (see the drop-zone
+   helper), deliberately unscoped so every drop zone in the system paints the same. What IS here
+   is the card under the pointer lighting up inside it (`.is-drop-target`, gm-bundle-tab.js). */
+.stonetop-gm-prep-panes > .tab.encounters  { --st-bundle-accent: var(--st-quiet-ink); }
+.stonetop-gm-prep-panes > .tab.expeditions { --st-bundle-accent: var(--st-timeline-kind-expedition); }
+.stonetop-gm-prep-panes > .tab.sites       { --st-bundle-accent: var(--st-timeline-kind-site); }
+
 .stonetop-gm-encounters {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 12px;
 }
 
-/* The pencil guards the two destructive buttons and nothing else. Everything else on this tab
-   stays live while it is off, which is the point: the reason the tab exists is to be dropped
-   into and noted on mid-session, and one that has to be unlocked first is one nobody uses. */
-.stonetop-gm-encounters--reading .stonetop-gm-encounter-remove,
-.stonetop-gm-encounters--reading .stonetop-gm-encounter-entry-remove {
-	display: none;
+/* --- The pane bar: lead on the left, the view's one act on the right ------------------------
+   gm-prep-pane-bar.hbs. One line, not the three-line italic intro it replaces: the full intro is
+   the lead's tooltip, so the line ellipsizes rather than wraps (the help cursor says there is
+   more), and the view's cards start a line under the switcher instead of four. */
+.stonetop-gm-pane-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 30px;
+	margin: 0;
 }
 
+/* THE PENCIL'S ROOM. The Encounters and Expeditions panes float their edit pencil in the pane's
+   top-right corner (`.steading-edit-section > .steading-section-edit-toggle`), which is exactly
+   where this bar's button ends. The bar gives up a pencil's width on its right so the two sit
+   side by side, and the pencil is dropped onto the bar's centre line below. */
+.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) .stonetop-gm-pane-bar {
+	padding-right: 26px;
+}
+.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) > .steading-section-edit-toggle {
+	top: 7px;
+	right: 2px;
+}
+
+/* The Sites pane is not a flex column with a gap (its section is shared with the Threats tab's
+   look), so its bar carries its own space below. */
+.steading-sites > .stonetop-gm-pane-bar {
+	margin-bottom: 12px;
+}
+
+.stonetop-gm-pane-lead {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-muted);
+	cursor: help;
+}
+
+/* THE ADD BUTTON, compact. It still wears `stonetop-prep-add-btn` (the "write one up" look, and a
+   hook the tests and the Improvements tab's lock read), so everything that class sets for the
+   full-width dashed strip is stated back here: a size of its own words, a solid slate outline, no
+   dashed edge. Two classes, so it outranks the base on specificity wherever either sits; the
+   Threats tab's bars wear the base alone and do not move.
+
+   SLATE OUTLINE, not the filled CTA: the bar is the top of every pane and is seen every time, and
+   a filled block there would be the loudest thing on the sheet. The filled one is kept for the
+   empty state, where starting one IS the only thing to do. */
+.stonetop-prep-add-btn.stonetop-gm-pane-add {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: auto;
+	height: auto;
+	min-height: 28px;
+	margin: 0;
+	padding: 2px 12px;
+	border: 1px solid var(--st-quiet-ink);
+	border-radius: var(--st-radius);
+	background: transparent;
+	box-shadow: none;
+	color: var(--st-quiet-ink);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	font-weight: 600;
+	line-height: 1.3;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.stonetop-prep-add-btn.stonetop-gm-pane-add:hover {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+	box-shadow: none;
+	color: var(--st-heading-ink);
+}
+
+.stonetop-prep-add-btn.stonetop-gm-pane-add--primary {
+	min-height: 32px;
+	padding: 4px 18px;
+	border-color: var(--st-btn-primary-border);
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+}
+
+.stonetop-prep-add-btn.stonetop-gm-pane-add--primary:hover {
+	border-color: var(--st-btn-primary-border-hover);
+	background: var(--st-btn-primary-bg-hover);
+	color: var(--st-btn-primary-text);
+}
+
+/* --- The list and the card ------------------------------------------------------------------ */
 .stonetop-gm-encounter-list,
 .stonetop-gm-encounter-entries {
 	list-style: none;
@@ -48351,61 +48468,253 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 8px;
 }
 
-.stonetop-gm-encounter-entries {
-	gap: 2px;
-}
-
+/* THE CARD: paper, a hairline, the large radius the switcher above it wears, and a whisper of
+   shadow that deepens on hover with the line, so the card under the pointer comes forward a step.
+   No `overflow: hidden`: it would clip the focus ring of the first and last control in it. */
 .stonetop-gm-encounter {
-	border: 1px solid var(--st-card-rule);
-	border-radius: var(--st-radius);
-	background: var(--st-card-fill);
-	overflow: hidden;
+	--st-bundle-edge: var(--st-bundle-accent, var(--st-quiet-ink));
+	position: relative;
+	border: 1px solid var(--st-prep-card-line);
+	border-radius: var(--st-radius-lg);
+	background: linear-gradient(180deg, var(--st-prep-card-paper), var(--st-prep-card-paper-lo));
+	box-shadow: var(--st-prep-card-shadow);
+	transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+.stonetop-gm-encounter:hover {
+	border-color: var(--st-prep-card-line-hover);
+	box-shadow: var(--st-prep-card-shadow-hover);
+}
+
+/* THE EDGE, inset from the card's top and bottom and rounded, the way the site card's
+   `.threat-card__edge` is drawn — which is the single strongest thing tying the two families
+   together at a glance. A pseudo-element rather than a `border-left`, so the card's own hairline
+   stays one even line all the way round and the edge can be a different colour from it. */
+.stonetop-gm-encounter::before {
+	content: "";
+	position: absolute;
+	left: 3px;
+	top: 9px;
+	bottom: 9px;
+	width: 3px;
+	border-radius: 2px;
+	background: var(--st-bundle-edge);
+	opacity: 0.8;
+	pointer-events: none;
+}
+
+/* --- The head: one line a shut card is read by --------------------------------------------- */
 .stonetop-gm-encounter-head {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 5px 8px;
+	gap: 8px;
+	min-height: 42px;
+	padding: 5px 8px 5px 12px;
+	cursor: pointer;
 }
 
+/* The hairline under the head on an OPEN card only: shut, the head is the whole card and a rule
+   along its foot would be a line under nothing. */
+.stonetop-gm-encounter:not(.is-collapsed) > .stonetop-gm-encounter-head {
+	border-bottom: 1px solid var(--st-prep-card-line);
+}
+
+/* The grip is there at rest, faint, so a GM knows a card can be dragged before reaching for it;
+   it comes up to full ink as the row is hovered. The check that stands in for it on a filed card
+   is further down with the other modifiers. */
 .stonetop-gm-encounter-grip {
 	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
 	color: var(--st-text-faint);
 	font-size: var(--st-fs-sm);
+	opacity: 0.45;
 	cursor: grab;
+	transition: opacity 0.15s;
+}
+
+.stonetop-gm-encounter:hover .stonetop-gm-encounter-grip,
+.stonetop-gm-encounter:focus-within .stonetop-gm-encounter-grip {
+	opacity: 1;
 }
 
 .stonetop-gm-encounter-grip:active {
 	cursor: grabbing;
 }
 
-/* The shape is the shared icon-button rule above; a row of encounters is denser than a tool row,
-   so only the size and the ink are set here. `box-shadow` is reset on the resting state too,
-   because core paints one on every button and the shared rule only clears it on hover.
+/* The done-check is drawn only on a filed card (see the modifiers). */
+.stonetop-gm-encounter-done-mark {
+	display: none;
+}
 
-   NARROWER THAN IT IS TALL, and pulled toward the trash beside it. A caret is a 5px glyph, so a
-   20px square carried 7px of empty box on each side; measured ink to ink, the button sat in 18.5px
-   of air on its left and 19.75px on its right, marooned between the badges and the trash and
-   reading as neither. 16px wide takes 2px off each side, and the negative margin cancels most of
-   the head's own 6px gap on the right so the row's TWO BUTTONS read as a pair at its end, with the
-   badges the thing they are separated from. The height is untouched: this is a button pressed on
-   every row of the tab, and it keeps a full-height target. */
-.stonetop-gm-encounter-toggle {
-	width: 16px;
-	height: 20px;
-	margin-right: -4px;
+/* THE NAME, a title that happens to be editable. The site card's own name face (Avara, bold) so
+   the two families share a voice, at a step below its size because this is a row in a list. No
+   box, no fill, no ring at rest; a faint underline on hover is the whole of "you can type here",
+   and focus brings the standard ring. `box-shadow: none` is the load-bearing line: core paints
+   every input an inset ring whatever its border says, and without it the column of names renders
+   as a stack of form fields. */
+.stonetop-gm-encounter-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 1px 3px;
+	border: 0;
+	border-radius: var(--st-radius-sm);
+	background: transparent;
 	box-shadow: none;
+	outline: none;
+	font-family: var(--font-avara);
+	font-size: var(--st-fs-lg);
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--st-heading-ink);
+	text-decoration: underline transparent;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 3px;
+	cursor: text;
+}
+
+.stonetop-gm-encounter-name:hover {
+	text-decoration-color: rgb(var(--st-ink-rgb) / 0.35);
+}
+
+.stonetop-gm-encounter-name:focus {
+	text-decoration-color: transparent;
+	background: rgb(var(--st-paper-rgb) / 0.6);
+	box-shadow: 0 0 0 2px var(--st-quiet-ink);
+}
+
+/* THE NOTE'S FIRST LINE, ON THE SHUT ROW. Drawn only while the card is folded, because open it
+   would say the same thing twice with the real note just below. One line, clipped with an
+   ellipsis at whatever width the row leaves it.
+
+   THE NAME OUTRANKS IT. Where the browser can size the name to its words (`field-sizing`, below)
+   the name takes exactly its own width and this span takes the rest; where it cannot, the name is
+   the flexible one and this is capped at 45% of the row, so a long note never eats the title it
+   is there to gloss. The `0` shrink in that fallback is load-bearing: core sizes an input
+   `width: 100%`, so the head is over-subscribed before this span is even in it. */
+.stonetop-gm-encounter-peek {
+	display: none;
+	flex: 0 0 auto;
+	max-width: 45%;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
 	color: var(--st-text-muted);
 }
 
-/* The caret points DOWN when the body is open and right when it is shut, which is the direction
+.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek {
+	display: block;
+}
+
+/* WHAT IS IN IT, BY KIND: "3 (monster) 1 (map) 2 (page)", the pills built by
+   `groupBundleEntries` with every zero already dropped in JS. Soft pills, WASHED and never
+   outlined: the head's one frame is the card itself, and a ring round each number would make the
+   row read as a toolbar of controls rather than as a line that says what is inside.
+
+   NOWRAP AND NO SHRINK. This is the only thing on the head that cannot be read at half length: a
+   run of pills that wrapped would put the row on two lines, and one clipped mid-glyph is a lie
+   about the contents. */
+.stonetop-gm-encounter-count {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+
+/* One kind: the count, then its glyph, read as one word ("three monsters"). The glyph is drawn a
+   shade quieter than the digit so the number is what the eye lands on down a column. */
+.stonetop-gm-encounter-tally,
+.stonetop-gm-expedition-road {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: rgb(var(--st-ink-rgb) / 0.06);
+	color: var(--st-text-secondary);
+	font-size: var(--st-fs-xs);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.stonetop-gm-encounter-tally > i,
+.stonetop-gm-expedition-road > i {
+	font-size: 0.95em;
+	line-height: 1;
+	color: var(--st-text-muted);
+}
+
+/* ON THE ROAD: the road's teal, washed under the words and worn by the walker glyph — a mark, as
+   the timeline wears its kinds, never the lettering, which stays in the ink ramp. */
+.stonetop-gm-expedition-road {
+	flex: 0 0 auto;
+	background: color-mix(in srgb, var(--st-timeline-kind-expedition) 13%, transparent);
+	color: var(--st-text-body);
+}
+
+.stonetop-gm-expedition-road > i {
+	color: var(--st-timeline-kind-expedition);
+}
+
+/* THE FIELD IS AS WIDE AS ITS WORDS, so its hover underline answers the pointer on the name and
+   not on the empty stretch of row beside it, and the peek can take that stretch instead. The
+   pills are then pushed right by an auto margin on the first thing after the peek: the road pill
+   when there is one, else the count, else the caret. Never two at once, since two auto margins in
+   one row split the free space between them.
+
+   Behind `@supports`: Firefox has no `field-sizing`, and there the name keeps filling the row,
+   the peek keeps its 45% cap, and nothing else changes. */
+@supports (field-sizing: content) {
+	.stonetop-gm-encounter-name {
+		flex: 0 1 auto;
+		width: auto;
+		min-width: 3ch;
+		max-width: 60%;
+		field-sizing: content;
+	}
+
+	.stonetop-gm-encounter-peek {
+		flex: 1 1 0;
+		max-width: none;
+	}
+
+	.stonetop-gm-encounter-head > :is(.stonetop-gm-expedition-road, .stonetop-gm-encounter-count, .stonetop-gm-encounter-toggle) {
+		margin-left: auto;
+	}
+
+	.stonetop-gm-encounter-head > :is(.stonetop-gm-expedition-road, .stonetop-gm-encounter-count) ~ :is(.stonetop-gm-encounter-count, .stonetop-gm-encounter-toggle) {
+		margin-left: 0;
+	}
+
+	/* A shut card with a peek: the peek already takes the slack, so nothing after it needs to. */
+	.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek ~ :is(.stonetop-gm-expedition-road, .stonetop-gm-encounter-count, .stonetop-gm-encounter-toggle) {
+		margin-left: 0;
+	}
+}
+
+/* The caret. The square, the reset and the hover ground are the shared icon-button rule (the
+   wonder tab's tools use it too); the ink is set here, a step stronger than the trash beside it
+   because this is the button pressed on every row.
+
+   The caret points DOWN when the body is open and right when it is shut, which is the direction
    every other disclosure in the system turns. The rotation is on the icon rather than the button
-   so the button's own hit area does not turn with it.
-   The box is a FIXED 16x20, but the caret took the UI's font size, so it grew past the box and
-   drifted: 1.44px low open and 1.14px right collapsed at root 24. A fixed whole-px glyph, the size
-   it already was at root 16: within 0.63px open and 0.77px collapsed at root 14 to 24.
-   Probe: z:/tmp/foundry-verify/encounter-toggle-centre.mjs. */
+   so the button's own hit area does not turn with it. A fixed whole-px glyph, because the box is
+   a fixed 22px square and a glyph that took the UI font size grew past it and drifted off centre
+   at the larger roots. */
+.stonetop-gm-encounter-toggle {
+	color: var(--st-text-muted);
+}
+
 .stonetop-gm-encounter-toggle > i {
 	font-size: 14px;
 	line-height: 1;
@@ -48416,559 +48725,590 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	transform: rotate(-90deg);
 }
 
-.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-body {
-	display: none;
-}
-
-/* The name is a field that does not look like one until it is reached for, the same three-state
-   treatment `.stonetop-gm-wonder-question` carries and for the same reason: a column of form
-   boxes reads as a form to fill in, and this is a list to read. `box-shadow: none` is the
-   load-bearing line, because core paints every input an inset ring whatever its border says. */
-.stonetop-gm-encounter-name {
-	flex: 1 1 auto;
-	min-width: 0;
-	margin: 0;
-	padding: 1px 4px;
-	font-size: var(--st-fs-md);
-	font-weight: 600;
-	color: var(--st-text);
-}
-
-/* THE NOTE'S FIRST LINE, ON THE SHUT ROW. Drawn only while the card is folded, because open it
-   would say the same thing twice with the real note two pixels below it. One line, clipped with
-   an ellipsis at whatever width is left beside the name.
-
-   THE NAME OUTRANKS IT, and that is the whole of the flexing. This span neither grows nor shrinks,
-   so it is exactly min(its own words, 45% of the row): a short note takes the width of what it
-   says and no more, and a long one is capped at a share of the head rather than eating the title
-   it is there to gloss. The name is the flexible one and absorbs whatever is left.
-
-   THE `0` SHRINK IS THE LOAD-BEARING HALF. Core sizes a form input `width: 100%`, so the name's
-   flex basis is the whole row and the head is over-subscribed before this span is even in it;
-   every shrinkable item then gives up a proportional share of that overflow, which with a
-   shrink of 1 here clipped a ten-word note with half the row still empty beside it. */
-.stonetop-gm-encounter-peek {
-	display: none;
-	flex: 0 0 auto;
-	max-width: 45%;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-	font-size: var(--st-fs-xs);
-	font-style: italic;
-	color: var(--st-text-faint);
-}
-
-.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek {
-	display: block;
-}
-
-/* WHAT IS IN THIS ENCOUNTER, BY KIND: "3(monster) 1(map) 2(page)", the badges built by
-   `encounterTally` with every zero already dropped in JS.
-
-   NO BOX AND NO RULE. The head already has three framed things on it (the name's input, and the
-   card's own border either side), and a fourth frame around a run of numbers made the row read as
-   a toolbar of controls rather than a line that says what is inside. The grouping is done with
-   SPACE instead: the gap inside this run is tighter than the head's own, and the margin either
-   side of it wider, so the badges hang together and stand apart from the peek on one side and the
-   tools on the other without anything being drawn to say so.
-
-   NOWRAP AND NO SHRINK. This is the shortest thing on the head and the only one that cannot be
-   read at half length: a breakdown that wrapped would push the row to two lines, and one clipped
-   mid-glyph is a lie about the contents. The name absorbs the flexing, as it does beside the
-   note's peek two rules up. */
-.stonetop-gm-encounter-count {
-	flex: 0 0 auto;
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	margin: 0 3px;
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-muted);
-	white-space: nowrap;
-}
-
-/* THE FIELD IS AS WIDE AS ITS WORDS, so its hover ring answers the pointer on the name and not on
-   the empty stretch of row between the name and the badges. Grown to fill the row, the box lit up
-   wherever the head was hovered.
-
-   The badges then have to be pushed right by something else, and that is an auto margin on the
-   first of them: the count when there is one, else the caret. Not on both at once, since two auto
-   margins in one row split the free space between them and park the badges in its middle.
-
-   Behind `@supports` for the same reason as the wonder answers below: Firefox has no
-   `field-sizing`, and there the field keeps filling the row, which is how it shipped. */
-@supports (field-sizing: content) {
-	.stonetop-gm-encounter-name {
-		flex: 0 1 auto;
-		width: auto;
-		min-width: 3ch;
-		field-sizing: content;
-	}
-
-	.stonetop-gm-encounter-count {
-		margin-left: auto;
-	}
-
-	.stonetop-gm-encounter-head:not(:has(> .stonetop-gm-encounter-count)) > .stonetop-gm-encounter-toggle {
-		margin-left: auto;
-	}
-}
-
-/* One kind's count and its glyph, which read as a single word and so must never be split by the
-   gap above -- hence a flex box of their own with a hair's gap inside it.
-
-   THE GLYPH IS SET LARGER THAN THE DIGIT. FA7 draws these at the cap height of the font size it
-   inherits, and at --st-fs-xs the wand and the d20 lose their detail and read as a smudge (the
-   same trap the sidebar type markers hit at pin size). A digit is legible far smaller than a
-   picture of a thing is. */
-.stonetop-gm-encounter-tally {
-	display: inline-flex;
-	align-items: center;
-	gap: 3px;
-	font-variant-numeric: tabular-nums;
-}
-
-.stonetop-gm-encounter-tally > i {
-	font-size: 1.15em;
-	line-height: 1;
-}
-
-.stonetop-gm-encounter-deploy:hover,
-.stonetop-gm-encounter-fight:hover {
-	color: var(--st-blue-text);
-}
-
 .stonetop-gm-encounter-remove:hover {
 	color: var(--st-red-text);
 }
 
+/* --reading: the pane's pencil is off, and exactly the two delete buttons go. Everything else
+   stays live (gm-toolkit-tab-encounters.hbs says why). */
+.stonetop-gm-encounters--reading .stonetop-gm-encounter-remove,
+.stonetop-gm-encounters--reading .stonetop-gm-encounter-entry-remove {
+	display: none;
+}
+
+/* --- The open body ------------------------------------------------------------------------
+   A container, so a row can lay itself out by the CARD's width rather than the window's: the
+   rail, the switcher and a resized sheet all change how much of the window a card gets. */
 .stonetop-gm-encounter-body {
-	padding: 0 8px 8px 8px;
+	container-type: inline-size;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 12px;
+	padding: 12px 12px 0 16px;
 }
 
-/* ONE KIND'S CARD, inside an open encounter's body: the monsters in one, the maps in another, in
-   the fixed order the tally table declares.
-
-   NO FILL OF ITS OWN. This is the third box deep -- the tab holds a bordered encounter which
-   holds this -- and a card of cards of cards is what the Completed fold's own comment warns
-   against. A hairline and a headed strip are enough to say "these belong together"; a second
-   filled panel inside a filled one reads as depth that means nothing.
-
-   It is the BODY's flex column that spaces these apart, so nothing here sets a margin. */
-.stonetop-gm-entry-card {
-	border: 1px solid var(--st-card-rule);
-	border-radius: var(--st-radius-sm);
-	overflow: hidden;
+.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-body {
+	display: none;
 }
 
-/* The heading strip: the kind's glyph, its name in the plural, and how many. It carries what
-   every row underneath used to repeat -- which is the whole of the de-cluttering, and why the
-   rows below have no glyph and no kind label of their own.
-
-   THE COUNT SITS AT THE FAR END rather than beside the name, so a column of these cards can be
-   read down the right-hand edge the way the badge row on the shut head is read across. */
-.stonetop-gm-entry-card-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 3px 8px;
-	border-bottom: 1px solid var(--st-card-rule);
-	background: var(--st-card-fill);
-	font-size: var(--st-fs-xs);
-	/* BODY INK, not muted. This line is the NAME of the group under it, and at this size, in caps,
-	   under a card rule, a muted grey read as a disabled label rather than as a heading. The two
-	   things on the line that are NOT the name step back from it instead, one token each: the
-	   glyph to secondary, the count to muted. */
-	color: var(--st-text-body);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-}
-
-/* THE GLYPH IS NUDGED DOWN, and the figure is measured rather than guessed. Scanned off the real
-   paint at 8x against the REAL Pro webfont, flex-centred the glyph's ink ran 2.25..16.75 against
-   the title's cap band of 5.63..15.00: overshooting the cap line by
-   3.38px above and the baseline by only 1.75px below. That asymmetry is what reads as "not
-   centred" even though `align-items: center` is centring both BOXES exactly -- FA7 carries a tall
-   ascent and almost no descent, so its ink sits high inside its own em box.
-
-   0.055em of the GLYPH's own size is the 0.81px that makes the two overshoots equal. In em, not
-   px, because it comes from the font's metrics and so has to hold at every UI font scale.
-
-   A TRANSFORM rather than `top`, so it can land sub-pixel instead of rounding to a whole one --
-   the same reason, and the same optical half of the same problem, as the dismiss/release/lift
-   buttons further up this file.
-
-   `letter-spacing: normal` because the heading spaces its caps out, and 0.04em added after a
-   one-character run pushes the glyph off its own centre. `margin: 0` because core spaces an <i>
-   from the label that normally follows it in its own components, and the gap on this line is the
-   flex gap's to set. */
-.stonetop-gm-entry-card-head > i {
-	flex: 0 0 auto;
-	margin: 0;
-	font-size: 1.15em;
-	line-height: 1;
-	letter-spacing: normal;
-	transform: translateY(0.055em);
-	color: var(--st-text-secondary);
-}
-
-.stonetop-gm-entry-card-title {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* "Put them all on the map", on the heading of the card that holds them. Transparent and square
-   like the tools on the encounter's own head, but sized off the strip rather than off that row: it
-   has to sit inside a 22px band without pushing it taller, so it takes NO height of its own: a
-   20px square pushed that one card's strip to 27px while its neighbours stayed at 22, which reads
-   as the Monsters card having a different heading from every other. `align-self: stretch` gives it
-   the strip's own content height instead, so the ground it lights on hover still fills the line
-   and the strip is the same height on every card.
-
-   `letter-spacing: normal` for the same reason the glyph beside the title needs it: the heading
-   spaces its caps out, and 0.04em after a one-character run pushes the glyph off its own centre.
-   The blue hover comes from the shared `.stonetop-gm-encounter-deploy:hover` rule further up, which
-   is keyed on the class and so followed the button here. */
-.stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy,
-.stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight {
-	flex: 0 0 auto;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	align-self: stretch;
-	width: 22px;
-	margin: 0;
-	padding: 0;
-	border: 0;
-	border-radius: var(--st-radius-sm);
-	background: transparent;
-	box-shadow: none;
-	color: var(--st-text-secondary);
-	cursor: pointer;
-	letter-spacing: normal;
-	line-height: 1;
-}
-
-.stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy:hover,
-.stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight:hover {
-	background: var(--st-warm-hover-bg);
-	box-shadow: none;
-}
-/* Deploy and fight's glyph is Font Awesome, sized to the same 16px the Deploy mask draws at. */
-.stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight > i {
-	font-size: 12px;
-	line-height: 1;
-}
-
-/* The glyph itself: a figure going down, masked out of one SVG so it takes the button's ink in
-   both themes and on hover with no second file and no `filter` to fight (the rule the tab rail's
-   whole set follows).
-
-   THE HEIGHT IS THE STRIP'S, not a number. `contain` fits the 512 viewBox, and this artwork fills
-   its own square nearly top to bottom -- so a fixed 16px box gives a 15px mark, which pushed this
-   one card's heading to 23px while its neighbours stayed at 22. `100%` of a stretched button can
-   never do that: whatever the strip's line is, the glyph is exactly it.
-
-   THE BOX IS SQUARE, and the width is not there to be trimmed. `contain` scales the whole 512
-   viewBox to fit the SMALLER side, so narrowing the box towards the ink's own width does not crop
-   the empty margins -- it shrinks the entire glyph. Measured on the icon this replaced, 12px
-   instead of 16 took the figure from 15px tall down to 11. The width is spent on margin so the
-   height can be spent on ink; that is the trade `contain` forces, and it is worth knowing before
-   the next mask is fitted here.
-
-   game-icons.net art is drawn with generous margins inside its 512 square, so `contain` hands back
-   less ink than a Font Awesome glyph in the same box -- the ~1.4x budget that art wants. Here the
-   strip's own line caps it instead. */
-.stonetop-gm-encounter-deploy-icon {
-	display: block;
-	width: 16px;
-	height: 100%;
-	background-color: currentColor;
-	-webkit-mask: url('/systems/stonetop-pwd/assets/icons/pounce.svg') center / contain no-repeat;
-	mask: url('/systems/stonetop-pwd/assets/icons/pounce.svg') center / contain no-repeat;
-}
-
-.stonetop-gm-entry-card-count {
-	flex: 0 0 auto;
-	color: var(--st-text-muted);
-	font-variant-numeric: tabular-nums;
-	letter-spacing: normal;
-}
-
-.stonetop-gm-entry-card .stonetop-gm-encounter-entries {
-	padding: 3px 8px;
-}
-
-/* One collected row. Two lines: the thing on the first, the GM's note on the second, indented
-   under it so the note reads as belonging to the row rather than as another row.
-
-   TWO COLUMNS NOW, not four. The glyph and the kind label are gone: the card this row sits in has
-   just said both, and repeating them on every line is what made a column of eight rows read as
-   eight of the same thing. */
-.stonetop-gm-encounter-entry {
-	display: grid;
-	grid-template-columns: 1fr auto;
-	align-items: center;
-	column-gap: 6px;
-	padding: 3px 0;
-	border-top: 1px solid var(--st-card-rule);
-}
-
-/* The first row in a card sits directly under the head's own rule, so its border would be a
-   second line two pixels below the first. */
-.stonetop-gm-encounter-entry:first-child {
-	border-top: 0;
-}
-
-/* A button rather than an anchor (see the template), so every scrap of core's button chrome has
-   to come off before it reads as a name in a list.
-
-   `justify-self: start` sizes it to the name rather than stretching it across the `1fr` column, so
-   the hover underline (and the click and drag) answer the name and not the blank run beside it.
-   `max-width: 100%` is what keeps the ellipsis: a nowrap name is its own min-content, and without
-   the cap a long one would run out of its cell rather than clip. */
-.stonetop-gm-encounter-entry-open {
-	grid-column: 1;
-	justify-self: start;
-	min-width: 0;
-	max-width: 100%;
-	width: auto;
-	margin: 0;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-	font-size: var(--st-fs-base);
-	color: var(--st-text-body);
-	text-align: left;
-	line-height: 1.3;
-	cursor: grab;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.stonetop-gm-encounter-entry-open:hover {
-	background: transparent;
-	box-shadow: none;
-	text-decoration: underline;
-}
-
-.stonetop-gm-encounter-entry-open:active {
-	cursor: grabbing;
-}
-
-.stonetop-gm-encounter-entry-remove {
-	grid-column: 2;
-	width: 20px;
-	height: 20px;
-}
-
-/* Red on hover, the same warning ink the wonder tab's own delete cross wears. The ground and the
-   box-shadow reset come from the shared rule; only the ink is this button's own. */
-.stonetop-gm-encounter-entry-remove:hover {
-	color: var(--st-red-text);
-}
-
-/* The note sits on its own row under the name, spanning the width, and indented a little so it
-   reads as belonging to the row above rather than as another row. A flat 10px now: it used to be
-   measured off the icon column, and that column is gone. */
-.stonetop-gm-encounter-entry-note {
-	grid-column: 1 / -1;
-	margin: 0 0 0 10px;
-	padding: 0 4px;
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-secondary);
-}
-
-/* The visible target for "put it at the end", and the only content an empty encounter has. */
-.stonetop-gm-encounter-dropzone {
-	margin: 0;
-	padding: 5px 8px;
-	border: 1px dashed var(--st-card-rule);
-	border-radius: var(--st-radius);
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-faint);
-	text-align: center;
-}
-
-/* THE NOTE BLOCK, boxed like the character and steading sheets box their own Notes tabs: a
-   translucent well with a hairline round it and a pencil in its top-right corner. Those sheets put
-   the box on their editor's `.editor-content` for a reason that does not apply here (once a
-   ProseMirror activates, its toolbar is a sibling of the content div and has to stay outside the
-   box) -- here the read block IS the box, because the pencil opens a Dialog rather than an editor
-   in place.
-
-   `relative` is what parks the pencil in the corner: the block is the positioning parent, so the
-   button sits over whichever of the two note blocks below was drawn without either of them having
-   to know it is there. */
+/* THE NOTES, a ruled passage rather than a well: a 2px rule in the card's accent (softened, so
+   it is a margin mark and not a second edge) and a little indent. The right padding keeps the
+   prose clear of the pencil parked in the corner. */
 .stonetop-gm-encounter-notes-block {
 	position: relative;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
 }
 
-/* The well, and its hover. The values are the character and steading Notes tabs' own, so the two
-   surfaces cannot drift apart: an encounter's notes and a PC's notes are the same kind of writing
-   and should read the same. Padding at the right leaves the corner control its room. */
 .stonetop-gm-encounter-notes {
-	padding: 4px 6px;
-	padding-right: calc(var(--form-field-height, 26px) + 6px);
-	background: rgb(var(--st-paper-rgb) / 0.28);
-	border: 1px solid rgb(var(--st-ink-rgb) / 0.22);
-	border-radius: var(--st-radius);
+	margin: 0;
+	padding: 0 30px 0 12px;
+	border-left: 2px solid color-mix(in srgb, var(--st-bundle-edge) 45%, transparent);
+	font-size: var(--st-fs-base);
+	line-height: 1.5;
+	color: var(--st-text-body);
 }
 
-.stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes,
-.stonetop-gm-encounter-notes-block:focus-within .stonetop-gm-encounter-notes {
-	background: rgb(var(--st-paper-rgb) / 0.5);
-	border-color: rgb(var(--st-ink-rgb) / 0.4);
-}
+.stonetop-gm-encounter-notes > :first-child { margin-top: 0; }
+.stonetop-gm-encounter-notes > :last-child  { margin-bottom: 0; }
 
-/* The pencil, parked where core parks `<prose-mirror toggled>`'s own toggle: the box's top-right
-   corner, a form-field square, on translucent ivory with a hairline. Hidden until the block is
-   hovered, again as core hides that one -- the box itself is what says "there is writing here, or
-   room for some", and a control standing in the corner of every card on a column of them is
-   furniture.
-
-   `top`/`right` of 2px rather than 0: core's own offset, which keeps the button's own border clear
-   of the box's rather than doubling it. */
+/* The pencil, parked in the block's top-right corner and shown while the block is hovered or
+   holds focus, as core reveals `<prose-mirror toggled>`'s own toggle. A quiet square, not a
+   raised chip: the passage has no box for a chip to sit on the edge of. `flex`, not
+   `inline-flex`, on the reveal: an absolutely positioned box is blockified anyway. */
 .stonetop-gm-encounter-notes-edit {
 	position: absolute;
-	top: 2px;
-	right: 2px;
+	top: -2px;
+	right: 0;
 	z-index: 1;
 	display: none;
 	align-items: center;
 	justify-content: center;
-	width: var(--form-field-height, 26px);
-	height: var(--form-field-height, 26px);
+	width: 24px;
+	height: 24px;
+	min-height: 0;
 	margin: 0;
 	padding: 0;
-	background: var(--st-on-dark-raised, rgba(255, 255, 240, 0.8));
-	border: 1px solid var(--color-border-light-primary, rgba(0, 0, 0, 0.22));
+	border: 0;
 	border-radius: var(--st-radius-sm);
+	background: transparent;
 	box-shadow: none;
 	font-size: var(--st-fs-xs);
-	color: var(--st-text-secondary);
-	cursor: pointer;
 	line-height: 1;
+	color: var(--st-text-muted);
+	cursor: pointer;
 }
 
-/* `flex`, not `inline-flex`: an absolutely positioned box is blockified by the spec, so
-   `inline-flex` would compute to `flex` anyway and the declaration would be describing something
-   the browser does not do. */
 .stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes-edit,
 .stonetop-gm-encounter-notes-block:focus-within .stonetop-gm-encounter-notes-edit {
 	display: flex;
 }
 
 .stonetop-gm-encounter-notes-edit:hover {
-	background: var(--st-on-dark-raised, rgba(255, 255, 240, 0.95));
-	border-color: rgb(var(--st-ink-rgb) / 0.4);
+	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 	color: var(--st-text-body);
 }
 
-.stonetop-gm-encounter-notes {
-	margin: 0;
-	font-size: var(--st-fs-sm);
-	color: var(--st-text-body);
-}
-
-.stonetop-gm-encounter-notes--empty {
-	color: var(--st-text-faint);
-	font-style: italic;
-}
-
-.stonetop-gm-encounter-used {
+/* NO NOTES YET: the pencil itself, as one muted italic line, "Add notes…", that opens the same
+   dialog. Always shown, in flow, at the passage's indent, so an untouched card offers somewhere to
+   write in the place the writing will go. Two classes, so it outranks the corner rules above. */
+.stonetop-gm-encounter-notes-edit.stonetop-gm-encounter-notes-add,
+.stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes-edit.stonetop-gm-encounter-notes-add {
+	position: static;
+	display: inline-flex;
+	gap: 7px;
 	width: auto;
+	height: auto;
+	padding: 2px 6px 2px 14px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-faint);
+}
+
+.stonetop-gm-encounter-notes-edit.stonetop-gm-encounter-notes-add:hover {
+	background: transparent;
+	color: var(--st-text-secondary);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+/* --- One kind of gathered thing: an eyebrow line, then its rows ----------------------------
+   NO BOX ROUND A GROUP. The card is the frame; a bordered group with a filled strip inside it was
+   a third frame deep, and nine entries filled a screen. The group is named by an EYEBROW in the
+   site card's own label voice (`.stonetop .threat-label`: IM Fell, capitals, spaced out) — glyph,
+   name, count, then a hairline running to the edge — with Deploy at the far end where it applies. */
+.stonetop-gm-entry-card {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 	margin: 0;
-	padding: 1px 8px;
-	border: 1px solid var(--st-card-rule);
+	padding: 0;
+	border: 0;
+}
+
+.stonetop-gm-entry-card-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-height: 26px;
+	font-family: "IM Fell English", var(--font-stonetop);
+	font-size: var(--st-fs-floor);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	/* SECONDARY INK, a step down from the rows it names: on paper at this size an eyebrow at body
+	   ink competes with the names under it, and the eye should land on the names. */
+	color: var(--st-text-secondary);
+}
+
+/* The glyph. `letter-spacing: normal` because the line spaces its capitals out, and the spacing
+   added after a one-character run pushes the glyph off its own centre; `margin: 0` because core
+   spaces an <i> from the label that normally follows it, and here the gap is the flex gap's.
+
+   NUDGED DOWN a sub-pixel transform in em: FA7 carries a tall ascent and almost no descent, so its
+   ink sits high in its own box and `align-items: center` centres the boxes, not the ink. In em
+   because it comes from the font's metrics and has to hold at every font scale. */
+.stonetop-gm-entry-card-head > i {
+	flex: 0 0 auto;
+	width: 1.25em;
+	margin: 0;
+	font-size: 1em;
+	line-height: 1;
+	letter-spacing: normal;
+	text-align: center;
+	transform: translateY(0.055em);
+	color: var(--st-bundle-edge);
+}
+
+.stonetop-gm-entry-card-title {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The count, in the body face and not the eyebrow's: IM Fell's figures are old-style and sit
+   below the capitals they follow, and a number that drops reads as a footnote. */
+.stonetop-gm-entry-card-count {
+	flex: 0 0 auto;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: normal;
+	color: var(--st-text-muted);
+}
+
+.stonetop-gm-entry-card-rule {
+	flex: 1 1 auto;
+	min-width: 12px;
+	height: 1px;
+	background: var(--st-prep-card-line);
+}
+
+/* DEPLOY and DEPLOY & FIGHT, labelled. Compact outlined pills at the end of the Monsters line:
+   the line names the group, and the buttons are what can be done with all of it at once. The
+   eyebrow's capitals and spacing are stated off, so the button reads in the sheet's own voice. */
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy,
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	width: auto;
+	height: auto;
+	min-height: 24px;
+	margin: 0;
+	padding: 1px 10px 1px 8px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.22);
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	letter-spacing: normal;
+	text-transform: none;
+	line-height: 1.3;
+	white-space: nowrap;
+	color: var(--st-text-secondary);
+	cursor: pointer;
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy:hover,
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight:hover {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+	box-shadow: none;
+	color: var(--st-heading-ink);
+}
+
+/* Deploy and fight's glyph is Font Awesome (core's own combat glyph), sized to sit with the
+   Deploy mask beside it. */
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight > i {
+	font-size: 1em;
+	line-height: 1;
+}
+
+/* The Deploy glyph: a figure going down (game-icons.net "pounce"), masked out of one SVG so it
+   takes the button's ink in both themes and on hover with no second file and no `filter` (the
+   rule the tab rail's whole set follows). A SQUARE box: `contain` scales the whole 512 viewBox to
+   the smaller side, so narrowing the box towards the ink's width shrinks the whole glyph rather
+   than cropping its margins. game-icons art is drawn with generous margins, hence a box a little
+   larger than the text beside it. */
+.stonetop-gm-encounter-deploy-icon {
+	display: block;
+	flex: 0 0 auto;
+	width: 16px;
+	height: 16px;
+	background-color: currentColor;
+	-webkit-mask: url('/systems/stonetop-pwd/assets/icons/pounce.svg') center / contain no-repeat;
+	mask: url('/systems/stonetop-pwd/assets/icons/pounce.svg') center / contain no-repeat;
+}
+
+/* --- One gathered row: [thumbnail + name] [note] [×] ---------------------------------------
+   ONE LINE WHEN THE CARD IS WIDE: the name takes its own width (up to 45% of the row) and the
+   note fills the rest, so a column of rows reads as a table of "this — what it is for" at about
+   34px a line where the old two-line row with a boxed note took ninety. A faint rule between rows
+   keeps them apart without boxing any of them.
+
+   ONE SET OF COLUMNS PER GROUP. The <ul> is the grid and each row a SUBGRID of it, so the name
+   column is as wide as the group's longest name and every note in the group starts on one x: with
+   a grid per row, each note started wherever its own name happened to end, and a column of notes
+   read as ragged. Still one <li> per row, in one <ul> per group, which is what the keyboard
+   reorder counts. A browser without subgrid lays each row out on its own, as before. */
+.stonetop-gm-encounter-entries {
+	/* The thumbnail's side, grown with the reader's sheet font so a picture never sits smaller than
+	   the name beside it at the larger sizes. Read by the narrow layout's indent too. */
+	--st-entry-thumb: calc(28px * var(--stonetop-font-scale, 1));
+	display: grid;
+	grid-template-columns: fit-content(45%) minmax(0, 1fr) auto;
+	column-gap: 12px;
+	gap: 0 12px;
+}
+
+.stonetop-gm-encounter-entry {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: subgrid;
+	align-items: center;
+	min-height: calc(var(--st-entry-thumb) + 6px);
+	padding: 2px 2px 2px 0;
+	border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.07);
+	border-radius: var(--st-radius-sm);
+}
+
+.stonetop-gm-encounter-entry:last-child {
+	border-bottom-color: transparent;
+}
+
+.stonetop-gm-encounter-entry:hover,
+.stonetop-gm-encounter-entry:focus-within {
+	background: rgb(var(--st-ink-rgb) / 0.035);
+}
+
+/* The name and its picture: a button rather than an anchor (see the template), so every scrap of
+   core's button chrome has to come off before it reads as a name in a list. It is the DRAG HANDLE
+   too, which is why the thumbnail is inside it. Sized to its contents (`justify-self: start`), so
+   the hover underline and the grab answer the name and not the blank run beside it; the name
+   itself ellipsizes inside. */
+.stonetop-gm-encounter-entry-open {
+	grid-column: 1;
+	grid-row: 1;
+	justify-self: start;
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 10px;
+	min-width: 0;
+	max-width: 100%;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 2px 4px 2px 2px;
+	border: 0;
 	border-radius: var(--st-radius-sm);
 	background: transparent;
 	box-shadow: none;
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-muted);
-	cursor: pointer;
-	line-height: 1.6;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-base);
+	line-height: 1.3;
+	text-align: left;
+	color: var(--st-text);
+	cursor: grab;
 }
 
-.stonetop-gm-encounter-used:hover {
-	background: var(--st-warm-hover-bg);
+.stonetop-gm-encounter-entry-open:hover {
+	background: transparent;
 	box-shadow: none;
+}
+
+.stonetop-gm-encounter-entry-open:hover .stonetop-gm-encounter-entry-name {
+	text-decoration: underline;
+	text-decoration-color: rgb(var(--st-ink-rgb) / 0.4);
+	text-underline-offset: 3px;
+}
+
+.stonetop-gm-encounter-entry-open:active {
+	cursor: grabbing;
+}
+
+.stonetop-gm-encounter-entry-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* THE THUMBNAIL: the document's own picture, 28px at the default text size, rounded a little and
+   cropped to fill (portraits and map renders are rarely square). Its border and ground are stated,
+   because core gives every <img> in an app a border of its own. */
+.stonetop-gm-entry-thumb {
+	flex: 0 0 auto;
+	display: block;
+	width: var(--st-entry-thumb, 28px);
+	height: var(--st-entry-thumb, 28px);
+	margin: 0;
+	padding: 0;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.16);
+	border-radius: 4px;
+	background: rgb(var(--st-ink-rgb) / 0.05);
+	object-fit: cover;
+}
+
+/* NO PICTURE: a round medallion washed in the card's accent, wearing the kind's glyph in it —
+   journals and pages, a monster still on its stock placeholder, a table with Foundry's d20. Round
+   where a picture is square, so the two can never be mistaken for one another down a column. */
+.stonetop-gm-entry-thumb--glyph {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-color: color-mix(in srgb, var(--st-bundle-edge) 28%, transparent);
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--st-bundle-edge) 10%, transparent);
+	color: var(--st-bundle-edge);
+}
+
+.stonetop-gm-entry-thumb--glyph > i {
+	font-size: 0.95em;
+	line-height: 1;
+}
+
+/* THE NOTE, AS TEXT. Transparent, borderless, italic and muted, so a row reads "Crinwin swarm —
+   12 of them, half in the reeds" and not "Crinwin swarm [input]". A dotted underline arrives as
+   the row is hovered, a solid one in the slate with full upright ink once it has the caret; the
+   placeholder ("Add a note…") is drawn only then too, so an untouched row is a name and nothing
+   else. The underline is a bottom BORDER, not text-decoration, because it has to show under an
+   empty field. */
+/* Placed by column, because the markup has the cross BEFORE the note (the template says why). */
+.stonetop-gm-encounter-entry-note {
+	grid-column: 2;
+	grid-row: 1;
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 2px 2px 1px;
+	border: 0;
+	border-bottom: 1px dotted transparent;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	outline: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	line-height: 1.4;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-gm-encounter-entry-note::placeholder {
+	color: transparent;
+	font-style: italic;
+}
+
+.stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note {
+	border-bottom-color: rgb(var(--st-ink-rgb) / 0.3);
+}
+
+.stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note::placeholder,
+.stonetop-gm-encounter-entry-note:focus::placeholder {
+	color: var(--st-text-faint);
+}
+
+.stonetop-gm-encounter-entry-note:focus {
+	border-bottom: 1px solid var(--st-quiet-ink);
+	background: transparent;
+	box-shadow: none;
+	font-style: normal;
+	color: var(--st-text);
+}
+
+/* The cross: the shared 22px square (see the icon-button rule), shown only while its row is
+   hovered or holds focus, so a column of rows is not a column of crosses. Opacity, not display,
+   so it keeps its place in the grid and stays reachable by Tab, which then reveals it. */
+.stonetop-gm-encounter-entry-remove {
+	grid-column: 3;
+	grid-row: 1;
+	opacity: 0;
+	transition: opacity 0.12s;
+}
+
+.stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-remove,
+.stonetop-gm-encounter-entry:focus-within .stonetop-gm-encounter-entry-remove {
+	opacity: 1;
+}
+
+/* Red on hover, the same warning ink the wonder tab's own delete cross wears. */
+.stonetop-gm-encounter-entry-remove:hover {
+	color: var(--st-red-text);
+}
+
+/* NARROW (the card under 520px): the note wraps under the name, indented to the name's own edge
+   (past the thumbnail), and the cross stays at the end of the first line. After the note's and the
+   cross's own rules, which it overrides on source order. */
+@container (max-width: 520px) {
+	.stonetop-gm-encounter-entries {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+	.stonetop-gm-encounter-entry {
+		row-gap: 0;
+		padding-bottom: 4px;
+	}
+	.stonetop-gm-encounter-entry-remove {
+		grid-column: 2;
+	}
+	.stonetop-gm-encounter-entry-note {
+		grid-row: 2;
+		grid-column: 1 / -1;
+		padding-left: calc(var(--st-entry-thumb) + 10px);
+	}
+}
+
+
+/* --- The drop strip and the foot ------------------------------------------------------------
+   The visible target for "put it at the end", and the only content an empty card has. Slim and
+   dashed, with a down arrow saying which way things go. */
+.stonetop-gm-encounter-dropzone {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 30px;
+	margin: 0;
+	padding: 3px 10px;
+	border: 1px dashed rgb(var(--st-ink-rgb) / 0.22);
+	border-radius: var(--st-radius);
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	color: var(--st-text-muted);
+	text-align: center;
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.stonetop-gm-encounter-dropzone > i {
+	font-size: 0.95em;
+	font-style: normal;
+}
+
+/* THE CARD UNDER A DRAG. The pane as a whole takes the system's drag-over wash; the one card the
+   pointer is over (`.is-drop-target`, set by gm-bundle-tab.js as the drag moves) takes its accent
+   round its edge, and its drop strip lights, so it is plain which card a let-go lands in. Every
+   OPEN card's strip lifts a little while anything is over the pane, which is where to aim for
+   "at the end". */
+.stonetop-card-drag-over .stonetop-gm-encounter-dropzone {
+	border-color: color-mix(in srgb, var(--st-bundle-edge) 55%, transparent);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-gm-encounter.is-drop-target {
+	border-color: var(--st-bundle-edge);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--st-bundle-edge) 30%, transparent), var(--st-prep-card-shadow-hover);
+}
+
+.stonetop-gm-encounter.is-drop-target .stonetop-gm-encounter-dropzone {
+	border-style: solid;
+	border-color: var(--st-bundle-edge);
+	background: color-mix(in srgb, var(--st-bundle-edge) 10%, transparent);
 	color: var(--st-text-body);
 }
 
-/* THE TWO-STATE BUTTON, at the foot of an open card. `align-self` and not a wrapper: the body is
-   already a flex column, so one line here does what a row div would, and the button takes the
-   width of its own words rather than the whole card.
-
-   IT IS LAST BY DOM ORDER, not by a margin: the body is a plain content-height column, so there
-   is no free space for an `auto` margin to push into and a rule claiming to pin it to the bottom
-   would be doing nothing. The template puts it under the dropzone; that is the whole of it.
-
-   The green comes AFTER the shared hover above, or the neutral ink in that rule would win on
-   source order and the tick would light like every other button on the card. */
-.stonetop-gm-encounter-used {
-	align-self: flex-start;
-	margin-top: 2px;
-}
-
-.stonetop-gm-encounter-used:hover {
-	color: var(--st-green-text);
-}
-
-/* THE EXPEDITIONS CARD'S FOOT, where the encounter card has a lone button. The body is a flex
-   COLUMN, so two buttons in it would stack; this row is the whole reason the wrapper exists.
-
-   `align-self` rather than a width, for the same reason the lone button uses it: the pair
-   takes the width of its own words rather than the whole card. The `margin-top` that the lone
-   button carries moves onto the row, or the two buttons inside would each add their own. */
+/* THE FOOT: a hairline across the whole card (the negative margins cancel the body's padding),
+   and the card's actions at the right-hand end, where a row of buttons ends and the eye lands. The
+   same foot on both cards: Encounters carries "Mark complete" alone, Expeditions puts Run after
+   it. */
 .stonetop-gm-card-foot {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 8px;
-	align-self: flex-start;
-	margin-top: 2px;
+	margin: 0 -12px 0 -16px;
+	padding: 9px 12px 9px 16px;
+	border-top: 1px solid var(--st-prep-card-line);
 }
 
-.stonetop-gm-card-foot .stonetop-gm-encounter-used {
-	margin-top: 0;
+/* THE TWO-STATE BUTTON, quiet: an outline in the card's own line, the words in secondary ink.
+   Green on hover, the tick's colour, because pressing it files the card as done. */
+.stonetop-gm-encounter-used {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: auto;
+	height: auto;
+	min-height: 28px;
+	margin: 0;
+	padding: 2px 12px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
+	border-radius: var(--st-radius);
+	background: transparent;
+	box-shadow: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	line-height: 1.3;
+	white-space: nowrap;
+	color: var(--st-text-secondary);
+	cursor: pointer;
 }
 
-/* RUN IT — the primary act on an expedition card, and the only control either bundle tab has
-   that reaches outside its own list: it opens the expedition walkthrough on this trip.
+.stonetop-gm-encounter-used:hover {
+	border-color: var(--st-green-border);
+	background: var(--st-green-bg);
+	box-shadow: none;
+	color: var(--st-green-text);
+}
 
-   THE SLATE CTA, against the quiet outline of the complete toggle beside it. They sit in one
-   row, and two outlines would read as two halves of one control rather than as an act and an
+/* RUN THE EXPEDITION — the primary act on an expedition card, and the only control either view
+   has that reaches outside its own list: it opens the expedition walkthrough on this trip. And
+   the Expeditions pane's "Call for Struggle as One", the other act on that pane that opens a
+   window of its own.
+
+   THE SLATE CTA, against the quiet outline of the complete toggle beside it. They sit in one row,
+   and two outlines would read as two halves of one control rather than as an act and an
    afterthought. Same three tokens the dialog footers use, so it is the system's one primary
-   button and not a fourth shade of it.
-
-   The metrics are the toggle's, deliberately: the two are the same height and sit on the same
-   baseline, which is what stops the row looking like a button with a label stuck beside it. */
+   button and not a fourth shade of it. The metrics are the toggle's, so the two are one height
+   on one baseline. */
 .stonetop-gm-expedition-run,
 .stonetop-gm-struggle-call {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	width: auto;
+	height: auto;
+	min-height: 28px;
 	margin: 0;
-	padding: 1px 10px;
+	padding: 2px 14px;
 	border: 1px solid var(--st-btn-primary-border);
-	border-radius: var(--st-radius-sm);
+	border-radius: var(--st-radius);
 	background: var(--st-btn-primary-bg);
 	box-shadow: none;
-	font-size: var(--st-fs-xs);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	line-height: 1.3;
+	white-space: nowrap;
 	color: var(--st-btn-primary-text);
 	cursor: pointer;
-	line-height: 1.6;
 }
 
 .stonetop-gm-expedition-run:hover,
@@ -48979,72 +49319,271 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-btn-primary-text);
 }
 
-.stonetop-gm-encounter-empty {
+/* THE STRUGGLE BAR, in the Expeditions pane: a soft band washed with the road's teal, so the call
+   reads as part of the trip's tools rather than as a second primary button stacked under "New
+   expedition". The bar's own rule (with the struggle window's styles) still sets its layout, and the
+   walkthrough's journey step, which draws the same bar, is left as it is. */
+.stonetop-gm-prep-panes > .tab.expeditions .stonetop-gm-struggle-bar {
+	margin: 0;
+	padding: 6px 12px 6px 6px;
+	border-radius: var(--st-radius-lg);
+	background: color-mix(in srgb, var(--st-timeline-kind-expedition) 6%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st-timeline-kind-expedition) 20%, transparent);
+}
+
+.stonetop-gm-prep-panes > .tab.expeditions .stonetop-gm-struggle-hint {
+	flex: 1 1 16em;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+/* Keyboard focus on every button the card and the pane bar draw: the switcher's slate ring, just
+   outside the control. Mouse focus draws nothing (`:focus-visible`). */
+:is(.stonetop-gm-pane-add, .stonetop-gm-encounter-toggle, .stonetop-gm-encounter-remove,
+	.stonetop-gm-encounter-notes-edit, .stonetop-gm-encounter-deploy, .stonetop-gm-encounter-fight,
+	.stonetop-gm-encounter-entry-open, .stonetop-gm-encounter-entry-remove, .stonetop-gm-encounter-used,
+	.stonetop-gm-expedition-run):focus-visible {
+	outline: 2px solid var(--st-quiet-ink);
+	outline-offset: 1px;
+}
+
+/* --- The empty view, and the one that has run everything ---------------------------------
+   gm-prep-empty.hbs: a centred block in the pane. The glyph is the switcher segment's own mask
+   (prep-stack, direction-signs, site-mound), drawn in the view's accent in a circle washed with
+   it, so the empty pane is recognisably the place the segment named. */
+.stonetop-gm-prep-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	max-width: 32em;
+	margin: 36px auto 24px;
+	padding: 0 16px;
+	text-align: center;
+}
+
+.stonetop-gm-prep-empty-glyph {
+	position: relative;
+	display: block;
+	width: 68px;
+	height: 68px;
+	margin-bottom: 4px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--st-bundle-accent, var(--st-quiet-ink)) 11%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st-bundle-accent, var(--st-quiet-ink)) 22%, transparent);
+}
+
+.stonetop-gm-prep-empty-glyph::before {
+	content: "";
+	position: absolute;
+	inset: 17px;
+	background-color: var(--st-bundle-accent, var(--st-quiet-ink));
+	-webkit-mask: var(--st-prep-icon) center / contain no-repeat;
+	mask: var(--st-prep-icon) center / contain no-repeat;
+}
+
+.stonetop-gm-prep-empty--encounters  { --st-prep-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
+.stonetop-gm-prep-empty--expeditions { --st-prep-icon: url('/systems/stonetop-pwd/assets/icons/tabs/direction-signs.svg'); }
+.stonetop-gm-prep-empty--sites       { --st-prep-icon: url('/systems/stonetop-pwd/assets/icons/tabs/site-mound.svg'); }
+
+/* An <h3>, stated in full: core and the sheet both give headings a rule and margins of their own. */
+.stonetop-gm-prep-empty-title {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-family: var(--font-avara);
+	font-size: var(--st-fs-xl);
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--st-heading-ink);
+}
+
+.stonetop-gm-prep-empty-text {
 	margin: 0;
 	font-size: var(--st-fs-sm);
-	color: var(--st-text-muted);
+	line-height: 1.5;
+	color: var(--st-text-secondary);
 }
 
-/* THE COMPLETED FOLD, at the foot of the tab: what has been run, kept whole and out of the way.
-   Rendered only when there is something in it, so an untouched tab shows one list and not two.
+.stonetop-gm-prep-empty-kinds {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	margin: 4px 0 6px;
+	padding: 0;
+	list-style: none;
+}
 
-   A RULE ACROSS THE TAB rather than a card-like box, because what this marks is a boundary in one
-   column and not a container: everything inside it is already a bordered card, and a second border
-   around a stack of them reads as a card of cards. The 10px above the rule is the section's own
-   flex gap; the padding below it is this box's own, so the pair sit evenly either side.
+.stonetop-gm-prep-empty-kinds > li {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	margin: 0;
+	border-radius: 50%;
+	background: rgb(var(--st-ink-rgb) / 0.05);
+	color: var(--st-text-muted);
+	font-size: var(--st-fs-sm);
+}
 
-   NO PENCIL AND SO NO CORNER PAIR. The tab's single pencil already reaches the delete buttons in
-   here, which is why this heading keeps its caret inline where `section-heading` puts it, and why
-   this box (unlike `.stonetop-gm-wonder-section`) needs no `position: relative`. */
+/* EVERYTHING HAS BEEN RUN: a quiet dashed line rather than the centred block, because the pane is
+   not empty (its fold is just below) and the advice is to lift one back out, not to start over. */
+.stonetop-gm-encounter-empty {
+	margin: 0;
+	padding: 10px 14px;
+	border: 1px dashed rgb(var(--st-ink-rgb) / 0.2);
+	border-radius: var(--st-radius-lg);
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-muted);
+	text-align: center;
+}
+
+/* --- The Completed fold --------------------------------------------------------------------
+   What has been run, kept whole and out of the way. Rendered only when there is something in it.
+   Its heading is an EYEBROW in the group lines' voice, one size up — capitals, the count in a pill,
+   a hairline to the edge and the fold caret at its end — because a history at the foot of the pane
+   should not shout as loud as the work above it. No box and no rule across the pane: the eyebrow's
+   own hairline is the boundary.
+
+   NO PENCIL AND SO NO CORNER PAIR. The pane's single pencil already reaches the delete buttons in
+   here, which is why the caret stays inline where `section-heading` puts it. The heading keeps
+   `stonetop-move-group-title` for the fold wiring, so every one of that class's looks is stated
+   back here with two classes' weight. */
 .stonetop-gm-encounters-completed {
-	padding-top: 12px;
-	border-top: 1px solid var(--st-card-rule);
+	padding-top: 8px;
 }
 
-/* The heading sets its own top margin to 0, so this is the whole of the gap under it. */
+.stonetop-move-group-title.stonetop-gm-fold-eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-family: "IM Fell English", var(--font-stonetop);
+	font-size: var(--st-fs-base);
+	font-weight: 400;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--st-text-secondary);
+}
+
+/* The hairline, after the count and before the caret. The title is a bare text run (order 0), so
+   the line and the caret are ordered past it rather than moved in the markup section-heading
+   owns. */
+.stonetop-move-group-title.stonetop-gm-fold-eyebrow::after {
+	content: "";
+	order: 1;
+	flex: 1 1 auto;
+	height: 1px;
+	background: var(--st-prep-card-line);
+}
+
+.stonetop-gm-fold-eyebrow > .stonetop-section-collapse {
+	order: 2;
+}
+
+.stonetop-gm-fold-eyebrow > .stonetop-section-note {
+	padding: 0 7px;
+	border-radius: 999px;
+	background: rgb(var(--st-ink-rgb) / 0.07);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	font-style: normal;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: normal;
+	line-height: 1.6;
+	color: var(--st-text-secondary);
+}
+
+/* The heading sets its own margin to 0, so this is the whole of the gap under it. */
 .stonetop-gm-encounter-list--completed {
-	margin-top: 8px;
+	margin-top: 10px;
 }
 
-/* MODIFIERS LAST. A `--mod` rule ties with its base on specificity, so it only wins by sitting
-   later in the file. Everything below here restyles a row that is already styled above. */
+/* MODIFIERS LAST. A modifier rule ties with its base on specificity, so it only wins by sitting
+   later in the file. Everything below here restyles a card or row already styled above. */
 
-/* An encounter that has been run is not deleted, it is set down: it moves into the fold above,
-   the ink goes quiet, and a green edge marks it done. The edge stays worth drawing now that the
-   section says the same thing, because a card can be READ apart from its section: folded away and
-   scrolled back to, or caught mid-drag out of the fold, it still has to say what it is. */
+/* A FILED CARD is not deleted, it is set down: green edge, the head's ink at about three quarters,
+   and a check where the grip was until the row is hovered (the grip is still the handle under
+   it). The edge stays worth drawing although the fold says the same, because a card can be read
+   apart from its section: caught mid-drag out of the fold, it still has to say what it is. */
 .stonetop-gm-encounter.is-used {
-	border-left: 3px solid var(--st-green-border);
+	--st-bundle-edge: var(--st-green-border);
 }
 
-.stonetop-gm-encounter.is-used .stonetop-gm-encounter-name {
-	color: var(--st-text-muted);
+.stonetop-gm-encounter.is-used :is(.stonetop-gm-encounter-name, .stonetop-gm-encounter-peek, .stonetop-gm-encounter-count) {
+	opacity: 0.75;
+	transition: opacity 0.15s;
+}
+
+.stonetop-gm-encounter.is-used:hover :is(.stonetop-gm-encounter-name, .stonetop-gm-encounter-peek, .stonetop-gm-encounter-count),
+.stonetop-gm-encounter.is-used:focus-within :is(.stonetop-gm-encounter-name, .stonetop-gm-encounter-peek, .stonetop-gm-encounter-count) {
+	opacity: 1;
+}
+
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-grip {
+	opacity: 1;
+}
+
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-grip > .fa-grip-vertical,
+.stonetop-gm-encounter.is-used:hover .stonetop-gm-encounter-done-mark {
+	display: none;
+}
+
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-done-mark,
+.stonetop-gm-encounter.is-used:hover .stonetop-gm-encounter-grip > .fa-grip-vertical {
+	display: inline;
+}
+
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-done-mark {
+	color: var(--st-green-text);
 }
 
 /* The tick's green does NOT carry over to the arrow that replaces it. Green here would be a
    button lit in the colour of the state it undoes, on the one card where that state is already
-   said twice over (the section it sits in, the edge beside it). It takes the neutral hover the
-   wonder tab's reopen arrow wears, for the same reason and out of the same token. The resting
-   ink stays the shared faint one, so the whole fold reads quiet until it is reached into. */
+   said twice over (the fold it sits in, the edge beside it). It takes the neutral slate hover. */
 .stonetop-gm-encounter.is-used .stonetop-gm-encounter-used:hover {
-	color: var(--st-text-secondary);
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+	color: var(--st-heading-ink);
 }
 
 /* A row whose target has left the world keeps its name and stops being a link, rather than
-   disappearing: what a GM needs from it is to see WHICH thing went, so they can put it back. */
-.stonetop-gm-encounter-entry.is-unresolved {
-	border-left: 2px dotted var(--st-red-border);
-	padding-left: 4px;
-}
-
+   disappearing: what a GM needs from it is to see WHICH thing went, so they can put it back.
+   Struck through and faint, with a broken link where its picture would be. */
 .stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-encounter-entry-open {
 	color: var(--st-text-faint);
-	cursor: default;
-	text-decoration: line-through;
+	cursor: help;
 }
 
-.stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-encounter-entry-open:hover {
+.stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-encounter-entry-name,
+.stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-encounter-entry-open:hover .stonetop-gm-encounter-entry-name {
 	text-decoration: line-through;
+	text-decoration-color: currentColor;
+}
+
+.stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-entry-thumb--glyph {
+	border-style: dashed;
+	border-color: var(--st-red-border);
+	background: transparent;
+	color: var(--st-red-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-gm-encounter,
+	.stonetop-gm-encounter-grip,
+	.stonetop-gm-encounter-toggle > i,
+	.stonetop-gm-encounter-entry-remove,
+	.stonetop-gm-encounter-dropzone,
+	.stonetop-prep-add-btn.stonetop-gm-pane-add,
+	.stonetop-gm-entry-card-head > :is(.stonetop-gm-encounter-deploy, .stonetop-gm-encounter-fight),
+	.stonetop-gm-encounter.is-used :is(.stonetop-gm-encounter-name, .stonetop-gm-encounter-peek, .stonetop-gm-encounter-count) {
+		transition: none;
+	}
 }
 
 /* ── THE IMAGE ZOOM WINDOW ────────────────────────────────────────────────────
@@ -56596,6 +57135,15 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-card-fill: rgba(235, 228, 214, 0.035);
 	--st-card-rule: rgba(235, 228, 214, 0.16);
 	--st-warm-hover-bg: rgba(235, 228, 214, 0.08);
+	/* The GM Toolkit's prep cards: the panel lifted a step toward the ink, so lamplit gets warm
+	   paper and Slate cool, from these same lines. The shadow goes black and heavier, the only way
+	   a shadow still reads on a dark page. */
+	--st-prep-card-paper:        color-mix(in srgb, var(--stonetop-bg) 92%, rgb(var(--st-ink-rgb)) 8%);
+	--st-prep-card-paper-lo:     color-mix(in srgb, var(--stonetop-bg) 95%, rgb(var(--st-ink-rgb)) 5%);
+	--st-prep-card-line:         rgb(var(--st-ink-rgb) / 0.14);
+	--st-prep-card-line-hover:   rgb(var(--st-ink-rgb) / 0.28);
+	--st-prep-card-shadow:       0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.22);
+	--st-prep-card-shadow-hover: 0 2px 4px rgb(0 0 0 / 0.38), 0 6px 18px rgb(0 0 0 / 0.32);
 
 	/* The timeline's kinds, lifted for the dark page (see their note in the first :root): the
 	   same hues, each walked up to 4.5:1 or past on the panel, a card and its chip's tint,
@@ -57007,6 +57555,12 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-text-faint:     #c2b9a8;
 	--st-card-fill: transparent;
 	--st-card-rule: rgba(240, 235, 224, 0.5);
+	--st-prep-card-paper:        var(--stonetop-bg);
+	--st-prep-card-paper-lo:     var(--stonetop-bg);
+	--st-prep-card-line:         var(--st-card-rule);
+	--st-prep-card-line-hover:   var(--st-text-body);
+	--st-prep-card-shadow:       none;
+	--st-prep-card-shadow-hover: none;
 	--st-green-border: hsl(140 35% 55%);
 	--st-green-text:   hsl(140 45% 72%);
 	--st-blue-border:  hsl(212 50% 62%);
@@ -57323,6 +57877,14 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	   costs contrast — and the edge becomes a real line at 4.76:1. */
 	--st-card-fill: transparent;
 	--st-card-rule: rgba(0, 0, 0, 0.55);
+	/* The GM Toolkit's prep cards the same way: bare paper, the card rule as their edge, and no
+	   shadow to soften it. */
+	--st-prep-card-paper:        var(--st-page);
+	--st-prep-card-paper-lo:     var(--st-page);
+	--st-prep-card-line:         var(--st-card-rule);
+	--st-prep-card-line-hover:   var(--st-text-body);
+	--st-prep-card-shadow:       none;
+	--st-prep-card-shadow-hover: none;
 
 	/* THE TIMELINE'S KINDS at 7:1 on white, and their washes dropped with the card fill above for
 	   the same reason: a tint only costs the words on it contrast. */
@@ -57436,6 +57998,33 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 }
 :root.stonetop-high-contrast .stonetop-gm-prep-view:not(.active) .stonetop-gm-prep-view-count {
 	box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* THE GM TOOLKIT'S PREP CARDS (their block is with the Encounters & Expeditions views): the tokens
+   already turn the paper bare and the edge into the card rule; what is left is what a token cannot
+   say. The washed pills and the count gain an edge like the switcher's; the accent edge thickens;
+   the grip stops hiding; and the note fields, which at normal contrast are text until hovered,
+   keep a visible line and their placeholder, so a reader who cannot find a hover can still find
+   where to type. The drop strip's dashes go to the card rule's weight. */
+:root.stonetop-high-contrast :is(.stonetop-gm-encounter-tally, .stonetop-gm-expedition-road, .stonetop-gm-fold-eyebrow > .stonetop-section-note) {
+	box-shadow: inset 0 0 0 1px currentColor;
+}
+:root.stonetop-high-contrast .stonetop-gm-encounter::before {
+	width: 4px;
+	opacity: 1;
+}
+:root.stonetop-high-contrast .stonetop-gm-encounter-grip {
+	opacity: 1;
+}
+:root.stonetop-high-contrast .stonetop-gm-encounter-entry-note {
+	border-bottom-color: var(--st-card-rule);
+}
+:root.stonetop-high-contrast .stonetop-gm-encounter-entry-note::placeholder {
+	color: var(--st-text-faint);
+}
+:root.stonetop-high-contrast :is(.stonetop-gm-encounter-dropzone, .stonetop-gm-encounter-empty) {
+	border-color: var(--st-card-rule);
+	color: var(--st-text-secondary);
 }
 
 /* AND THE EIGHT DASH PATTERNS, WHICH ONLY THIS MODE PAINTS.

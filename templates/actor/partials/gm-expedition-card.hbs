@@ -1,19 +1,20 @@
 {{!-- ONE PREPPED EXPEDITION, wherever it is rendered. Two lists print this: the live one at the
       top of the tab and the Completed fold under it, and the card is the SAME card in both.
 
-      THIS IS gm-encounter-card.hbs WITH ONE MORE BUTTON, and that card is where the reasoning
-      lives — why the drag handle is the name button and not the row, why no field carries a
-      `name`, why expanding is a class and not a render, why the caret rides at the end of the
-      badges, why the complete toggle sits at the foot of the body rather than in the head. Every
-      one of those rules holds here unchanged; read them there rather than looking for a second
-      copy.
+      THIS IS gm-encounter-card.hbs WITH TWO MORE THINGS — the "On the road" pill and the Run
+      button — and that card is where the reasoning lives: why the drag handle is the name button
+      and not the row, why every <img> opts out of dragging, why no field carries a `name`, why
+      expanding is a class and not a render, why the caret rides at the end of the pills, why the
+      complete toggle sits at the foot of the body rather than in the head. Every one of those
+      rules holds here unchanged; read them there rather than looking for a second copy.
 
       IT WEARS THE ENCOUNTER CARD'S CLASS NAMES, on purpose and not by oversight. The two tabs draw
       the same object — a named bundle of pointers, with notes on it — so they share one stylesheet
       block and one set of hooks in gm-bundle-tab.js, which is bound to a tab by the panel it
       draws into rather than by what its cards are called. `stonetop-gm-encounter-*` is the shared
-      card vocabulary, named for the tab it was written for; only the one control this card has
-      that the other has not carries a name of its own.
+      card vocabulary, named for the tab it was written for; only the controls this card has that
+      the other has not carry names of their own. Its accent edge is the road's teal rather than
+      slate, and that is keyed off the PANE in stonetop.css, not off a class here.
 
       TWO FILES RATHER THAN ONE PARTIAL WITH A PARAMETER, because Handlebars MERGES a partial's
       hash into the caller's context: a `{{> card i18n="..."}}` would also be a bare lookup against
@@ -30,11 +31,21 @@
 	<div class="stonetop-gm-encounter-head stonetop-field-btns">
 		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
 		      data-tooltip="{{localize "stonetop.gmToolkit.expeditions.reorder"}}" data-tooltip-direction="UP">
-			<i class="fas fa-grip-vertical"></i>
+			<i class="fas fa-grip-vertical"></i>{{#if used}}<i class="fas fa-check stonetop-gm-encounter-done-mark"></i>{{/if}}
 		</span>
 		<input type="text" class="stonetop-gm-encounter-name" value="{{this.name}}" maxlength="120"
 		       aria-label="{{localize "stonetop.gmToolkit.expeditions.nameLabel"}}">
 		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{this.notesPeek}}</span>{{/if}}
+		{{!-- ON THE ROAD: this card is bound to a trip in the walkthrough's log, so Run will
+		      reopen that trip rather than start one. Said on the shut row, before the pills,
+		      because "which of these is under way" is the question a column of expeditions is
+		      scanned for. Off `tripId`, the same field that turns the Run button's words; not on a
+		      filed card, whose trip is over. --}}
+		{{#if tripId}}{{#unless used}}
+		<span class="stonetop-gm-expedition-road" data-tooltip="{{localize "stonetop.gmToolkit.expeditions.onTheRoadTip"}}" data-tooltip-direction="UP">
+			<i class="fas fa-person-hiking" aria-hidden="true"></i> {{localize "stonetop.gmToolkit.expeditions.onTheRoad"}}
+		</span>
+		{{/unless}}{{/if}}
 		{{#if groups.length}}
 		<span class="stonetop-gm-encounter-count">
 			{{#each groups}}
@@ -56,16 +67,19 @@
 	</div>
 
 	<div class="stonetop-gm-encounter-body">
-		<div class="stonetop-gm-encounter-notes-block">
+		<div class="stonetop-gm-encounter-notes-block{{#unless notesHtml}} stonetop-gm-encounter-notes-block--empty{{/unless}}">
 			{{#if notesHtml}}
 			<div class="stonetop-gm-encounter-notes">{{{this.notesHtml}}}</div>
-			{{else}}
-			<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.expeditions.notesEmpty"}}</p>
-			{{/if}}
 			<button type="button" class="stonetop-gm-encounter-notes-edit"
 			        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.notesEdit"}}" data-tooltip-direction="UP">
 				<i class="fas fa-pen"></i>
 			</button>
+			{{else}}
+			<button type="button" class="stonetop-gm-encounter-notes-edit stonetop-gm-encounter-notes-add"
+			        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.notesEdit"}}" data-tooltip-direction="UP">
+				<i class="fas fa-pen" aria-hidden="true"></i> {{localize "stonetop.gmToolkit.expeditions.notesAdd"}}
+			</button>
+			{{/if}}
 		</div>
 
 		{{#each groups}}
@@ -73,13 +87,15 @@
 			<div class="stonetop-gm-entry-card-head">
 				<i class="{{this.icon}}" aria-hidden="true"></i>
 				<span class="stonetop-gm-entry-card-title">{{this.title}}</span>
+				<span class="stonetop-gm-entry-card-count">{{this.count}}</span>
+				<span class="stonetop-gm-entry-card-rule" aria-hidden="true"></span>
 				{{#if canDeploy}}
 				<button type="button" class="stonetop-gm-encounter-deploy"
 				        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.deploy"}}" data-tooltip-direction="UP">
 					<span class="stonetop-gm-encounter-deploy-icon" aria-hidden="true"></span>
+					<span class="stonetop-gm-encounter-deploy-label">{{localize "stonetop.gmToolkit.expeditions.deployShort"}}</span>
 				</button>
 				{{/if}}
-				<span class="stonetop-gm-entry-card-count">{{this.count}}</span>
 			</div>
 			<ul class="stonetop-gm-encounter-entries">
 				{{#each entries}}
@@ -88,7 +104,9 @@
 					        draggable="{{#if unresolved}}false{{else}}true{{/if}}"
 					        data-uuid="{{this.uuid}}" data-doc-type="{{this.type}}"
 					        data-tooltip="{{#if unresolved}}{{localize "stonetop.gmToolkit.expeditions.entryGoneTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.entryOpenTip"}}{{/if}}"
-					        data-tooltip-direction="UP">{{this.name}}</button>
+					        data-tooltip-direction="UP">
+						{{#if unresolved}}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph" aria-hidden="true"><i class="fas fa-link-slash"></i></span>{{else if img}}<img class="stonetop-gm-entry-thumb" src="{{this.img}}" alt="" draggable="false" loading="lazy">{{else}}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph" aria-hidden="true"><i class="{{this.icon}}"></i></span>{{/if}}<span class="stonetop-gm-encounter-entry-name">{{this.name}}</span>
+					</button>
 					<button type="button" class="stonetop-gm-encounter-entry-remove"
 					        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.removeEntry"}}" data-tooltip-direction="UP">
 						<i class="fas fa-xmark"></i>
@@ -102,12 +120,12 @@
 		</section>
 		{{/each}}
 
-		<p class="stonetop-gm-encounter-dropzone">{{localize "stonetop.gmToolkit.expeditions.dropHere"}}</p>
+		<p class="stonetop-gm-encounter-dropzone"><i class="fas fa-arrow-down" aria-hidden="true"></i> {{localize "stonetop.gmToolkit.expeditions.dropHere"}}</p>
 
-		{{!-- THE FOOT: what to do with the card now, in the order the night goes. Run opens the
-		      walkthrough on this trip; the toggle beside it files the card away once the trip is
-		      over. A ROW, where the encounter card has one lone button, which is the whole reason
-		      the wrapper exists — the body is a flex COLUMN, so two buttons in it would stack.
+		{{!-- THE FOOT: what to do with the card now, in the order the night goes, right-aligned
+		      under a hairline. The quiet toggle that files the card away once the trip is over,
+		      then Run, which opens the walkthrough on this trip — LAST, at the right-hand end,
+		      where a row of buttons ends and the eye lands.
 
 		      RUN IS THE PRIMARY ACT and wears the slate CTA, against the quiet outline the toggle
 		      keeps: they sit side by side, and if both were outlines the pair would read as two
@@ -119,15 +137,15 @@
 		      about to do. `tripId` is what turns it, and it is set by the run itself
 		      (gm-expeditions-tab.js), never by hand. --}}
 		<div class="stonetop-gm-card-foot">
-			<button type="button" class="stonetop-gm-expedition-run"
-			        data-tooltip="{{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopenTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.runTip"}}{{/if}}"
-			        data-tooltip-direction="UP">
-				<i class="fas fa-person-hiking"></i> {{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}
-			</button>
 			<button type="button" class="stonetop-gm-encounter-used"
 			        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsed"}}{{/if}}"
 			        data-tooltip-direction="UP">
 				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}"></i> {{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsedShort"}}{{/if}}
+			</button>
+			<button type="button" class="stonetop-gm-expedition-run"
+			        data-tooltip="{{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopenTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.runTip"}}{{/if}}"
+			        data-tooltip-direction="UP">
+				<i class="fas fa-person-hiking"></i> {{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}
 			</button>
 		</div>
 	</div>
