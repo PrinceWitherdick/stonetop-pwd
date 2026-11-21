@@ -623,3 +623,32 @@ describe("the shared left rail centres its words by trimming them", () => {
 		expect(bare).toEqual([]);
 	});
 });
+
+// A Seeker's major from off the background's list: onboarding's Major Arcanum step buttons, the Details
+// tab ask's "Choose a different arcanum" and the Arcana tab's GM row all stand on the house
+// .stonetop-inline-btn, unnudged, in rows spaced by gap. Measured 11-20 with the text-centring audit at UI
+// roots 16 and 20, 1x/1.25x/1.5x: rows within 0.5px, chips within 0.5px, the row's buttons on one line.
+describe("the Seeker major-grant buttons centre on the house inline button", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+
+	it.each([".stonetop-seeker-major-actions", ".stonetop-seeker-major-grant"])("%s spaces its buttons by gap and nudges none", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		expect(declared(body, "display")).toBe("flex");
+		expect(declared(body, "gap")).toBeTruthy();
+		expect(declarations(MAIN, `${sel} .stonetop-inline-btn`), `${sel} restyles its buttons`).toBeFalsy();
+	});
+
+	it("the grant button carries no rule of its own", () => {
+		const body = declarations(MAIN, ".stonetop-seeker-major-grant-btn") ?? "";
+		for (const prop of NUDGES) expect(declared(body, prop), `nudges with ${prop}`).toBeNull();
+	});
+
+	it.each([
+		["templates/dialogs/character-onboarding.hbs", /<div class="stonetop-seeker-major-actions">\s*\{\{#each[^}]*\}\}\s*<button type="button" class="stonetop-inline-btn"/],
+		["templates/dialogs/seeker-major-arcanum.hbs", /<div class="stonetop-seeker-major-actions">\s*<button type="button" class="stonetop-inline-btn" data-action="other">/],
+		["templates/actor/partials/tab-arcana.hbs", /class="stonetop-inline-btn stonetop-seeker-major-grant-btn"><i class="fas fa-hand-sparkles" aria-hidden="true"><\/i>/],
+	])("%s draws the house inline button", (file, pattern) => {
+		expect(readRepo(file)).toMatch(pattern);
+	});
+});

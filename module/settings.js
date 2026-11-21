@@ -488,6 +488,30 @@ export function registerSettings() {
 		default: false,
 	});
 
+	// A Seeker's starting major from outside the background's 3, for a table bringing a character
+	// over. Off (the default) is the book's rule. Read through seekerOfferedMajors, by onboarding's
+	// Major Arcanum step and the Details tab's ask. On the Preferences tab as a GM row.
+	game.settings.register(SYSTEM_ID, "seekerAnyMajorArcanum", {
+		name: "stonetop.settings.seekerAnyMajorArcanum.name",
+		hint: "stonetop.settings.seekerAnyMajorArcanum.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
+	// Whether the players' picker under the switch above lists the world's homebrew majors
+	// (seeker-major-grant.js#playersSeeHomebrewMajors). The GM's picker and a GM's grant never
+	// depend on it.
+	game.settings.register(SYSTEM_ID, "seekerAnyMajorHomebrew", {
+		name: "stonetop.settings.seekerAnyMajorHomebrew.name",
+		hint: "stonetop.settings.seekerAnyMajorHomebrew.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
 	// Identifying artifacts, Book I pp.430-431. When on, a Book II treasure dropped onto a
 	// character sheet lands with its tags, Value and ○ uses withheld, so the table plays out
 	// "describe it… hint at more than meets the eye" and a PC has to Know Things about it.

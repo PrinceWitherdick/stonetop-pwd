@@ -243,15 +243,17 @@
 				{{/if}}
 				{{#if majorArcana.length}}
 				<div class="stonetop-onboarding-background-arcana">
-					<p class="stonetop-onboarding-background-arcana-label">Major arcanum</p>
+					<p class="stonetop-onboarding-background-arcana-label">{{#if majorGranted}}{{this.majorGrantedLabel}}{{else}}Major arcanum{{/if}}</p>
 					<div class="stonetop-onboarding-arcana-grid stonetop-onboarding-arcana-grid--background">
 						{{#each majorArcana}}
 						<span class="stonetop-onboarding-arcana-option{{#if selected}} is-selected{{/if}}">
+							{{#unless granted}}
 							<input type="radio"
 							       name="onboard-background-major-arcanum"
 							       value="{{this.slug}}"
 							       data-background-slug="{{this.backgroundSlug}}"
 							       {{#if selected}}checked{{/if}}>
+							{{/unless}}
 							{{#if img}}<img class="stonetop-onboarding-arcana-thumb" src="{{this.img}}" alt="">{{/if}}
 							<span class="stonetop-onboarding-arcana-name">{{this.name}}</span>
 							<span class="stonetop-onboarding-arcana-preview">
@@ -942,7 +944,7 @@
 		<div class="stonetop-onboarding-arcana-picker">
 			<section class="stonetop-onboarding-arcana-section">
 				<h4 class="stonetop-onboarding-lore-section-title">Major Arcanum</h4>
-				<p class="stonetop-onboarding-step-hint">Choose the major arcanum granted by your background.</p>
+				<p class="stonetop-onboarding-step-hint">{{seekerArcanaChoices.majorHint}}</p>
 				<div class="stonetop-onboarding-arcana-grid stonetop-onboarding-arcana-grid--major">
 					{{#each seekerArcanaChoices.major}}
 					<label class="stonetop-onboarding-arcana-option{{#if selected}} is-selected{{/if}}">
@@ -957,6 +959,13 @@
 					</label>
 					{{/each}}
 				</div>
+				{{#if seekerArcanaChoices.majorActions.length}}
+				<div class="stonetop-seeker-major-actions">
+					{{#each seekerArcanaChoices.majorActions}}
+					<button type="button" class="stonetop-inline-btn" data-seeker-major-action="{{this.action}}"><i class="fas {{this.icon}}" aria-hidden="true"></i>{{this.label}}</button>
+					{{/each}}
+				</div>
+				{{/if}}
 			</section>
 		</div>
 		{{#if seekerArcanaData.sections.length}}

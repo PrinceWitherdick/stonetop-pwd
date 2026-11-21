@@ -106,7 +106,8 @@ import {spendSurpriseForRoll, refundSurpriseForRoll} from "../../combat/battle-h
 import {settleTierEffects, recordTierEffects, reconcileTierEffects, tierEffectsAllowed, insertFormRollFor, holdOnRollFor, holdMoreBonus} from "./tier-effects.js";
 import {xpToLevelUp, xpAfterLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
-import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
+import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed, seekerOfferedMajors} from "./seeker-collection.js";
+import {getBooleanSetting} from "../../settings.js";
 import {CharacterLore} from "./CharacterLore.js";
 import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./CharacterPostDeath.js";
 import {INSERT_MOVES_PENDING_FLAG, isPostDeathMove, planLoreMoveSync, planMissingInsertMoves, postDeathMoveItemData} from "./post-death-moves.js";
@@ -4843,12 +4844,51 @@ export class StonetopCharacter {
 	async settleSeekerMajorOnBackground() {
 		const state      = this.seekerCreationState();
 		const background = await this.selectedBackground();
-		const offered    = background?.majorArcana ?? [];
+		const { offered, locked } = this.seekerMajorOffer(background);
 		const held       = !!state.major && this._arcana.ownedSlugs.has(state.major);
 		const asGranted  = held && await this._seekerCardAsGranted(state.major, "major", state);
-		const plan       = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted });
+		let plan         = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted });
+		// The GM's grant is owed even beside a played major: the played one stays held, and the grant
+		// is asked for (seeker-collection.test.js, "a grant ... beside a played major").
+		if (locked && plan === "stays") plan = "ask";
 		if (plan === "replace") await this.settleSeekerArcana(state, { ...state, major: "", majorMarks: [] });
-		return { plan, background, offered, major: state.major };
+		return { plan, background, offered, locked, major: state.major };
+	}
+
+	/**
+	 * The playbook a character not made yet is being created as: the walkthrough's own record
+	 * (onboardingProgress.playbookSlug, the sheet's _setOnboardingState), or null.
+	 */
+	async playbookInCreation() {
+		if (this._actor.system?.playbook?.slug) return null;
+		const slug = resolvedFlags(this._actor).onboardingProgress?.playbookSlug;
+		return slug ? this._playbookRepo.findBySlug(slug) : null;
+	}
+
+	/** The GM's given starting major (CharacterArcana#majorGrantSlug), or "". */
+	seekerMajorGrant() {
+		return this._arcana.majorGrantSlug;
+	}
+
+	/** Give (or, with "", take back) the GM's pick of starting major. The card held is not touched. */
+	async setSeekerMajorGrant(slug) {
+		await this._arcana.setMajorGrant(slug);
+	}
+
+	/**
+	 * The majors `background` offers this Seeker (seekerOfferedMajors): the GM's grant, or the
+	 * background's list plus, with the world's "any major" switch on, the creation major already held.
+	 * A creation major no longer held is left out, so a deleted card is not offered back as a 4th.
+	 */
+	seekerMajorOffer(background) {
+		const state = this.seekerCreationState();
+		const major = state.major && this._arcana.ownedSlugs.has(state.major) ? state.major : "";
+		return seekerOfferedMajors({
+			listed: background?.majorArcana ?? [],
+			grant:  this.seekerMajorGrant(),
+			open:   getBooleanSetting("seekerAnyMajorArcanum"),
+			major,
+		});
 	}
 
 	/**
@@ -4858,11 +4898,12 @@ export class StonetopCharacter {
 	async seekerMajorOwed(playbookData = undefined) {
 		if (!this.backgroundState().slug) return false;
 		const background = this._selectedBackground(playbookData === undefined ? await this.playbook() : playbookData);
-		const offered    = background?.majorArcana ?? [];
-		if (!offered.length) return false;
+		if (!(background?.majorArcana ?? []).length && !this.seekerMajorGrant()) return false;
+		const { offered, locked } = this.seekerMajorOffer(background);
 		const leads = this._arcana.leadSlugs;
 		const owned = [...this._arcana.ownedSlugs].filter(s => !leads.has(s));
-		return seekerMajorOwed({ offered, owned, major: this.seekerCreationState().major });
+		// With a grant only the grant settles it: an older creation major held does not.
+		return seekerMajorOwed({ offered, owned, major: locked ? "" : this.seekerCreationState().major });
 	}
 
 	/** Give `major` as the Seeker's major arcanum with its 1 mark ("context:index" keys). */
@@ -5140,7 +5181,7 @@ export class StonetopCharacter {
 		const flags = resolvedFlags(this._actor);
 		const keys  = [
 			"possessions", "possessionGrantsApplied", POSSESSION_PRESELECTED_WALKED_FLAG, "background", "instinct", "lore",
-			"arcana.major", "arcana.minorDraw", "arcana.minorRoles", "arcana.majorMarks", "arcana.majorMarksFor",
+			"arcana.major", "arcana.minorDraw", "arcana.minorRoles", "arcana.majorMarks", "arcana.majorMarksFor", "arcana.majorGrant",
 			"moves.backgroundAnswers", "moves.dismissedLevelOverage",
 			"crew", "animalCompanion",
 			// "With the party" too (follower-party.js), or an initiate picked again later comes back already travelling.

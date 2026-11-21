@@ -642,6 +642,8 @@ export class CharacterArcana {
 	get minorDrawSlugs()   { return this._flags.getFlag("minorDraw") ?? []; }
 	get minorRoles()       { return this._flags.getFlag("minorRoles") ?? {}; }
 	get majorMarkKeys()    { return this._flags.getFlag("majorMarks") ?? []; }
+	// The GM's pick for a Seeker's starting major, in place of the background's three (seekerOfferedMajors).
+	get majorGrantSlug()   { const slug = this._flags.getFlag("majorGrant"); return typeof slug === "string" ? slug : ""; }
 	// The unlock latch: cards whose track has been completed at least once (see _isUnlocked).
 	get unlockedOnceSlugs() { return new Set(this._flags.getFlag("unlockedOnce") ?? []); }
 	// The latched cards whose 7-9 back debt the latch settled, so releasing the latch owes it again.
@@ -1271,6 +1273,13 @@ export class CharacterArcana {
 			else if (this._flags.getFlag(key) != null) Object.assign(data, this._flags.deletionData(key));
 		}
 		await this._flags.applyUpdateData(data);
+	}
+
+	/** Store the GM's given major (`majorGrantSlug`); an empty slug removes it, as a merge cannot. */
+	async setMajorGrant(slug) {
+		const value = String(slug ?? "").trim();
+		if (value) return this._flags.applyUpdateData(this._flags.updateData("majorGrant", value));
+		if (this._flags.getFlag("majorGrant") != null) await this._flags.applyUpdateData(this._flags.deletionData("majorGrant"));
 	}
 
 	// GM-only: in secretive mode, expose / hide a still-LOCKED card's back to the owning

@@ -1,8 +1,8 @@
 // Descriptions for animal companion trait tags — checked before compendium lookup.
-import { isMajorArcana, isMajorArcanumItem } from "../../../arcana-icons.js";
+import { isMajorArcanumItem } from "../../../arcana-icons.js";
 import { withMarkOptionList } from "../mark-option-list.js";
 import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, backgroundPossessionSlugs, startingMoveChoiceNames } from "../StonetopCharacter.js";
-import { ARCANA_PACK } from "../StonetopFlags.js";
+import { ARCANA_PACK, STONETOP_SCOPE } from "../StonetopFlags.js";
 import { markQuestionBullets } from "../../../utils/question-bullets.js";
 import { openJournalSheetAsChild } from "../../../utils/front-on-open.js";
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
@@ -39,7 +39,8 @@ import { neighborChoiceGroups, randomNeighborTrait } from "./BackgroundNeighbors
 import { INITIATE_BACKGROUND, choiceCountState } from "../initiates.js";
 import { lorePickMax, lorePickMin } from "../lore-pick-count.js";
 import { MAGNIFICENT_SPECIMEN_MOVE, companionKindOptions, companionTraitAllowance, trimCompanionTraits } from "../animal-companion.js";
-import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete } from "../seeker-collection.js";
+import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete, seekerOfferedMajors } from "../seeker-collection.js";
+import { giveSeekerMajor, pickMajorArcanum, playersSeeHomebrewMajors } from "../seeker-major-grant.js";
 import { plural } from "../../../utils/plural.js";
 import { isFinishedWorldArcanum } from "../../../item/createArcanum.js";
 
@@ -51,6 +52,18 @@ const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
  * only: a draft (flags.stonetop.draft) and a card without a slug are no card yet, and a major is
  * the background's to grant, never drawn. Empty when the switch is off.
  */
+/**
+ * The world's finished homebrew major arcana, for the Seeker's major step. They are offered only
+ * when the GM gives one or a player picks one (seekerOfferedMajors) and are never drawn, so no
+ * setting gates loading them (seeker-collection.test.js, "the minor pool is unchanged").
+ */
+export function seekerHomebrewMajors({ items = globalThis.game?.items } = {}) {
+	return [...(items ?? [])].filter(item => {
+		const flags = item?.flags?.stonetop ?? {};
+		return isFinishedWorldArcanum(item) && !!flags.slug && isMajorArcanumItem({ slug: flags.slug, major: flags.major });
+	});
+}
+
 export function seekerHomebrewMinors({ items = globalThis.game?.items, enabled } = {}) {
 	const on = enabled === undefined ? getBooleanSetting("arcanaSeekerDrawsHomebrew") : enabled;
 	if (!on) return [];
@@ -158,8 +171,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	constructor(playbookDoc, onComplete, options = {}) {
-		const { onBack, onSave, onClose, onProgress, onLiveSave, onExit, initialSelections, startAtStep = null, ownedMoveCounts = null, restoredPickCounts = null, characterLevel = 1, retiredMoveNames = null, retiredCreationPicks = 0, crewTagBonus = 0, companionTraitBonus = 0, heldMinorArcana = null, ...appOptions } = options;
+		const { onBack, onSave, onClose, onProgress, onLiveSave, onExit, initialSelections, startAtStep = null, ownedMoveCounts = null, restoredPickCounts = null, characterLevel = 1, retiredMoveNames = null, retiredCreationPicks = 0, crewTagBonus = 0, companionTraitBonus = 0, heldMinorArcana = null, actor = null, ...appOptions } = options;
 		super(appOptions);
+		// The character being made, read live for the GM's given major (_seekerMajorGrant) and watched
+		// for a change to it while open. Null from the Playbook Builder's try-out.
+		this._seekerActor        = actor;
 		this._playbookDoc        = playbookDoc;
 		this._onComplete         = onComplete;
 		// The minor arcana already held in the world (seeker-collection.js#minorArcanaHeldElsewhere),
@@ -763,6 +779,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	_applyBackgroundChange(slug) {
+		// A major taken off the old background's list follows the background; one picked from outside
+		// it (the world's "any major" switch) stays, as _ensureSeekerMajorSelection keeps it.
+		if (this._combineSeekerArcana && (this._selectedBackground()?.majorArcana ?? []).includes(this._selections.arcana.major)) {
+			this._selections.arcana.major = "";
+		}
 		this._selections.backgroundSlug = slug;
 		this._selections.initiates = [];
 		// A picked crew tag the new background grants on its own is no longer a pick.
@@ -1013,16 +1034,37 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			: null;
 	}
 
+	// The GM's given starting major, read off the character on every call rather than kept in
+	// _selections, so a saved resume snapshot can never carry a stale one.
+	_seekerMajorGrant() {
+		return String(this._seekerActor?.typedActor?.seekerMajorGrant?.() ?? "");
+	}
+
+	// The majors the background step and the Major Arcanum step offer (seekerOfferedMajors): the
+	// grant alone, or the background's list, keeping an off-list pick while the world's switch is on.
+	_seekerMajorOffer(background = this._selectedBackground()) {
+		return seekerOfferedMajors({
+			listed: background?.majorArcana ?? [],
+			grant:  this._seekerMajorGrant(),
+			open:   getBooleanSetting("seekerAnyMajorArcanum"),
+			major:  this._selections.arcana.major,
+		});
+	}
+
 	_seekerMajorArcanaSlugs(background = this._selectedBackground()) {
-		return background?.majorArcana ?? [];
+		return this._seekerMajorOffer(background).offered;
 	}
 
 	_ensureSeekerMajorSelection() {
 		if (!this._combineSeekerArcana) return;
 		const allowed = this._seekerMajorArcanaSlugs();
 		if (!allowed.length) return;
-		if (!allowed.includes(this._selections.arcana.major)) {
-			this._selections.arcana.major = allowed[0];
+		// Once the arcana are loaded, a slug no arcanum has (a card since deleted) is never kept, open
+		// mode included (seeker-collection.test.js, "a stale slug is snapped").
+		const known = slug => !this._arcanaCache || this._arcanaCache.major.some(option => option.slug === slug);
+		const major = this._selections.arcana.major;
+		if (!allowed.includes(major) || !known(major)) {
+			this._selections.arcana.major = allowed.find(known) ?? allowed[0];
 		}
 	}
 
@@ -1260,7 +1302,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const packDocs = pack ? await Promise.all(entries.map(entry => pack.getDocument(entry._id))) : [];
 			// Book I p.136 "Draw 3 at random": with the GM's switch on (ruling A19) the world's own
 			// finished minors join the deck. After the pack's, so a shipped slug always wins.
-			const docs = [...packDocs.filter(Boolean), ...seekerHomebrewMinors()];
+			const docs = [...packDocs.filter(Boolean), ...seekerHomebrewMinors(), ...seekerHomebrewMajors()];
 			const seen = new Set();
 			const options = docs.flatMap(doc => {
 				const flags = doc.flags?.stonetop ?? {};
@@ -1282,7 +1324,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					backSummary:     this._firstParagraph(flags.back?.description ?? ""),
 					backDescription: flags.back?.description ?? "",
 					img:        doc.img && doc.img !== "icons/svg/item-bag.svg" ? doc.img : null,
-					isMajor:     isMajorArcana(slug),
+					// The item's own `major` flag too, or a homebrew major lands in the minor list.
+					isMajor:     isMajorArcanumItem({ slug, major: flags.major }),
+					// The players' picker lists these only with both world switches on (playersSeeHomebrewMajors).
+					homebrew:    !doc.pack,
 				}];
 			});
 			this._arcanaCache = {
@@ -1312,8 +1357,12 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		const swapOptions = arcana.minor
 			.filter(option => !minorDraw.has(option.slug) && !held.has(option.slug))
 			.map(option => ({ slug: option.slug, name: option.name }));
+		const { locked } = this._seekerMajorOffer();
 		return {
 			majorSelected: selectedMajor,
+			majorLocked:   locked,
+			majorHint:     localize(locked ? "stonetop.onboarding.majorHint.locked" : "stonetop.onboarding.majorHint.choose"),
+			majorActions:  this._seekerMajorActions(locked),
 			minorAssignedCount: Object.values(minorRoles).filter(Boolean).length,
 			minorPickCount: this._selections.arcana.minorDraw.length,
 			major: arcana.major.filter(option => allowedMajor.has(option.slug)).map(option => ({
@@ -1326,6 +1375,68 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				swapOptions,
 				})),
 		};
+	}
+
+	// The buttons under the Major Arcanum step's cards: the GM's "Give a major arcanum" (the one way
+	// to give a character not made yet), then a player's "Choose a different arcanum" while the
+	// world's switch is on and nothing is given. A GM sees both, and the second lists what a player's would.
+	_seekerMajorActions(locked) {
+		const actions = [];
+		if (globalThis.game?.user?.isGM && this._seekerActor) {
+			const key = this._seekerMajorGrant() ? "stonetop.seekerMajor.grant.change" : "stonetop.seekerMajor.grant.give";
+			actions.push({ action: "give-major", icon: "fa-hand-sparkles", label: localize(key) });
+		}
+		if (!locked && getBooleanSetting("seekerAnyMajorArcanum")) {
+			actions.push({ action: "other-major", icon: "fa-wand-sparkles", label: localize("stonetop.seekerMajor.other") });
+		}
+		return actions;
+	}
+
+	// The GM's grant, from the Major Arcanum step. The flag alone is written here (creation is not
+	// applied yet); the re-render reads it back and locks the step to it.
+	async _giveSeekerMajor() {
+		const character = this._seekerActor?.typedActor;
+		if (!character) return;
+		const written = await giveSeekerMajor(character, { background: this._selectedBackground(), name: this._seekerActor?.name ?? "" });
+		if (written) await this.render(false);
+	}
+
+	// "Choose a different arcanum": any major, the background's own first, homebrew ones only with
+	// both world switches on. The pick stays as a 4th card (seekerOfferedMajors), and the re-render
+	// resets its mark to the new card's default (_reconcileSeekerMajorMarks).
+	async _chooseOtherSeekerMajor() {
+		const arcana = await this._loadArcanaOptions();
+		const homebrew = playersSeeHomebrewMajors();
+		const slug = await pickMajorArcanum({
+			majors:      arcana.major.filter(o => homebrew || !o.homebrew).map(o => ({ slug: o.slug, name: o.name, summary: o.description, homebrew: o.homebrew })),
+			listed:      this._selectedBackground()?.majorArcana ?? [],
+			selected:    this._selections.arcana.major,
+			title:       localize("stonetop.seekerMajor.otherTitle"),
+			buttonLabel: localize("stonetop.seekerMajor.otherButton"),
+		});
+		if (!slug) return;
+		this._selections.arcana.major = slug;
+		await this.render(false);
+	}
+
+	// While open, a GM's grant (or its removal) redraws the steps that read it, so a player part-way
+	// through sees it without closing the window.
+	_watchSeekerGrant() {
+		if (this._seekerGrantHook || !this._seekerActor || !this._combineSeekerArcana) return;
+		const actorId = this._seekerActor.id;
+		this._seekerGrantHook = Hooks.on("updateActor", (actor, changes) => {
+			if (actor?.id !== actorId || !this.rendered) return;
+			const arcana = changes?.flags?.[STONETOP_SCOPE]?.arcana;
+			if (!arcana || !Object.keys(arcana).some(key => key.replace(/^-=/, "") === "majorGrant")) return;
+			this._ensureSeekerMajorSelection();
+			this.render(false);
+		});
+	}
+
+	_unwatchSeekerGrant() {
+		if (!this._seekerGrantHook) return;
+		Hooks.off("updateActor", this._seekerGrantHook);
+		this._seekerGrantHook = null;
 	}
 
 	// The "mysteries" progression on the front of a major arcanum's insert that the Seeker
@@ -2262,6 +2373,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		if (stepType === "background") {
 			const arcana = this._combineSeekerArcana ? await this._loadArcanaOptions() : null;
 			const majorBySlug = new Map((arcana?.major ?? []).map(option => [option.slug, option]));
+			this._ensureSeekerMajorSelection();
+			// The GM's grant stands in for each background's three, drawn without a radio.
+			const grantOption = this._combineSeekerArcana ? majorBySlug.get(this._seekerMajorGrant()) : null;
+			const grantedLabel = localize("stonetop.onboarding.backgroundMajorGranted");
 			backgrounds = this._backgrounds.map(bg => ({
 				slug:        bg.slug,
 				label:       this._normalizeOnboardingText(bg.label),
@@ -2271,14 +2386,18 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				setup: this._backgroundSetupData(bg),
 				picks: this._backgroundPicksData(bg),
 				markableActions: this._backgroundMarkableActionsData(bg),
-				majorArcana: (bg.majorArcana ?? []).map(slug => {
-					const option = majorBySlug.get(slug);
-					return option ? {
-						...option,
-						backgroundSlug: bg.slug,
-						selected: this._selections.arcana.major === slug,
-					} : null;
-				}).filter(Boolean),
+				majorGranted:      !!grantOption && !!bg.majorArcana?.length,
+				majorGrantedLabel: grantedLabel,
+				majorArcana: grantOption && bg.majorArcana?.length
+					? [{ ...grantOption, backgroundSlug: bg.slug, selected: true, granted: true }]
+					: (bg.majorArcana ?? []).map(slug => {
+						const option = majorBySlug.get(slug);
+						return option ? {
+							...option,
+							backgroundSlug: bg.slug,
+							selected: this._selections.arcana.major === slug,
+						} : null;
+					}).filter(Boolean),
 			}));
 		}
 
@@ -2785,6 +2904,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	activateListeners(html) {
 		super.activateListeners(html);
+		this._watchSeekerGrant();
 		markQuestionBullets(html[0]);
 		// Redraw inline ◇/○/□/▶ glyphs in the read-only prose (background & possession
 		// descriptions, lore section text, lore pick options like the Seeker's "mark 1 ○
@@ -3831,6 +3951,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		html.find(".stonetop-onboarding-redraw-minor").on("click", () => this._redrawSeekerMinorArcana());
 
+		html.find("[data-seeker-major-action='give-major']").on("click", ev => this._guardBusy(ev, () => this._giveSeekerMajor()));
+		html.find("[data-seeker-major-action='other-major']").on("click", ev => this._guardBusy(ev, () => this._chooseOtherSeekerMajor()));
+
 		html.find(".stonetop-onboarding-minor-swap-select").on("change", async ev => {
 			const oldSlug = ev.currentTarget.dataset.slug;
 			const newSlug = ev.currentTarget.value;
@@ -4041,6 +4164,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	async close(options) {
 		this._clearPopups();
+		this._unwatchSeekerGrant();
 		// Cancel any debounced live-save; the current answers are captured below
 		// (onExit) or were already committed (onComplete), and a late timer could
 		// otherwise re-stamp a flag the completion just cleared.

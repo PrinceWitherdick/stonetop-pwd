@@ -1524,6 +1524,14 @@
         "name": "Include homebrew minor arcana in the Seeker's draw",
         "hint": "When on, the minor arcana made in this world (finished, not drafts) join the shipped ones in the deck a new Seeker draws 3 from. Off by default."
       },
+      "seekerAnyMajorArcanum": {
+        "name": "Seekers may start with any major arcanum",
+        "hint": "Off, a Seeker takes 1 of the 3 major arcana their background lists. On, a player may pick any major arcanum at creation, for a character brought over from another table. They will see every major arcanum's name."
+      },
+      "seekerAnyMajorHomebrew": {
+        "name": "Players may pick homebrew major arcana",
+        "hint": "Only matters while Seekers may start with any major arcanum. Off, players pick from the books' major arcana. On, your world's finished homebrew major arcana are listed too, by name. You can always give a homebrew major arcanum yourself."
+      },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",
         "hint": "A player always sees the back of a card once they've unlocked it (filled every spot). That's their own achievement, no setting needed. This switch is a separate peek: when on, players may also open the back of a card they haven't unlocked yet, reading the whole card up front. Off by default for a more secretive table: an un-unlocked back stays hidden until you click \"Reveal back to player\" on that card (handy when a card must be read before it can be unlocked). Turn on to let players read cards up front. You always see both sides as the GM."
@@ -1820,7 +1828,26 @@
       "later": "Choose later",
       "stays": "{major} stays: it has been played. Your new background grants no second major arcanum.",
       "owed": "Your Background grants you 1 major arcanum, and you haven't chosen it yet.",
-      "owedButton": "Choose your major arcanum"
+      "owedButton": "Choose your major arcanum",
+      "grant": {
+        "give": "Give a major arcanum",
+        "change": "Change",
+        "none": "Give this Seeker a major arcanum of your choosing instead of the background's three.",
+        "set": "Starting major arcanum: {name}, given by you.",
+        "pickTitle": "Give {name} a major arcanum",
+        "pickButton": "Give this arcanum",
+        "clear": "The background's own three",
+        "clearHint": "The player chooses one, as the book has it.",
+        "stays": "{major} stays: it has been played. {given} is now the starting major arcanum."
+      },
+      "groups": {
+        "listed": "From this background",
+        "other": "Other major arcana",
+        "homebrew": "Homebrew"
+      },
+      "other": "Choose a different arcanum",
+      "otherTitle": "Choose a major arcanum",
+      "otherButton": "Take this arcanum"
     },
     "backgroundNeighbors": {
       "title": "{background}: Neighbors",
@@ -1832,6 +1859,11 @@
       "skipTraits": "Add them without traits"
     },
     "onboarding": {
+      "majorHint": {
+        "choose": "Choose the major arcanum granted by your background.",
+        "locked": "Your GM has given you this major arcanum."
+      },
+      "backgroundMajorGranted": "Major arcanum, given by your GM",
       "wellVersedExtra": "Well Versed: mark 1 more topic",
       "wellVersedFromBackground": "from your Background",
       "creationMarkHint": "Go mark it now: each Veteran Crew you start with picks 1.",

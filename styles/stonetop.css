@@ -12397,6 +12397,20 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	background-color: color-mix(in srgb, var(--st-blue-border) 12%, transparent);
 }
 
+/* The GM's "Give a major arcanum" row on a Seeker's Arcana tab: a quiet line of text and the
+   house inline button (which centres its icon and label by flex: tests/styles/chip-centring.test.js). */
+.stonetop-seeker-major-grant {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 8px;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-faint);
+}
+
+.stonetop-seeker-major-grant-text { flex: 1; min-width: 10em; }
+
 .stonetop-arcanum-identify-btn,
 .stonetop-arcanum-givecard-btn,
 .stonetop-arcanum-discover-btn {
@@ -27968,6 +27982,18 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	padding: 1px 7px;
 	font-size: var(--st-fs-base);
 	line-height: 1.4;
+}
+
+/* A Seeker's major arcanum from off the background's list: onboarding's Major Arcanum step ("Give a
+   major arcanum" for the GM, "Choose a different arcanum" under the world's switch) and the Details
+   tab's ask. House inline buttons in a row spaced by gap. In the ask's body, not its footer: three
+   footer buttons share 480px, and the long label wrapped and stretched all three to two lines.
+   Measured with the text-centring audit (tests/styles/chip-centring.test.js names the row). */
+.stonetop-seeker-major-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
 }
 
 .stonetop-onboarding-lore-counter {

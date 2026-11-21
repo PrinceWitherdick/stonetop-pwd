@@ -56,6 +56,7 @@ import {CallUpDeepOnesDialog} from "./dialogs/CallUpDeepOnesDialog.js";
 import {BackgroundNeighborsDialog, storedNeighborPicks, storedNeighborTraits, traitedNeighbors} from "./dialogs/BackgroundNeighborsDialog.js";
 import {BackgroundAnswersDialog, backgroundSetupAsks} from "./dialogs/BackgroundAnswersDialog.js";
 import {SeekerMajorArcanumDialog} from "./dialogs/SeekerMajorArcanumDialog.js";
+import {giveSeekerMajor, pickMajorArcanum, loadMajorArcana, playersSeeHomebrewMajors} from "./seeker-major-grant.js";
 import {minorArcanaHeldElsewhere} from "./seeker-collection.js";
 import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower, findRingFollower, loyaltyOwnerId, RING_ARCANUM_SLUG} from "../../data/servant-of-daagon.js";
 import {characterSummonBlocker, followerReadinessBonus, summonBlockedMessage, summonHeldElsewhere, summonHeldElsewhereText, summonHoldersBySource} from "../../data/arcana-summon-gates.js";
@@ -2178,6 +2179,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// edit the sheet, and shows even while it holds no card yet.
 			context.stonetop.seekerMajorOwed = this.isEditable
 				&& !!(await this._stonetopCharacter.seekerMajorOwed?.(playbookDoc));
+			// The GM's "Give a major arcanum" row, on a playbook whose backgrounds grant a major (the
+			// Seeker's): the grant's card name, or "" for none (seeker-major-grant.js#giveSeekerMajor).
+			context.stonetop.seekerMajorGrant = await this._seekerMajorGrantRow(playbookDoc);
 			context.stonetop.hasArcana = !!(
 				context.stonetop.arcana?.minor?.hasOwned ||
 				context.stonetop.arcana?.major?.hasOwned ||
@@ -6708,6 +6712,14 @@ export function createStonetopCharacterSheetClass(Base) {
 				this._onSeekerMajorOwed().catch(err => console.error("Stonetop | choosing the major arcanum failed", err));
 			}, true);
 
+			// The GM's "Give a major arcanum" (the tab's GM-only row).
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest(".stonetop-seeker-major-grant-btn");
+				if (!btn) return;
+				ev.stopPropagation();
+				this._onGiveSeekerMajor().catch(err => console.error("Stonetop | giving the major arcanum failed", err));
+			}, true);
+
 			html[0].addEventListener("click", ev => {
 				const thumb = ev.target.closest(".stonetop-arcanum-thumb, .stonetop-lore-arcana-img");
 				if (!thumb) return;
@@ -8577,7 +8589,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async _askSeekerMajorArcanum() {
 			const character = this._stonetopCharacter;
-			const { plan, background, offered, major } = await character.settleSeekerMajorOnBackground();
+			const { plan, background, offered, locked, major } = await character.settleSeekerMajorOnBackground();
 			if (plan === "stays") {
 				const name = (await character.getArcanum(major))?.front?.title ?? major;
 				ui.notifications?.info?.(format("stonetop.seekerMajor.stays", { major: name }));
@@ -8585,8 +8597,25 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			if (plan !== "ask" && plan !== "replace") return;
 			const cards = (await Promise.all(offered.map(slug => character.getArcanum(slug)))).filter(Boolean);
-			const pick  = await SeekerMajorArcanumDialog.ask(background, cards);
+			// The world's "any major" switch adds "Choose a different arcanum"; never beside a GM's grant.
+			const other = !locked && getBooleanSetting("seekerAnyMajorArcanum");
+			let pick = await SeekerMajorArcanumDialog.ask(background, cards, { other });
+			if (pick?.other) pick = await this._askOtherSeekerMajor(background);
 			if (pick?.major) await character.chooseSeekerMajor(pick.major, pick.marks);
+		}
+
+		// "Choose a different arcanum" from the Details tab's ask: any major (homebrew only with both
+		// world switches on, playersSeeHomebrewMajors), then the same ask for its 1 mark. A GM pressing
+		// it sees what a player would; the GM's full list is the Arcana tab's "Give a major arcanum".
+		async _askOtherSeekerMajor(background) {
+			const slug = await pickMajorArcanum({
+				majors:      await loadMajorArcana({ homebrew: playersSeeHomebrewMajors() }),
+				listed:      background?.majorArcana ?? [],
+				title:       localize("stonetop.seekerMajor.otherTitle"),
+				buttonLabel: localize("stonetop.seekerMajor.otherButton"),
+			});
+			const card = slug ? await this._stonetopCharacter.getArcanum(slug) : null;
+			return card ? SeekerMajorArcanumDialog.ask(background, [card]) : null;
 		}
 
 		/**
@@ -8599,6 +8628,29 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!(await this._stonetopCharacter.seekerMajorOwed())) return;
 			await this._askSeekerMajorArcanum();
 			this.render(false);
+		}
+
+		/**
+		 * The Arcana tab's GM row: `{ shown, name }`, shown to a GM on a playbook whose backgrounds
+		 * list major arcana, `name` the given card's front title or "".
+		 */
+		async _seekerMajorGrantRow(playbookDoc) {
+			const character = this._stonetopCharacter;
+			if (!game.user?.isGM) return { shown: false, name: "" };
+			// A character still being made has no playbook yet: the one its player's walkthrough is on,
+			// so the GM can give the major while the player's window is open (it redraws on the grant).
+			const playbook = playbookDoc ?? await character.playbookInCreation?.();
+			const shown = (playbook?.backgrounds ?? []).some(bg => bg?.majorArcana?.length);
+			const grant = shown ? (character.seekerMajorGrant?.() ?? "") : "";
+			const name = grant ? normalizePlaybookGlyphs((await character.getArcanum(grant))?.front?.title ?? grant) : "";
+			return { shown, name };
+		}
+
+		/** The GM row's button: give, change or take back this Seeker's starting major. */
+		async _onGiveSeekerMajor() {
+			const character = this._stonetopCharacter;
+			const written = await giveSeekerMajor(character, { background: await character.selectedBackground(), name: this.actor.name });
+			if (written) this.render(false);
 		}
 
 		/**
@@ -15202,6 +15254,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					crewTagBonus: this._crewTagBonusBeyondCreation(),
 					companionTraitBonus: this._companionTraitBonusBeyondCreation(playbookDoc),
 					heldMinorArcana: this._heldMinorArcana(),
+					actor: this.actor,
 					onBack: openPicker,
 					onSave: async (selections, info) => {
 						await this._applyPlaybookSelections(playbookDoc, selections);
@@ -15216,7 +15269,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					// player's local resume snapshot otherwise, which the GM can't read, so
 					// the Welcome roster has no other way to name the in-progress playbook.
 					onProgress: info => {
-						this._setOnboardingState("onboarding", { step: info.step + 1, total: info.total, playbook: playbookDoc.name });
+						// The slug too, so a GM can give a Seeker's major mid-creation (_seekerMajorGrantRow).
+						this._setOnboardingState("onboarding", { step: info.step + 1, total: info.total, playbook: playbookDoc.name, playbookSlug: playbookDoc.system?.slug ?? "" });
 						saveResume(info);
 					},
 					// Every edit (debounced): just the local snapshot — no network — so a
@@ -15224,7 +15278,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					onLiveSave: saveResume,
 					// Closing mid-creation keeps the snapshot so a reload can resume here.
 					onExit: info => {
-						this._setOnboardingState("exited", { playbook: playbookDoc.name });
+						this._setOnboardingState("exited", { playbook: playbookDoc.name, playbookSlug: playbookDoc.system?.slug ?? "" });
 						saveResume(info);
 					},
 				},
@@ -15321,6 +15375,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					crewTagBonus: this._crewTagBonusBeyondCreation(),
 					companionTraitBonus: this._companionTraitBonusBeyondCreation(playbookDoc),
 					heldMinorArcana: this._heldMinorArcana(),
+					actor: this.actor,
 					onSave: async (sel, info) => {
 						await this._applyPlaybookSelections(playbookDoc, sel);
 						saveResume?.({ ...info, selections: sel }, { committed: true });

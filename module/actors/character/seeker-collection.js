@@ -215,6 +215,22 @@ export function seekerMajorSwitchPlan({ major = "", held = true, offered = [], a
 }
 
 /**
+ * The majors a Seeker may take as the background's 1: `{ offered: string[], locked: boolean }`.
+ *   grant set            -> [grant], locked (the GM's pick replaces the list)
+ *   open (world switch)  -> listed, plus `major` when it is not listed (a free pick already made stays)
+ *   otherwise            -> listed
+ * `major` is the major selected or held now; callers pass "" when there is none. Every reader of a
+ * background's `majorArcana` goes through this, so a given or freely-picked major is never snapped
+ * back or taken away by a background switch (seeker-collection.test.js, "a major given or picked").
+ */
+export function seekerOfferedMajors({ listed = [], grant = "", open = false, major = "" } = {}) {
+	if (grant) return { offered: [grant], locked: true };
+	const offered = [...new Set((listed ?? []).filter(Boolean))];
+	if (open && major && !offered.includes(major)) offered.push(major);
+	return { offered, locked: false };
+}
+
+/**
  * Whether the Seeker's background still owes its major arcanum ("Your Background grants you 1
  * major arcanum"), for the Arcana tab's cue: the background lists majors (`offered`), and the
  * character holds none of them and no creation major either (`major`, the one creation or the
