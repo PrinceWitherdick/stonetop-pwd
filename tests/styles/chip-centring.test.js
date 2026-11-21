@@ -78,6 +78,7 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-cf-preview-tag",
 		".stonetop .threat-themes__item",
 		".stonetop-expedition-dialog .stonetop-exp-load-pill",
+		".stonetop-expedition-dialog .stonetop-exp-status",
 		".stonetop-journey-canvas .stonetop-journey-tag",
 		".stonetop-rel-lane-count",
 		".stonetop-fight-badge",
@@ -395,6 +396,43 @@ describe("the Playbook Builder's buttons and the sheet's Restore it centre by fl
 		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
 		expect(bottom).toBe(top);
 		expect(readRepo("templates/actor/partials/actor-header.hbs")).toMatch(/class="stonetop-inline-btn stonetop-playbook-restore"/);
+	});
+});
+
+// The Expedition road panel's Travel, Back a leg and "Spend N days of supplies…" wear the roll-button skin
+// on core's flex button, in a gap-spaced row. Measured 11-20 with the text-centring audit
+// (exp-trail-verify.mjs) at UI roots 16 and 20, 1x/1.25x/1.5x: each label within 0.5px of its button's
+// centre, the row within 0.1px. What would break them is a nudge in the skin or in their own rules.
+describe("the Expedition road panel's buttons centre by flex, unnudged", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+
+	it.each([
+		".stonetop-spring-roll-btn",
+		".stonetop-spring-roll-btn--primary",
+		".stonetop-expedition-dialog .stonetop-exp-trail-buttons > button",
+		".stonetop-exp-trail-travel",
+		".stonetop-exp-trail-back",
+		".stonetop-exp-trail-days",
+	])("%s nudges nothing", sel => {
+		const body = declarations(MAIN, sel) ?? "";
+		for (const prop of NUDGES) expect(declared(body, prop), `${sel} nudges with ${prop}`).toBeNull();
+		const display = declared(body, "display");
+		if (display) expect(display).toMatch(/flex/);
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it("spaces the row by gap, with no margin under its buttons", () => {
+		const row = declarations(MAIN, ".stonetop-expedition-dialog .stonetop-exp-trail-buttons");
+		expect(declared(row, "display")).toBe("flex");
+		expect(declared(row, "gap")).toBeTruthy();
+		expect(declared(declarations(MAIN, ".stonetop-expedition-dialog .stonetop-exp-trail-buttons > button"), "margin")).toBe("0");
+	});
+
+	it("draws each icon as an element before its label", () => {
+		const trail = readRepo("templates/dialogs/partials/expedition-trail.hbs");
+		expect(trail).toMatch(/class="stonetop-exp-trail-travel [^"]*"[^>]*>\s*<i class="fas fa-person-hiking" aria-hidden="true"><\/i> \{\{this\.road\.travel\.label\}\}/);
+		expect(trail).toMatch(/class="stonetop-exp-trail-days [^"]*"[^>]*>\s*<i class="fas fa-utensils" aria-hidden="true"><\/i> \{\{this\.road\.daysOffer\.label\}\}/);
 	});
 });
 

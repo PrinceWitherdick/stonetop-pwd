@@ -240,8 +240,17 @@ export function sharedRoutePlace(payload) {
 export function sharedNextStop(payload) {
 	const reached = payload?.progress?.reached;
 	if (!Number.isInteger(reached) || reached < 0) return null;
-	const leg = sharedPublicRoute(payload)?.legs?.[reached];
-	return leg?.toName || null;
+	return sharedStopName(payload, reached + 1);
+}
+
+/**
+ * Stop `index` of a share's way as the players read it (0 is where they set out, `k` where leg `k`
+ * ends), or null past either end. The road panel's arrival band names the stop through this.
+ */
+export function sharedStopName(payload, index) {
+	const legs = sharedPublicRoute(payload)?.legs;
+	if (!legs?.length || !Number.isInteger(index) || index < 0 || index > legs.length) return null;
+	return (index === 0 ? legs[0].fromName : legs[index - 1].toName) || null;
 }
 
 export function sharedRouteView(payload) {

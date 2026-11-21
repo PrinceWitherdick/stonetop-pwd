@@ -65,7 +65,7 @@ import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
 import { wireSidebarToggle } from "../utils/sidebar-toggle.js";
-import { SpinTrack } from "../utils/flash-highlight.js";
+import { SpinTrack, flashHighlight } from "../utils/flash-highlight.js";
 import { callStruggleAsOne, gmStruggleCall } from "../struggle/struggle-flow.js";
 import {
 	TRAVEL_MAPS, BEYOND_TIER,
@@ -93,8 +93,10 @@ import { openTravelMap } from "./TravelMapWindow.js";
 import { journeyMapLayer, pinAnchors, timeLabel } from "./journey-map-layer.js";
 import {
 	readSharedRoute, shareRoute, sharedRequirementLines, sharedRoutePayload, sharedRouteState,
-	sharedRoutePlace, stopSharingRoute,
+	sharedRoutePlace, sharedStopName, stopSharingRoute,
 } from "../utils/shared-route.js";
+import { roadLegs, steppedProgress, tripProgress, tripStatus } from "../utils/trip-progress.js";
+import { prefersReducedMotion } from "../utils/reduced-motion.js";
 import { postSharedRouteCard, sharedRouteNotice } from "./SharedRouteWindow.js";
 import { RoadRationsDialog } from "./RoadRationsDialog.js";
 import {
@@ -131,6 +133,13 @@ const SCENE_SWITCH_REFUSALS = new Set(["no-scene", "not-a-map", "wrong-map", "of
 // sheet under it changes (see `_refreshLoadReadout`), not only through the `{{> }}` in the
 // dialog's template.
 const LOAD_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs";
+
+// Running the journey's road panel, redrawn alone by a Travel press (`_refreshRoadPanel`).
+const TRAIL_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-trail.hbs";
+
+// The longest a walk of the road panel's marker may hold `is-walking` if its animationend never fires
+// (a hidden window, a stylesheet that lost the keyframes). The walk itself is 0.9s.
+const TRAIL_WALK_FALLBACK_MS = 1500;
 
 // How long the readout waits after a sheet write before rebuilding. Ticking one inventory box
 // can land as several documents updating in a row (the item, the actor's pool flag, a follower's
@@ -453,6 +462,8 @@ const _STEPS = [
 		roadDays: true,
 		// A fight on the road: the Start a fight window, which also plays the curtain (fight/fight-curtain.js).
 		fight: true,
+		// The road panel: where the party is on the route, and the GM's Travel (`_roadContext`).
+		road: true,
 		// What was charted, as the to-do list the book calls it (p.303), ticked off as each is dealt
 		// with (p.323). The words were settled on Chart a Course; a challenge they couldn't have seen
 		// coming, or one added because a requirement went unmet (p.322), is added from here too.
@@ -869,6 +880,14 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true, only: this._tripParty().map(a => a.id) }));
 		html.find(".stonetop-exp-road-btn").on("click", () => this._openRoadDays());
 		html.find(".stonetop-exp-fight-btn").on("click", () => this._startRoadFight());
+		// The road panel. Delegated from the root because a Travel press redraws the panel alone
+		// (`_refreshRoadPanel`), as the load readout's chips are.
+		html.on("click", ".stonetop-exp-trail-travel, .stonetop-exp-trail-back", ev => {
+			this._travel(Number(ev.currentTarget.dataset.step), ev.currentTarget).catch(err => warn("could not travel a leg", err));
+		});
+		html.on("click", ".stonetop-exp-trail-days", ev => this._openRoadDays(Number(ev.currentTarget.dataset.days) || null));
+		html.on("click", ".stonetop-exp-trail-plot", ev => this._goTo(Number(ev.currentTarget.dataset.stepIndex)));
+		this._watchRoadTrack(html[0]);
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
 		// width without a flicker, and a render here would rebuild the route step's map panel
@@ -1113,6 +1132,9 @@ export class ExpeditionDialog extends StepperDialog {
 			roadDays:  !!step.roadDays && !!game.user?.isGM,
 			// Start a fight is the Fight tab's window, so it is offered only where that tab is on.
 			fight:     !!step.fight && !!game.user?.isGM && isFightTabEnabled(),
+			road:      step.road ? this._roadContext() : null,
+			// The banner's chip, in place of the step count once there is a trip to say something of.
+			tripStatus: current ? this._tripStatusChip() : null,
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			// The same, at the foot of the step rather than under its opening prose.
@@ -4448,6 +4470,7 @@ export class ExpeditionDialog extends StepperDialog {
 	async close(options = {}) {
 		this._dropCanvasWatch();
 		this._dropLoadWatch();
+		this._dropRoadWatch();
 		// A face hovered as the window goes is portaled to <body>, so it outlives its row unless
 		// it is taken down here.
 		removeAvatarPreview();
@@ -4725,11 +4748,245 @@ export class ExpeditionDialog extends StepperDialog {
 	 * "N days pass" (Book I p.89, p.304): the window that spends the party's supplies for the days
 	 * the GM glosses, seeded with what the charted route says the trip takes.
 	 */
-	_openRoadDays() {
-		const routeDays = Number(chartBlankValue("days", this._journeyRoute())) || null;
+	_openRoadDays(days = null) {
+		const routeDays = days ?? (Number(chartBlankValue("days", this._journeyRoute())) || null);
 		// Surplus loaded on the Requisition step (E7) means a laden cart: no meals to count, by default.
 		const packAnimal = (Number(this._currentExpedition()?.surplusOut) || 0) > 0;
 		return new RoadRationsDialog(this._tripParty(), { routeDays, packAnimal }).render(true);
+	}
+
+	/**
+	 * Running the journey's road panel (expedition-trail.hbs): where the party is, a row per leg, and
+	 * Travel / Back a leg. The GM's own names, since this window is GM-only. Travel is never refused
+	 * for a missing stamp (flag, never block): the sentence says they have not set out and goes on.
+	 * Guarded by tests/dialogs/expedition-road.test.js.
+	 */
+	_roadContext() {
+		const key = "stonetop.expedition.road";
+		const trip = this._currentExpedition();
+		const route = this._journeyRoute();
+		const { reached, total, started, arrived } = tripProgress(trip, route);
+		const base = { heading: localize(`${key}.heading`), canEdit: !!game.user?.isGM, hasRoute: total > 0, started, arrived };
+		if (!total) {
+			return {
+				...base, legs: [],
+				where:          localize(`${key}.noRoute`),
+				plot:           localize(`${key}.plot`),
+				routeStepIndex: this._steps.findIndex(s => s.key === "journey"),
+			};
+		}
+		const legs = roadLegs(route, reached).map(row => ({
+			...row,
+			line:       format(`${key}.legLine`, { from: row.fromName, to: row.toName }),
+			// "about", not a tilde: a tilde read aloud is the word "tilde" (shared-route.js#sharedLegLine).
+			time:       row.time && row.estimated ? format("stonetop.expedition.shared.estimated", { time: row.time }) : row.time,
+			stateLabel: row.state === "walked" ? localize(`${key}.walked`) : row.state === "next" ? localize(`${key}.next`) : "",
+		}));
+		const start = legs[0].fromName;
+		const where = arrived ? format(`${key}.arrived`, { place: legs.at(-1).toName })
+			: reached > 0 ? format(`${key}.onLeg`, { n: reached + 1, total, place: legs[reached].toName })
+				: trip?.setOut?.season ? format(`${key}.atStart`, { place: start })
+					: format(`${key}.notSetOut`, { place: start });
+		// The days the leg just travelled took, offered to Days pass on the road.
+		const walked = reached > 0 ? legs[reached - 1] : null;
+		const span = walked?.days ? countOf(walked.days, "day") : "";
+		return {
+			...base, where, legs,
+			travel:    { label: format(`${key}.travel`, { place: legs[Math.min(reached, total - 1)].toName }), disabled: arrived },
+			back:      { label: localize(`${key}.back`), disabled: reached === 0 },
+			daysOffer: span ? { days: walked.days, label: format(`${key}.days`, { days: span }), hint: format(`${key}.daysHint`, { days: span }) } : null,
+		};
+	}
+
+	/** The banner's `{ key, label }`: Planning, On the road (leg n of total), Arrived, Home. */
+	_tripStatusChip() {
+		const trip = this._currentExpedition();
+		const route = this._journeyRoute();
+		const key = tripStatus(trip, route);
+		const { reached, total } = tripProgress(trip, route);
+		const label = key === "road" && total
+			? format("stonetop.expedition.status.roadLeg", { n: Math.min(reached + 1, total), total })
+			: localize(`stonetop.expedition.status.${key}`);
+		return { key, label };
+	}
+
+	/**
+	 * Travel on a leg (`step` 1) or take one back (-1). Read afresh inside the trip's patch, so two
+	 * presses cannot both start from one count. Redraws the panel alone and walks the marker; a
+	 * forward step onto a stop the players were shown sends them the arrival band.
+	 */
+	async _travel(step, control = null) {
+		return onePress(this, "travel", async () => {
+			const trip = this._currentExpedition();
+			const route = this._journeyRoute();
+			if (!trip || !route?.legs?.length) return false;
+			const before = tripProgress(trip, route).reached;
+			let after = null;
+			const wrote = await this._patchTrip(trip, entry => {
+				const next = steppedProgress(entry, route, step);
+				if (!next) return false;
+				entry.progress = next;
+				after = next.reached;
+			});
+			if (!wrote || after === null) return false;
+			const from = this._roadMarkerOffset();
+			// The step is saved by now, so a failed redraw must not swallow the arrival band: the
+			// whole window is drawn again instead, and the travel still counts.
+			let host = null;
+			try {
+				host = await this._refreshRoadPanel();
+			} catch (err) {
+				warn("could not redraw the road panel", err);
+				this.render(false);
+			}
+			if (host) {
+				this._placeRoadMarker(host, { from });
+				// Back on the same control, so a GM can press Enter leg after leg.
+				const again = host.querySelector(step > 0 ? ".stonetop-exp-trail-travel" : ".stonetop-exp-trail-back");
+				(again && !again.disabled ? again : host.querySelector(".stonetop-exp-trail-buttons button:not([disabled])"))?.focus?.();
+				if (after > before) {
+					const row = host.querySelector(`[data-leg="${after - 1}"]`);
+					if (row) flashHighlight(row, { scope: host });
+				}
+			}
+			if (after > before) this._arriveMoment(this._currentExpedition() ?? trip, route, after);
+			return true;
+		}, { control });
+	}
+
+	/**
+	 * "Reached the Crossroads" for the players, only while this trip's way is what they are shown
+	 * (`sharedRouteState` "same"), and named from the share in their words (shared-route.js
+	 * `sharedStopName`), never from the GM's log. A failed moment never fails the travel.
+	 */
+	_arriveMoment(trip, route, reached) {
+		try {
+			const shared = readSharedRoute();
+			const shown = sharedRouteState(shared, {
+				expeditionId: trip.id, journey: trip.journey, hasRoute: !!route?.legs?.length, title: trip.title ?? "",
+			}) === "same";
+			const place = shown ? sharedStopName(shared, reached) : null;
+			if (!place) return;
+			const leg = route.legs[reached - 1];
+			sendMoment({
+				kind:  "arrive",
+				title: format("stonetop.moments.arrive.reached", { place }),
+				sub:   leg?.time ? (leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time) : "",
+			});
+		} catch (err) {
+			warn("could not show the arrival moment", err);
+		}
+	}
+
+	/**
+	 * Redraw the road panel and the banner chip in place, not the window (the `_refreshLoadReadout`
+	 * idiom). The `where` line and its section STAY IN THE DOCUMENT and only the words change:
+	 * everything around the line is swapped, never the line. Moving the line out and back in, even
+	 * within one task, makes it a new live region inserted with its text already in, which not every
+	 * screen reader reads out (moment-overlay.js waits 100ms for the same reason). Guarded by
+	 * tests/dialogs/expedition-road-redraw.test.js. Answers the panel's host, or null.
+	 */
+	async _refreshRoadPanel() {
+		const root = this.element?.[0];
+		const host = root?.querySelector?.(".stonetop-exp-trail-wrap");
+		if (!host) return null;
+		const road = this._roadContext();
+		const markup = await renderTemplate(TRAIL_TEMPLATE, { road });
+		if (!host.isConnected) return null;
+		const next = host.ownerDocument.createElement("div");
+		next.innerHTML = markup;
+		const section = host.querySelector(".stonetop-exp-trail");
+		const kept = section?.querySelector(".stonetop-exp-trail-where");
+		const freshSection = next.querySelector(".stonetop-exp-trail");
+		const fresh = freshSection?.querySelector(".stonetop-exp-trail-where");
+		if (kept?.parentNode === section && fresh?.parentNode === freshSection) {
+			const parts = [...freshSection.childNodes];
+			const at = parts.indexOf(fresh);
+			for (const node of [...section.childNodes]) if (node !== kept) node.remove();
+			kept.before(...parts.slice(0, at));
+			kept.after(...parts.slice(at + 1));
+			for (const { name, value } of [...freshSection.attributes]) section.setAttribute(name, value);
+			if (kept.textContent !== road.where) kept.textContent = road.where;
+		} else {
+			host.replaceChildren(...next.childNodes);
+		}
+		this._watchRoadTrack(root);
+		const chip = root.querySelector("[data-exp-status]");
+		if (chip) {
+			const status = this._tripStatusChip();
+			chip.className = `stonetop-exp-status stonetop-exp-status--${status.key}`;
+			chip.textContent = status.label;
+		}
+		return host;
+	}
+
+	/** Where the road marker stands now, in px down its track, or null with no marker drawn. */
+	_roadMarkerOffset() {
+		const track = this.element?.[0]?.querySelector?.(".stonetop-exp-trail-track");
+		const value = track?.style?.getPropertyValue?.("--stonetop-trail-to");
+		return value ? parseFloat(value) : null;
+	}
+
+	/**
+	 * Stand the road marker beside the next leg's row (below the last when arrived), as
+	 * `--stonetop-trail-to` on the track. With `from` (the old offset) it walks there by the
+	 * `stonetop-exp-trail-walk` keyframes, unless the reader asked for less motion.
+	 *
+	 * Not while the track has no layout (a first render's frame is still `display: none` as it fades
+	 * in, and a step not shown has none): every offset reads 0 there, which would stand the marker
+	 * by the first leg. `_watchRoadTrack` places it once the track is laid out.
+	 */
+	_placeRoadMarker(root, { from = null } = {}) {
+		const track = root?.querySelector?.(".stonetop-exp-trail-track");
+		const marker = track?.querySelector(".stonetop-exp-trail-marker");
+		const rows = track?.querySelectorAll("[data-leg]");
+		if (!marker || !rows?.length || !track.offsetHeight) return;
+		const next = track.querySelector(".stonetop-exp-trail-leg.is-next");
+		const last = rows[rows.length - 1];
+		const size = marker.offsetHeight || 0;
+		// The marker's top: centred on the next row, or on the last row's foot once arrived.
+		const to = next
+			? next.offsetTop + (next.offsetHeight - size) / 2
+			: last.offsetTop + last.offsetHeight - size / 2;
+		const px = `${Math.round(to)}px`;
+		track.style.setProperty("--stonetop-trail-to", px);
+		if (from === null || Math.round(from) === Math.round(to) || prefersReducedMotion()) return;
+		track.style.setProperty("--stonetop-trail-from", `${Math.round(from)}px`);
+		marker.classList.remove("is-walking");
+		// Restart the animation when a walk is already under way.
+		void marker.offsetWidth;
+		marker.classList.add("is-walking");
+		// The marker's own animationend only: the icon's step animation ends inside it and bubbles.
+		const ended = ev => { if (ev.target === marker) done(); };
+		const done = () => {
+			clearTimeout(timer);
+			marker.removeEventListener("animationend", ended);
+			marker.classList.remove("is-walking");
+		};
+		const timer = setTimeout(done, TRAIL_WALK_FALLBACK_MS);
+		marker.addEventListener("animationend", ended);
+	}
+
+	/**
+	 * Keep the marker beside its row. Its place is a px offset, so anything that re-wraps the leg rows
+	 * without a render moves the rows out from under it: the moves-rail toggle (a class, on purpose),
+	 * a window resize, Sheet Text Size, a late font. Every one of those resizes the track, as does the
+	 * first render's frame being shown. The previous watch is dropped first, because an observer holds
+	 * its target, and a render or a panel redraw replaces the track.
+	 */
+	_watchRoadTrack(root) {
+		this._dropRoadWatch();
+		const track = root?.querySelector?.(".stonetop-exp-trail-track");
+		if (!track) return;
+		this._placeRoadMarker(root);
+		if (typeof globalThis.ResizeObserver !== "function") return;
+		this._roadWatch = new globalThis.ResizeObserver(() => this._placeRoadMarker(root));
+		this._roadWatch.observe(track);
+	}
+
+	_dropRoadWatch() {
+		this._roadWatch?.disconnect();
+		this._roadWatch = null;
 	}
 
 	// Toggle a PC in/out of the current trip's party (stored on the trip entry, so it's

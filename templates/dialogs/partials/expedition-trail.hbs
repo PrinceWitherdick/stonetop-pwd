@@ -1,0 +1,40 @@
+{{!-- Running the journey's road panel: where the party is on the route, a row per leg, and the GM's
+      Travel / Back a leg (ExpeditionDialog `_roadContext`). Its own partial because a Travel press
+      redraws it alone (`_refreshRoadPanel`); every control in it is delegated from the dialog root.
+      The words say where they are (the `where` line is a live region); the walking marker is only
+      for the eye. Classes are `stonetop-exp-trail-*` because `.stonetop-exp-road` is the days bar. --}}
+<section class="stonetop-exp-trail" aria-label="{{this.road.heading}}">
+  <h3 class="stonetop-guide-aside-head">{{this.road.heading}}</h3>
+  <p class="stonetop-exp-trail-where" role="status" aria-live="polite">{{this.road.where}}</p>
+  {{#if this.road.hasRoute}}
+  <div class="stonetop-exp-trail-track">
+    <span class="stonetop-exp-trail-marker" aria-hidden="true"><i class="fas fa-person-hiking" aria-hidden="true"></i></span>
+    <ol class="stonetop-exp-trail-legs">
+      {{#each this.road.legs}}
+      <li class="stonetop-exp-trail-leg is-{{this.state}}" data-leg="{{this.index}}">
+        <span class="stonetop-exp-trail-leg-name">{{this.line}}</span>
+        {{#if this.time}}<span class="stonetop-exp-trail-leg-time">{{this.time}}</span>{{/if}}
+        {{#if this.stateLabel}}<span class="stonetop-exp-trail-leg-state">{{this.stateLabel}}</span>{{/if}}
+      </li>
+      {{/each}}
+    </ol>
+  </div>
+  {{#if this.road.canEdit}}
+  <div class="stonetop-exp-trail-buttons">
+    <button type="button" class="stonetop-exp-trail-travel stonetop-spring-roll-btn stonetop-spring-roll-btn--primary" data-step="1"{{#if this.road.travel.disabled}} disabled{{/if}}>
+      <i class="fas fa-person-hiking" aria-hidden="true"></i> {{this.road.travel.label}}
+    </button>
+    <button type="button" class="stonetop-exp-trail-back stonetop-spring-roll-btn" data-step="-1"{{#if this.road.back.disabled}} disabled{{/if}}>{{this.road.back.label}}</button>
+    {{#if this.road.daysOffer}}
+    <button type="button" class="stonetop-exp-trail-days stonetop-spring-roll-btn" data-days="{{this.road.daysOffer.days}}" data-tooltip="{{this.road.daysOffer.hint}}">
+      <i class="fas fa-utensils" aria-hidden="true"></i> {{this.road.daysOffer.label}}
+    </button>
+    {{/if}}
+  </div>
+  {{/if}}
+  {{else if this.road.canEdit}}
+  <div class="stonetop-exp-trail-buttons">
+    <button type="button" class="stonetop-exp-trail-plot stonetop-spring-roll-btn" data-step-index="{{this.road.routeStepIndex}}">{{this.road.plot}}</button>
+  </div>
+  {{/if}}
+</section>

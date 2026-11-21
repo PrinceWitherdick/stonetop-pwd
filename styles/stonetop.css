@@ -49328,6 +49328,135 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 @media (prefers-reduced-motion: reduce) {
 	.stonetop-expedition-dialog .stonetop-guide-main.is-entering { animation: none; }
 }
+
+/* ── Running the journey's road panel (partials/expedition-trail.hbs) ──
+   A row per leg down a track, a marker beside the next leg, and the GM's Travel. The state of a leg
+   is the WORD ("travelled", "next"), never its colour alone. `stonetop-exp-trail-*`, because
+   `.stonetop-exp-road` is the days bar. Guarded by tests/dialogs/expedition-road.test.js. */
+.stonetop-expedition-dialog .stonetop-exp-trail {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-where {
+	margin: 0;
+	color: var(--st-text-body);
+}
+/* The marker's offsetParent: `_placeRoadMarker` measures each row's offsetTop against it. */
+.stonetop-expedition-dialog .stonetop-exp-trail-track {
+	position: relative;
+	padding-left: 2.25em;
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-track::before {
+	content: "";
+	position: absolute;
+	left: calc(0.8em - 1px);
+	top: 0.4em;
+	bottom: 0.4em;
+	width: 2px;
+	background: rgb(var(--st-ink-rgb) / 0.18);
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-legs {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+/* Words of one row on a shared baseline, spaced by gap; a long name wraps under its own start. */
+.stonetop-expedition-dialog .stonetop-exp-trail-leg {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 2px 10px;
+	margin: 0;
+	min-height: 1.6em;
+	padding: 0.15em 0;
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-leg-name { color: var(--st-text-body); }
+.stonetop-expedition-dialog .stonetop-exp-trail-leg-time {
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-leg-state {
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+/* Secondary, not muted: muted measured 4.3:1 on paper (exp-trail-verify.mjs). */
+.stonetop-expedition-dialog .stonetop-exp-trail-leg.is-walked .stonetop-exp-trail-leg-name { color: var(--st-text-secondary); }
+.stonetop-expedition-dialog .stonetop-exp-trail-leg.is-walked .stonetop-exp-trail-leg-state { color: var(--st-green-text); }
+.stonetop-expedition-dialog .stonetop-exp-trail-leg.is-next .stonetop-exp-trail-leg-name { font-weight: 600; }
+/* The party, on the track. Stood by `translate` from `--stonetop-trail-to` (px, set by the script),
+   and walked there by keyframes: movement is an animation, never a transition. The primary
+   button's own pair, so each palette's fill keeps its legible glyph. */
+.stonetop-expedition-dialog .stonetop-exp-trail-marker {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1.6em;
+	height: 1.6em;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+	translate: 0 var(--stonetop-trail-to, 0px);
+	pointer-events: none;
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking {
+	animation: stonetop-exp-trail-walk 0.9s ease-in-out both;
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking > i {
+	animation: stonetop-exp-trail-step 0.3s ease-in-out 3 alternate;
+}
+@keyframes stonetop-exp-trail-walk {
+	from { translate: 0 var(--stonetop-trail-from, 0px); }
+	to   { translate: 0 var(--stonetop-trail-to, 0px); }
+}
+@keyframes stonetop-exp-trail-step {
+	from { rotate: -6deg; }
+	to   { rotate: 6deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking,
+	.stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking > i { animation: none; }
+}
+/* Travel, Back a leg and the days offer: a row of buttons spaced by gap. */
+.stonetop-expedition-dialog .stonetop-exp-trail-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.stonetop-expedition-dialog .stonetop-exp-trail-buttons > button { margin: 0; }
+
+/* The banner's trip status (Planning / On the road / Arrived / Home), in place of the step count. A
+   text-only chip trims itself (tests/styles/chip-centring.test.js); each state wears one whole family. */
+.stonetop-expedition-dialog .stonetop-exp-status {
+	display: inline-block;
+	flex: none;
+	font-size: var(--st-fs-xs);
+	font-weight: 600;
+	text-box: trim-both cap alphabetic;
+	padding: calc(3px + var(--st-trim-top)) 9px calc(3px + var(--st-trim-bottom));
+	border-radius: 999px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
+	background: rgb(var(--st-ink-rgb) / 0.05);
+	color: var(--st-text-secondary);
+	white-space: nowrap;
+}
+/* Body ink on the gold wash: --st-gold-text there measured 3.96:1 on paper (exp-trail-verify.mjs). */
+.stonetop-expedition-dialog .stonetop-exp-status--road {
+	background: var(--st-gold-bg);
+	border-color: var(--st-gold-border);
+	color: var(--st-text-body);
+}
+.stonetop-expedition-dialog .stonetop-exp-status--arrived,
+.stonetop-expedition-dialog .stonetop-exp-status--home {
+	background: var(--st-green-bg);
+	border-color: var(--st-green-border);
+	color: var(--st-green-text);
+}
 /* The window's announcement channel (SharedRouteWindow `_announce`). On the window frame, outside
    the content AppV1 replaces, and read by a screen reader only: the same words are on screen. */
 .stonetop-shared-route-app > .stonetop-shared-route-live {

@@ -20,12 +20,23 @@
               Truncated, because the name is whatever the table typed. --}}
         <div class="stonetop-guide-banner-sub stonetop-guide-truncate">{{this.bannerSub}}</div>
       </div>
+      {{!-- Where the trip stands, once there is one (the footer and the rail already say the step).
+            Rewritten in place by a Travel press (ExpeditionDialog `_refreshRoadPanel`). --}}
+      {{#if this.tripStatus}}
+      <span class="stonetop-exp-status stonetop-exp-status--{{this.tripStatus.key}}" data-exp-status>{{this.tripStatus.label}}</span>
+      {{else}}
       <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
+      {{/if}}
     </div>
 
     {{!-- Setting out is the first thing that happens on Running the journey, so its stamp opens
           the step (`tripStamp.atTop`); Going home's stays at the foot, after the homecoming. --}}
     {{#if this.tripStamp.atTop}}{{> stonetopTripStamp}}{{/if}}
+
+    {{!-- The road panel, under the set-out stamp: where the party is and the GM's Travel. --}}
+    {{#if this.road}}
+    <div class="stonetop-exp-trail-wrap">{{> "stonetop.expedition-trail" road=this.road}}</div>
+    {{/if}}
 
     {{!-- Expedition-log bar: name the current trip, switch between logged trips, or
           start a fresh one. Each trip with content becomes its own Chronicle page.

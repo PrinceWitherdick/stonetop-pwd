@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 const {
 	isSharedRoute, readSharedRoute, sharedRoutePayload, sharedRouteState, sharedRouteView,
 	sharedRouteCardHtml, sharedRouteChip, sharedLegLine, shareRoute, stopSharingRoute,
-	sharedRequirementLines, sharedRequirementsHtml, publicRoute, sharedNextStop,
+	sharedRequirementLines, sharedRequirementsHtml, publicRoute, sharedNextStop, sharedStopName,
 } = await import("../../module/utils/shared-route.js");
 const { frameFor } = await import("../../module/data/travel-times.js");
 const { journeyMapLayer } = await import("../../module/dialogs/journey-map-layer.js");
@@ -140,6 +140,18 @@ describe("sharedNextStop", () => {
 		expect(sharedNextStop({ ...share, progress: { reached: legs.length } })).toBeNull();
 		expect(sharedNextStop({ ...share, progress: { reached: 0.5 } })).toBeNull();
 		expect(sharedNextStop(null)).toBeNull();
+	});
+});
+
+describe("sharedStopName", () => {
+	it("names the start and each leg's end in the players' words, and nothing past either end", () => {
+		const share = crossroads();
+		const legs = sharedRouteView(share).legs;
+		expect(sharedStopName(share, 0)).toBe("Stonetop");
+		expect(legs.at(-1).text).toContain(sharedStopName(share, legs.length));
+		expect(sharedStopName(share, legs.length + 1)).toBeNull();
+		expect(sharedStopName(share, -1)).toBeNull();
+		expect(sharedStopName(null, 0)).toBeNull();
 	});
 });
 

@@ -3699,6 +3699,29 @@
       "fight": {
         "start": "Start a fight…",
         "hint": "Opens Start a fight with every character on this map already ticked."
+      },
+      "road": {
+        "heading": "The road",
+        "noRoute": "No route is plotted for this trip yet.",
+        "plot": "Plot the route",
+        "notSetOut": "They have not set out yet, from {place}.",
+        "atStart": "At {place}, ready to leave.",
+        "onLeg": "Leg {n} of {total}: next stop {place}.",
+        "arrived": "Arrived at {place}.",
+        "travel": "Travel on to {place}",
+        "back": "Back a leg",
+        "walked": "travelled",
+        "next": "next",
+        "days": "Spend {days} of supplies…",
+        "daysHint": "The leg just travelled took {days}. Opens Days pass on the road with that many.",
+        "legLine": "{from} to {to}"
+      },
+      "status": {
+        "planning": "Planning",
+        "road": "On the road",
+        "roadLeg": "On the road, leg {n} of {total}",
+        "arrived": "Arrived",
+        "home": "Home"
       }
     },
     "suggestionMenu": {
