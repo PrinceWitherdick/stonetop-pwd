@@ -18,6 +18,7 @@ import { CharacterTokenLinkDialog } from "../dialogs/CharacterTokenLinkDialog.js
 import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { clearAllBlankDangers } from "../migration/blank-dangers.js";
+import { clearAllPlaceMapLines } from "../migration/place-map-line.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
 import { runWorldSetup, pendingSetupWork } from "./WorldSetup.js";
 import { reapplyBook2Art, hasImportedBook2Art } from "../book2-art/reapply.js";
@@ -417,6 +418,11 @@ export async function onReady() {
 		// of every journal page, and nothing writes them any more.
 		try { await oncePerVersion("blankDangers", clearAllBlankDangers); }
 		catch (err) { console.error("Stonetop | blank Dangers entry cleanup failed", err); }
+		// Take the "Marked D on the village map." line out of the Places of Interest pages seeded
+		// while they still opened with it (see migration/place-map-line.js). Once per version:
+		// nothing writes it any more.
+		try { await oncePerVersion("placeMapLine", clearAllPlaceMapLines); }
+		catch (err) { console.error("Stonetop | Places of Interest map-line cleanup failed", err); }
 		try { await migrateAllSteadingPeople(); }
 		catch (err) { console.error("Stonetop | Residents/Neighbors → NPC conversion failed", err); }
 		// Give already-linked Residents of Stonetop a "Stonetop" Home if theirs is blank

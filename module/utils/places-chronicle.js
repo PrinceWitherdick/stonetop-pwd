@@ -10,8 +10,9 @@
 //
 // Pages are seeded, never overwritten: the six places the book names open with the
 // gazetteer's own paragraph, and once the GM writes into a section it stops syncing (the
-// prose-hash rule in mergeChronicleSections). A place the GM invents gets a page with just
-// its map letter, ready to be written into.
+// prose-hash rule in mergeChronicleSections). A place the GM invents gets a page with an empty
+// Overview, ready to be written into: the page has to exist for its pin to open, and an empty
+// section shows only to those who can write in it.
 //
 // Seeded from the LIVE steading, so a renamed or newly-named place gets its page on the
 // next pass. Keyed by LETTER rather than name — the letter is the slot, the name is what
@@ -19,7 +20,6 @@
 // everything written on it, and retitles the page while it still wears the name we gave it
 // (a page the GM retitled in the journal keeps their title).
 
-import { escHtml } from "./strings.js";
 import { villagePlaceBlurb } from "../data/village-places.js";
 import { ensureChronicleJournal, seedChroniclePages, findChronicleJournal } from "./chronicle-journals.js";
 import { getStonetopSteadingActor } from "./world.js";
@@ -76,13 +76,10 @@ export function buildPlacePages(places = [], { villageLink = "" } = {}) {
 		.map(place => {
 			const letter = place.letter;
 			const blurb = villagePlaceBlurb(place.name);
-			// The map line is always true and always worth having: it is what ties the page
-			// back to the disc someone just clicked. The book's paragraph follows it when the
-			// gazetteer describes this place, and the pointer to the full village entry only
-			// when it does — an invented place has nothing to read on over there.
-			const body = `<p>Marked <strong>${escHtml(letter.toUpperCase())}</strong> on the village map.</p>`
-				+ blurb
-				+ (blurb ? villageLink : "");
+			// The book's paragraph when the gazetteer describes this place, and the pointer to
+			// the full village entry only when it does — an invented place has nothing to read
+			// on over there, so its Overview starts empty.
+			const body = blurb + (blurb ? villageLink : "");
 			return {
 				key: placePageKey(letter),
 				name: place.name,
