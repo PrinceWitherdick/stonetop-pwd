@@ -7,15 +7,16 @@ const played = [];
 vi.mock("../../module/moments/moment-overlay.js", () => ({ playMoment: view => { played.push(view); return !!view; } }));
 
 import {
-	sendMoment, registerMomentBroadcast, _resetMomentBroadcast, MOMENT_SOCKET, MOMENT_PLAY,
+	sendMoment, registerMomentBroadcast, _resetMomentBroadcast, MOMENT_PLAY,
 } from "../../module/moments/moment-broadcast.js";
+import { SYSTEM_SOCKET } from "../../module/utils/system-socket.js";
 
 let handler;
 let momentsOn;
 
 function asUser(isGM) {
 	game.user = { isGM, id: isGM ? "gm" : "player" };
-	game.socket = { emit: vi.fn(), on: (channel, fn) => { if (channel === MOMENT_SOCKET) handler = fn; } };
+	game.socket = { emit: vi.fn(), on: (channel, fn) => { if (channel === SYSTEM_SOCKET) handler = fn; } };
 	registerMomentBroadcast();
 }
 
@@ -34,7 +35,7 @@ describe("sendMoment", () => {
 	it("from a GM, emits on the system channel and plays here", () => {
 		asUser(true);
 		expect(sendMoment({ kind: "setOut", title: "To the Crossroads" })).toBe(true);
-		expect(game.socket.emit).toHaveBeenCalledWith(MOMENT_SOCKET, {
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, {
 			action: MOMENT_PLAY, kind: "setOut", title: "To the Crossroads", sub: "", userId: "gm",
 		});
 		expect(played.map(v => v.title)).toEqual(["To the Crossroads"]);
