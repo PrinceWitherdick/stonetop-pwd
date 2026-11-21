@@ -25,6 +25,7 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { format, localize } from "./i18n.js";
 import { joinNames } from "./strings.js";
+import { touchesKey } from "./touches-flag.js";
 import { bodyStyleTokens } from "./css-tokens.js";
 import {
 	flagScopes, posterMapFor, posterMapSlugOf, sceneOrigin, scopedFlag, scopedFlagDeletions,
@@ -162,9 +163,7 @@ export function sceneJourney(scene) {
  */
 export function routeFlagTouched(changes) {
 	const flags = changes?.flags ?? {};
-	return flagScopes()
-		.some(scope => !!flags[scope]
-			&& (SCENE_ROUTE_FLAG in flags[scope] || `-=${SCENE_ROUTE_FLAG}` in flags[scope]));
+	return flagScopes().some(scope => touchesKey(flags[scope], SCENE_ROUTE_FLAG));
 }
 
 /**

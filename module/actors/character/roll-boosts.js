@@ -49,6 +49,7 @@
 import { SYSTEM_ID } from "../../system-id.js";
 import { format, localize } from "../../utils/i18n.js";
 import { escHtml } from "../../utils/strings.js";
+import { touchesFlag } from "../../utils/touches-flag.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { rollCardRoute, writeCardRoll } from "../../utils/roll-card-writer.js";
@@ -439,8 +440,7 @@ export function deathsDoorPlusOnes(message, roller, { user = globalThis.game?.us
  */
 export function onUpdateActorDoorPlusOnes(actor, changes, { messages = globalThis.game?.messages, redraw = m => globalThis.ui?.chat?.updateMessage?.(m) } = {}) {
 	if (actor?.type !== "character") return;
-	const flags = changes?.flags?.[SYSTEM_ID] ?? {};
-	if (!(DEATHS_DOOR_ROLLING_FLAG in flags) && !(`-=${DEATHS_DOOR_ROLLING_FLAG}` in flags)) return;
+	if (!touchesFlag(changes, DEATHS_DOOR_ROLLING_FLAG)) return;
 	for (const message of asArray(messages).slice(-DOOR_CARD_REDRAW_DEPTH)) {
 		// Not a card this client has not drawn: core's updateMessage would post it at the foot of the log.
 		if (!message?.logged || !isDeathsDoorCard(message) || speakerActor(message)?.id !== actor.id) continue;
