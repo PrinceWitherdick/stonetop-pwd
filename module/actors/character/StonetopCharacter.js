@@ -1,4 +1,4 @@
-import { resourceCheckName } from "../../utils/resource-checks.js";
+import { readinessPips, resourceCheckName } from "../../utils/resource-checks.js";
 import {
 	AppearanceLineSnapshot,
 	AppearanceOptionSnapshot,
@@ -4847,10 +4847,7 @@ export class StonetopCharacter {
 		const { offered, locked } = this.seekerMajorOffer(background);
 		const held       = !!state.major && this._arcana.ownedSlugs.has(state.major);
 		const asGranted  = held && await this._seekerCardAsGranted(state.major, "major", state);
-		let plan         = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted });
-		// The GM's grant is owed even beside a played major: the played one stays held, and the grant
-		// is asked for (seeker-collection.test.js, "a grant ... beside a played major").
-		if (locked && plan === "stays") plan = "ask";
+		const plan       = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted, locked });
 		if (plan === "replace") await this.settleSeekerArcana(state, { ...state, major: "", majorMarks: [] });
 		return { plan, background, offered, locked, major: state.major };
 	}
@@ -4902,8 +4899,7 @@ export class StonetopCharacter {
 		const { offered, locked } = this.seekerMajorOffer(background);
 		const leads = this._arcana.leadSlugs;
 		const owned = [...this._arcana.ownedSlugs].filter(s => !leads.has(s));
-		// With a grant only the grant settles it: an older creation major held does not.
-		return seekerMajorOwed({ offered, owned, major: locked ? "" : this.seekerCreationState().major });
+		return seekerMajorOwed({ offered, owned, major: this.seekerCreationState().major, locked });
 	}
 
 	/** Give `major` as the Seeker's major arcanum with its 1 mark ("context:index" keys). */
@@ -6323,9 +6319,6 @@ export class StonetopCharacter {
 		const opts  = { hasShield: await this.bearsShield(gear), hasGuardian: this.hasGuardianMove };
 		const value = this.defendReadiness;
 		const cap   = defendReadinessCap(opts);
-		// Never render fewer circles than are held, so an over-held pool (e.g. shield
-		// dropped mid-fight) stays visible and spendable.
-		const count = Math.max(cap, value);
 		return {
 			value,
 			cap,
@@ -6335,7 +6328,7 @@ export class StonetopCharacter {
 			// (fight/hero-moves.js#leapInOpen): the row's Leap in button.
 			leapIn: leapInOpen(this._actor),
 			// Named one by one ("Readiness 2 of 3"): the sheet draws each as an empty button.
-			pips: Array.from({ length: count }, (_, i) => ({ index: i, filled: i < value, label: `Readiness ${i + 1} of ${count}` })),
+			pips: readinessPips(value, cap),
 		};
 	}
 

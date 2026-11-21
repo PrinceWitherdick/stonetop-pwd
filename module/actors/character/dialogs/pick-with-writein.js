@@ -31,14 +31,14 @@ export function suggestionView(suggestions, chosen) {
 /**
  * Repaint a pick-N list after a pick changes, without a re-render: the count, the unticked boxes
  * locked at the limit, each write-in box locked at the limit unless it holds a pick, and the create
- * button.
+ * button when there is one (onboarding's Next has its own refresh).
  */
-export function paintPickLimit({ count, boxes, custom, create }, picked, limit, ready) {
+export function paintPickLimit({ count, boxes, custom, create = null }, picked, limit, ready) {
 	const atLimit = picked >= limit;
 	count.text(picked);
 	boxes.each((_, el) => { if (!el.checked) el.disabled = atLimit; });
 	custom.each((_, el) => { el.disabled = atLimit && !String(el.value ?? "").trim(); });
-	create.prop("disabled", !ready);
+	create?.prop("disabled", !ready);
 }
 
 /**
@@ -59,4 +59,14 @@ export function bindSuggestionOrCustom(html, radioName, customSelector, apply, a
 			.closest(".stonetop-onboarding-card").removeClass("is-selected");
 		after();
 	});
+}
+
+/**
+ * The setup dialogs' instinct and cost pairs (`<prefix>-instinct` radios with a
+ * `.<prefix>-instinct-custom` write-in, and the same for cost), saved into `app._sel`.
+ */
+export function bindInstinctAndCost(app, html, prefix, after) {
+	for (const key of ["instinct", "cost"]) {
+		bindSuggestionOrCustom(html, `${prefix}-${key}`, `.${prefix}-${key}-custom`, value => { app._sel = { ...app._sel, [key]: value }; }, after);
+	}
 }

@@ -245,6 +245,13 @@ describe("the Details tab's background switch and the major arcanum", () => {
 		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", offered: [] })).toBe("none");
 	});
 
+	it("plans with a GM's grant: a played major stays held and the grant is still asked for", () => {
+		const offered = ["mindgem"];
+		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", offered, asGranted: false, locked: true })).toBe("ask");
+		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", offered, asGranted: true, locked: true })).toBe("replace");
+		expect(seekerMajorSwitchPlan({ major: "mindgem", offered, locked: true })).toBe("keep");
+	});
+
 	it("the dialog's answer: a ○ major takes its first ○, a □ major waits for its task", () => {
 		const choices = seekerMajorChoices([card("azure-hand"), card("mindgem")]);
 		expect(choices.map(c => [c.slug, c.circles, c.tasks.length])).toEqual([["azure-hand", 4, 0], ["mindgem", 0, 4]]);
@@ -295,6 +302,11 @@ describe("the Details tab's background switch and the major arcanum", () => {
 		// The creation major is gone from the sheet: owed again.
 		expect(seekerMajorOwed({ offered, owned: [], major: "hectumel-codex" })).toBe(true);
 		expect(seekerMajorOwed({ offered: [], owned: [], major: "" })).toBe(false);
+	});
+
+	it("with a GM's grant only the grant settles the debt, not an older creation major held", () => {
+		expect(seekerMajorOwed({ offered: ["mindgem"], owned: ["hectumel-codex"], major: "hectumel-codex", locked: true })).toBe(true);
+		expect(seekerMajorOwed({ offered: ["mindgem"], owned: ["mindgem"], major: "hectumel-codex", locked: true })).toBe(false);
 	});
 
 	it("'Choose later' leaves the major owed, and the Arcana tab's button asks again and gives it", async () => {

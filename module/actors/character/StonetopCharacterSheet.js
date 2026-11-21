@@ -56,7 +56,8 @@ import {CallUpDeepOnesDialog} from "./dialogs/CallUpDeepOnesDialog.js";
 import {BackgroundNeighborsDialog, storedNeighborPicks, storedNeighborTraits, traitedNeighbors} from "./dialogs/BackgroundNeighborsDialog.js";
 import {BackgroundAnswersDialog, backgroundSetupAsks} from "./dialogs/BackgroundAnswersDialog.js";
 import {SeekerMajorArcanumDialog} from "./dialogs/SeekerMajorArcanumDialog.js";
-import {giveSeekerMajor, pickMajorArcanum, loadMajorArcana, playersSeeHomebrewMajors} from "./seeker-major-grant.js";
+import {giveSeekerMajor, pickOtherSeekerMajor} from "./seeker-major-grant.js";
+import {pipRow, readinessPips} from "../../utils/resource-checks.js";
 import {minorArcanaHeldElsewhere} from "./seeker-collection.js";
 import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower, findRingFollower, loyaltyOwnerId, RING_ARCANUM_SLUG} from "../../data/servant-of-daagon.js";
 import {characterSummonBlocker, followerReadinessBonus, summonBlockedMessage, summonHeldElsewhere, summonHeldElsewhereText, summonHoldersBySource} from "../../data/arcana-summon-gates.js";
@@ -991,18 +992,12 @@ function _animalCompanionTraitTooltip(trait) {
 // tooltip ("Set Loyalty") is the same on every one, so the name is what tells them apart for a
 // screen reader. tests/templates/icon-conventions.test.js keeps every empty control named.
 function _makeLoyaltyPips(val, max = 3) {
-	return Array.from({ length: max }, (_, i) => ({ index: i, filled: i < val, label: `Loyalty ${i + 1} of ${max}` }));
+	return pipRow("Loyalty", val, max);
 }
 
-
-// Readiness circles (Defend, p.216 / followers p.469). The Defend move holds up
-// to 3 (10+) or 1 (7-9); a borne shield adds +1 to either, so the cap is 4 with
-// a shield, 3 without. Never render fewer circles than are held, so an over-held
-// pool (e.g. shield dropped mid-fight) stays spendable.
-function _makeReadinessPips(val, max = 3) {
-	const count = Math.max(max, val);
-	return Array.from({ length: count }, (_, i) => ({ index: i, filled: i < val, label: `Readiness ${i + 1} of ${count}` }));
-}
+// Readiness circles (Defend, p.216 / followers p.469) are resource-checks.js#readinessPips. The
+// Defend move holds up to 3 (10+) or 1 (7-9); a borne shield adds +1 to either, so the cap is 4
+// with a shield, 3 without.
 
 // An Order button's tag and move lists: trimmed text, blanks dropped.
 const cleanList = (list) => (list ?? []).map(v => String(v ?? "").trim()).filter(Boolean);
@@ -3196,7 +3191,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// un-learned Shield Wall stays on the sheet and changes nothing), as orderFollower's own
 				// Shield Wall offer already does.
 				const crewHasShieldWall = ownsLearned(SHIELD_WALL_MOVE) && formedInShieldWall(sf);
-				const crewReadinessPips = _makeReadinessPips(crewReadiness, crewReadinessCap({ hasShield: crewHasShield, formed: crewHasShieldWall }));
+				const crewReadinessPips = readinessPips(crewReadiness, crewReadinessCap({ hasShield: crewHasShield, formed: crewHasShieldWall }));
 				// Crew shares the common card body but supplies its own gear (the
 				// inventory section below), so spread the shared extras then override
 				// `gear`. Details live under crew.details so they don't collide with the
@@ -3756,7 +3751,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						card.readinessValue    = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, _followerReadinessPath(card.ftype, rSlug))) || 0);
 						card.readinessHasShield = _followerBearsShield(card.gear);
 						// The Bronze Protector's "+1 Readiness on a 7+ to Defend" prints Readiness ○○○○ (p.533).
-						card.readinessPips      = _makeReadinessPips(card.readinessValue,
+						card.readinessPips      = readinessPips(card.readinessValue,
 							readinessCap(card.readinessHasShield) + this._followerReadinessBonus(card.ftype, rSlug));
 					}
 					// The two pip tracks reserve the same number of slots so their Spend
@@ -8604,16 +8599,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (pick?.major) await character.chooseSeekerMajor(pick.major, pick.marks);
 		}
 
-		// "Choose a different arcanum" from the Details tab's ask: any major (homebrew only with both
-		// world switches on, playersSeeHomebrewMajors), then the same ask for its 1 mark. A GM pressing
-		// it sees what a player would; the GM's full list is the Arcana tab's "Give a major arcanum".
+		// "Choose a different arcanum" from the Details tab's ask (pickOtherSeekerMajor), then the same
+		// ask for its 1 mark. A GM pressing it sees what a player would; the GM's full list is the
+		// Arcana tab's "Give a major arcanum".
 		async _askOtherSeekerMajor(background) {
-			const slug = await pickMajorArcanum({
-				majors:      await loadMajorArcana({ homebrew: playersSeeHomebrewMajors() }),
-				listed:      background?.majorArcana ?? [],
-				title:       localize("stonetop.seekerMajor.otherTitle"),
-				buttonLabel: localize("stonetop.seekerMajor.otherButton"),
-			});
+			const slug = await pickOtherSeekerMajor({ background });
 			const card = slug ? await this._stonetopCharacter.getArcanum(slug) : null;
 			return card ? SeekerMajorArcanumDialog.ask(background, [card]) : null;
 		}

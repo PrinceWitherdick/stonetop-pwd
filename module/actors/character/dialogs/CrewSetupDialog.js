@@ -2,7 +2,7 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { normalizePlaybookGlyphs } from "../../../utils/strings.js";
 import { STONETOP_SCOPE } from "../StonetopFlags.js";
 import { crewWriteInTags, crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
-import { togglePick, suggestionView, paintPickLimit, bindSuggestionOrCustom } from "./pick-with-writein.js";
+import { togglePick, suggestionView, paintPickLimit, bindInstinctAndCost } from "./pick-with-writein.js";
 
 // ── CrewSetupDialog ──────────────────────────────────────────────────────────
 // Set up a crew the character is owed but has never been given: the Crew insert's tags, instinct,
@@ -168,11 +168,7 @@ export class CrewSetupDialog extends StonetopDialog {
 			refresh();
 		});
 
-		// A suggestion radio saves its value and clears the write-in; typing a write-in saves it and
-		// clears the radios, as onboarding's crew step does.
-		const setSel = key => value => { this._sel = { ...this._sel, [key]: value }; };
-		bindSuggestionOrCustom(html, "crew-setup-instinct", ".crew-setup-instinct-custom", setSel("instinct"), refresh);
-		bindSuggestionOrCustom(html, "crew-setup-cost", ".crew-setup-cost-custom", setSel("cost"), refresh);
+		bindInstinctAndCost(this, html, "crew-setup", refresh);
 
 		html.find(".stonetop-crew-setup-create").on("click", () => {
 			if (!crewSetupReady(this._sel, this._limit)) return;

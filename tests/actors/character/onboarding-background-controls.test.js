@@ -1,9 +1,8 @@
 // The background card's inner controls (a setup choice or text, a neighbor's trait or pick, a marked
 // action, a move choice, the major arcanum) each pick their card's background as they are engaged.
-// They switch it only when it is another background: _applyBackgroundChange clears the Initiates
-// picks and rebuilds the steps, so re-running it for the background already taken (a setup field's
-// `input` event, on every keystroke) threw those picks away for nothing. The major arcanum now
-// syncs the background radio the way every other inner control does.
+// _applyBackgroundChange does nothing for the background already taken: a full apply clears the
+// Initiates picks and rebuilds the steps, and a setup field's `input` event calls it on every
+// keystroke. The major arcanum syncs the background radio the way every other inner control does.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -24,23 +23,28 @@ function blessedDialog() {
 }
 
 describe("re-applying the background already taken", () => {
-	// Why the inner controls guard: the one thing a same-background apply changes is to drop the
-	// Initiates picks. Everything else it does comes out the same, so skipping it loses nothing.
-	it("would only clear the Initiates picks; the steps and reconciled picks come out the same", () => {
+	it("keeps the Initiates picks, the steps and every other pick", () => {
 		const dialog = blessedDialog();
 		const [first, second] = dialog._getInitiatesData().options.map(o => o.slug);
 		dialog._selections.initiates = [first, second];
 		const steps = [...dialog._steps];
 		const step = dialog._step;
-		const { initiates, ...rest } = structuredClone(dialog._selections);
-		expect(initiates).toEqual([first, second]);
+		const before = structuredClone(dialog._selections);
 
 		dialog._applyBackgroundChange("initiate");
-		expect(dialog._selections.initiates).toEqual([]);
-		const { initiates: _cleared, ...after } = structuredClone(dialog._selections);
-		expect(after).toEqual(rest);
+		expect(dialog._selections).toEqual(before);
 		expect(dialog._steps).toEqual(steps);
 		expect(dialog._step).toBe(step);
+	});
+
+	it("switching to another background still clears them", () => {
+		const dialog = blessedDialog();
+		const [first] = dialog._getInitiatesData().options.map(o => o.slug);
+		dialog._selections.initiates = [first];
+		const other = dialog._backgrounds.find(b => b.slug !== "initiate").slug;
+		dialog._applyBackgroundChange(other);
+		expect(dialog._selections.backgroundSlug).toBe(other);
+		expect(dialog._selections.initiates).toEqual([]);
 	});
 });
 
@@ -53,14 +57,6 @@ describe("the background card's inner controls", () => {
 	it("is the section being scanned", () => {
 		expect(listeners).toContain("[name='onboard-background-major-arcanum']");
 		expect(listeners).toContain(".onboard-background-setup-text");
-	});
-
-	it("switch the background only when it is another one", () => {
-		const calls = listeners.match(/^.*this\._applyBackgroundChange\(backgroundSlug\);$/gm) ?? [];
-		expect(calls.length).toBeGreaterThanOrEqual(9);
-		for (const line of calls) {
-			expect(line.trim()).toBe("if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);");
-		}
 	});
 
 	it("include the major arcanum in syncing the background radio and its picks", () => {

@@ -32,7 +32,7 @@ import { FoundryMoveRepository } from "../repositories/FoundryMoveRepository.js"
 import { ensurePackIndex } from "../../../utils/pack-index.js";
 import { SYSTEM_ID, ITEM_FLAG_SCOPE } from "../../../system-id.js";
 import { crewSetupLimit } from "./CrewSetupDialog.js";
-import { bindSuggestionOrCustom as bindSuggestionPair } from "./pick-with-writein.js";
+import { bindSuggestionOrCustom, paintPickLimit, suggestionView, togglePick } from "./pick-with-writein.js";
 import { crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
 import { CREATION_MARK_MOVES, creationMarkCopies, creationMarkCrewTags, creationMarksComplete, creationMarkRadios } from "./creation-marks.js";
 import { neighborChoiceGroups, randomNeighborTrait } from "./BackgroundNeighborsDialog.js";
@@ -40,38 +40,40 @@ import { INITIATE_BACKGROUND, choiceCountState } from "../initiates.js";
 import { lorePickMax, lorePickMin } from "../lore-pick-count.js";
 import { MAGNIFICENT_SPECIMEN_MOVE, companionKindOptions, companionTraitAllowance, trimCompanionTraits } from "../animal-companion.js";
 import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete, seekerOfferedMajors } from "../seeker-collection.js";
-import { giveSeekerMajor, pickMajorArcanum, playersSeeHomebrewMajors } from "../seeker-major-grant.js";
+import { giveSeekerMajor, pickOtherSeekerMajor } from "../seeker-major-grant.js";
 import { plural } from "../../../utils/plural.js";
 import { isFinishedWorldArcanum } from "../../../item/createArcanum.js";
+import { touchesKey } from "../../../utils/touches-flag.js";
 
 const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
 
-/**
- * The world's homebrew minor arcana that join the Seeker's draw, when the GM's world switch
- * `arcanaSeekerDrawsHomebrew` is on (ruling A19; Book I p.136 "Draw 3 at random"). Finished cards
- * only: a draft (flags.stonetop.draft) and a card without a slug are no card yet, and a major is
- * the background's to grant, never drawn. Empty when the switch is off.
- */
+// The world's finished arcana of one kind: a draft (flags.stonetop.draft) and a card without a slug
+// are no card yet.
+function finishedWorldArcana(items, major) {
+	return [...(items ?? [])].filter(item => {
+		const flags = item?.flags?.stonetop ?? {};
+		return isFinishedWorldArcanum(item) && !!flags.slug
+			&& isMajorArcanumItem({ slug: flags.slug, major: flags.major }) === major;
+	});
+}
+
 /**
  * The world's finished homebrew major arcana, for the Seeker's major step. They are offered only
  * when the GM gives one or a player picks one (seekerOfferedMajors) and are never drawn, so no
  * setting gates loading them (seeker-collection.test.js, "the minor pool is unchanged").
  */
 export function seekerHomebrewMajors({ items = globalThis.game?.items } = {}) {
-	return [...(items ?? [])].filter(item => {
-		const flags = item?.flags?.stonetop ?? {};
-		return isFinishedWorldArcanum(item) && !!flags.slug && isMajorArcanumItem({ slug: flags.slug, major: flags.major });
-	});
+	return finishedWorldArcana(items, true);
 }
 
+/**
+ * The world's homebrew minor arcana that join the Seeker's draw, when the GM's world switch
+ * `arcanaSeekerDrawsHomebrew` is on (ruling A19; Book I p.136 "Draw 3 at random"). A major is the
+ * background's to grant, never drawn. Empty when the switch is off.
+ */
 export function seekerHomebrewMinors({ items = globalThis.game?.items, enabled } = {}) {
 	const on = enabled === undefined ? getBooleanSetting("arcanaSeekerDrawsHomebrew") : enabled;
-	if (!on) return [];
-	return [...(items ?? [])].filter(item => {
-		const flags = item?.flags?.stonetop ?? {};
-		return isFinishedWorldArcanum(item) && !!flags.slug
-			&& !isMajorArcanumItem({ slug: flags.slug, major: flags.major });
-	});
+	return on ? finishedWorldArcana(items, false) : [];
 }
 
 // The Ranger's animal-companion builder only applies to characters who have the
@@ -779,6 +781,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	_applyBackgroundChange(slug) {
+		// The background already taken changes nothing but would clear the Initiates picks, and a setup
+		// field's `input` calls this on every keystroke (onboarding-background-controls.test.js).
+		if (slug === this._selections.backgroundSlug) return;
 		// A major taken off the old background's list follows the background; one picked from outside
 		// it (the world's "any major" switch) stays, as _ensureSeekerMajorSelection keeps it.
 		if (this._combineSeekerArcana && (this._selectedBackground()?.majorArcana ?? []).includes(this._selections.arcana.major)) {
@@ -1401,18 +1406,15 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		if (written) await this.render(false);
 	}
 
-	// "Choose a different arcanum": any major, the background's own first, homebrew ones only with
-	// both world switches on. The pick stays as a 4th card (seekerOfferedMajors), and the re-render
-	// resets its mark to the new card's default (_reconcileSeekerMajorMarks).
+	// "Choose a different arcanum" (pickOtherSeekerMajor), from the majors this step already loaded so
+	// the pick is one it can draw. The pick stays as a 4th card (seekerOfferedMajors), and the
+	// re-render resets its mark to the new card's default (_reconcileSeekerMajorMarks).
 	async _chooseOtherSeekerMajor() {
 		const arcana = await this._loadArcanaOptions();
-		const homebrew = playersSeeHomebrewMajors();
-		const slug = await pickMajorArcanum({
-			majors:      arcana.major.filter(o => homebrew || !o.homebrew).map(o => ({ slug: o.slug, name: o.name, summary: o.description, homebrew: o.homebrew })),
-			listed:      this._selectedBackground()?.majorArcana ?? [],
-			selected:    this._selections.arcana.major,
-			title:       localize("stonetop.seekerMajor.otherTitle"),
-			buttonLabel: localize("stonetop.seekerMajor.otherButton"),
+		const slug = await pickOtherSeekerMajor({
+			majors:     arcana.major.map(o => ({ slug: o.slug, name: o.name, summary: o.description, homebrew: o.homebrew })),
+			background: this._selectedBackground(),
+			selected:   this._selections.arcana.major,
 		});
 		if (!slug) return;
 		this._selections.arcana.major = slug;
@@ -1426,8 +1428,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		const actorId = this._seekerActor.id;
 		this._seekerGrantHook = Hooks.on("updateActor", (actor, changes) => {
 			if (actor?.id !== actorId || !this.rendered) return;
-			const arcana = changes?.flags?.[STONETOP_SCOPE]?.arcana;
-			if (!arcana || !Object.keys(arcana).some(key => key.replace(/^-=/, "") === "majorGrant")) return;
+			if (!touchesKey(changes?.flags?.[STONETOP_SCOPE]?.arcana, "majorGrant")) return;
 			this._ensureSeekerMajorSelection();
 			this.render(false);
 		});
@@ -2673,12 +2674,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// tag picks) and for Instinct/Cost (a value not among the suggestions).
 			const knownTags = new Set(raw.availableTags ?? []);
 			const customTag = [...chosen].find(t => !knownTags.has(t)) ?? "";
-			const crewInstinct   = this._selections.crew.instinct;
-			const crewCost       = this._selections.crew.cost;
-			const instinctValues = (raw.instincts ?? []).map(v => this._normalizeOnboardingText(v));
-			const costValues     = (raw.costs ?? []).map(v => this._normalizeOnboardingText(v));
-			const isCustomInstinct = !!crewInstinct && !instinctValues.includes(crewInstinct);
-			const isCustomCost     = !!crewCost && !costValues.includes(crewCost);
+			const instinct  = suggestionView(raw.instincts, this._selections.crew.instinct);
+			const cost      = suggestionView(raw.costs, this._selections.crew.cost);
 			crewData = {
 				// Veteran Crew's "Go mark it now", one pick for each copy creation gives.
 				creationMarks:      this._creationMarkData(),
@@ -2699,12 +2696,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 						disabled: isAuto || (!isSelected && atLimit),
 					};
 				}),
-				instincts: instinctValues.map(value => ({ value, selected: crewInstinct === value })),
-				costs:     costValues.map(value => ({ value, selected: crewCost === value })),
-				isCustomInstinct,
-				customInstinct: isCustomInstinct ? crewInstinct : "",
-				isCustomCost,
-				customCost:     isCustomCost ? crewCost : "",
+				instincts:      instinct.options,
+				customInstinct: instinct.custom,
+				costs:          cost.options,
+				customCost:     cost.custom,
 			};
 		}
 
@@ -2777,12 +2772,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// Instinct and cost are "pick a suggestion or make up your own" (Book I
 			// companion insert), so a value that isn't one of the suggestions is a
 			// write-in — surfaced through the custom field with the radios cleared.
-			const acInstinct     = this._selections.animalCompanion.instinct;
-			const acCost         = this._selections.animalCompanion.cost;
-			const instinctValues = (raw.instincts ?? []).map(v => this._normalizeOnboardingText(v));
-			const costValues     = (raw.costs ?? []).map(v => this._normalizeOnboardingText(v));
-			const isCustomInstinct = !!acInstinct && !instinctValues.includes(acInstinct);
-			const isCustomCost     = !!acCost && !costValues.includes(acCost);
+			const instinct = suggestionView(raw.instincts, this._selections.animalCompanion.instinct);
+			const cost     = suggestionView(raw.costs, this._selections.animalCompanion.cost);
 			acData = {
 				types: (raw.types ?? []).map(t => ({
 					slug: t.slug, label: this._normalizeOnboardingText(t.label), examples: this._normalizeOnboardingText(t.examples),
@@ -2819,12 +2810,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 						};
 					}),
 				} : null,
-				instincts: instinctValues.map(value => ({ value, selected: acInstinct === value })),
-				costs:     costValues.map(value => ({ value, selected: acCost === value })),
-				isCustomInstinct,
-				customInstinct: isCustomInstinct ? acInstinct : "",
-				isCustomCost,
-				customCost:     isCustomCost ? acCost : "",
+				instincts:      instinct.options,
+				customInstinct: instinct.custom,
+				costs:          cost.options,
+				customCost:     cost.custom,
 				companionName: this._selections.animalCompanion.name,
 			};
 		}
@@ -2959,12 +2948,6 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// Mirror a background change driven by an inline input (setup/neighbor/action
 		// pick) onto the background radio cards, so engaging an inner control also
 		// selects its card.
-		//
-		// Each inner control switches the background only when it belongs to another one
-		// (`prevBackground !== backgroundSlug`). _applyBackgroundChange clears the Initiates
-		// picks and rebuilds the steps, so re-running it for the background already taken (a
-		// setup field's `input`, on every keystroke) threw those picks away for nothing; its
-		// reconcilers and the step list come out the same for an unchanged background.
 		const _syncBackgroundSelection = (prevBackground, backgroundSlug) => {
 			if (prevBackground === backgroundSlug) return;
 			_paintBackgroundPicks();
@@ -2999,7 +2982,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const { backgroundSlug } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
 			// Ticking a background's word picks that background, as its other inner controls do.
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._setBackgroundPick(ev.currentTarget.value, ev.currentTarget.checked);
 			_paintBackgroundPicks();
 			_syncBackgroundSelection(prevBackground, backgroundSlug);
@@ -3020,7 +3003,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".stonetop-onboarding-background-choice-option input[type='radio']").on("change", ev => {
 			const { backgroundSlug, choiceKey, choiceLabel } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundChoices[choiceKey] = {
 				label: choiceLabel,
 				value: ev.currentTarget.value,
@@ -3064,7 +3047,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".stonetop-onboarding-background-extra-mark input[type='radio']").on("change", ev => {
 			const { backgroundSlug, choiceKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundMoveMarks ??= {};
 			this._selections.backgroundMoveMarks[choiceKey] = ev.currentTarget.value;
 			_paintExtraMarks(ev.currentTarget.closest(".stonetop-onboarding-background-move-choice"), backgroundSlug, choiceKey);
@@ -3086,7 +3069,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".stonetop-onboarding-background-setup-option input[type='radio']").on("change", ev => {
 			const { backgroundSlug, choiceKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundSetup.choices[choiceKey] = ev.currentTarget.value;
 			html.find(`[name='${ev.currentTarget.name}']`).each((_, radio) => {
 				radio.closest(".stonetop-onboarding-background-setup-option")
@@ -3098,7 +3081,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".onboard-background-setup-text").on("input", ev => {
 			const { backgroundSlug, textKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundSetup.texts[textKey] = ev.currentTarget.value;
 			_syncBackgroundSelection(prevBackground, backgroundSlug);
 			_refreshNextButton();
@@ -3111,7 +3094,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".onboard-background-neighbor-trait").on("input", ev => {
 			const { backgroundSlug, traitKey } = ev.currentTarget.dataset;
 			const prevBackground = this._selections.backgroundSlug;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._selections.backgroundSetup.neighborTraits[traitKey] = ev.currentTarget.value.trim();
 			_syncBackgroundSelection(prevBackground, backgroundSlug);
 			_refreshNextButton();
@@ -3146,7 +3129,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const { backgroundSlug, choiceKey } = ev.currentTarget.dataset;
 			const max = Number(ev.currentTarget.dataset.choiceCount ?? 1);
 			const prevBackground = this._selections.backgroundSlug;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			const current = this._selections.backgroundSetup.neighborPicks[choiceKey] ?? [];
 			const value = ev.currentTarget.value;
 			const next = ev.currentTarget.checked
@@ -3187,7 +3170,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const prevBackground = this._selections.backgroundSlug;
 			// Engaging a background's action picks that background, mirroring the
 			// setup/neighbor/arcana inputs on the other cards.
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			const bg  = this._backgrounds.find(b => b.slug === backgroundSlug);
 			const max = allowedMarkableActions(bg?.markableActions, 1);
 			const value = ev.currentTarget.value;
@@ -3232,7 +3215,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find("[name='onboard-background-major-arcanum']").on("change", ev => {
 			const prevBackground = this._selections.backgroundSlug;
 			const { backgroundSlug } = ev.currentTarget.dataset;
-			if (prevBackground !== backgroundSlug) this._applyBackgroundChange(backgroundSlug);
+			this._applyBackgroundChange(backgroundSlug);
 			this._selections.arcana.major = ev.currentTarget.value;
 
 			// Update arcana is-selected without re-rendering.
@@ -3741,6 +3724,15 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			if (this._setCreationMark(move, Number(copy), ev.currentTarget.value)) this.render(false);
 		});
 
+		const crewPickEls = {
+			count:  html.find(".stonetop-onboarding-crew-tag-count"),
+			boxes:  html.find("[name='onboard-crew-tag']:not([data-auto])"),
+			custom: html.find(".onboard-crew-tag-custom"),
+		};
+		const _paintCrewPicks = () => {
+			paintPickLimit(crewPickEls, this._crewPickedTags().length, this._crewTagLimit());
+			_refreshNextButton();
+		};
 		html.find("[name='onboard-crew-tag']").on("change", ev => {
 			if (!this._toggleCrewTag(ev.currentTarget.value, ev.currentTarget.checked)) {
 				ev.currentTarget.checked = false;
@@ -3748,14 +3740,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			}
 			ev.currentTarget.closest(".stonetop-onboarding-tag-option")
 				?.classList.toggle("is-selected", ev.currentTarget.checked);
-			const picked  = this._crewPickedTags().length;
-			html.find(".stonetop-onboarding-crew-tag-count").text(picked);
-			const atLimit = picked >= this._crewTagLimit();
-			html.find("[name='onboard-crew-tag']:not([data-auto])").each((_, el) => {
-				if (!el.checked) el.disabled = atLimit;
-			});
-			html.find(".onboard-crew-tag-custom").each((_, el) => { el.disabled = atLimit && !el.value.trim(); });
-			_refreshNextButton();
+			_paintCrewPicks();
 		});
 		// Custom crew tag write-in: spends one of the "pick N" tag picks, same as the
 		// companion trait write-in. Re-derive tags as [listed picks] + this write-in.
@@ -3765,25 +3750,16 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const limit = this._crewTagLimit();
 			const bgTag = this._crewBgTag();
 			const listed = this._selections.crew.tags.filter(t => known.has(t) && t !== bgTag);
-			const boxes  = html.find(".onboard-crew-tag-custom").toArray().map(el => el.value);
+			const boxes  = crewPickEls.custom.toArray().map(el => el.value);
 			this._selections.crew.tags = crewTagsWithWriteIns(listed, boxes, limit);
-			html.find(".onboard-crew-tag-custom").each((_, el) => {
-				el.disabled = this._crewPickedTags().length >= limit && !el.value.trim();
-			});
-			const picked = this._crewPickedTags().length;
-			html.find(".stonetop-onboarding-crew-tag-count").text(picked);
-			html.find("[name='onboard-crew-tag']:not([data-auto]):not(:checked)").prop("disabled", picked >= limit);
-			_refreshNextButton();
+			_paintCrewPicks();
 		});
-		// Suggestion-radio + "or write your own" custom-input pair (crew/AC instinct &
-		// cost): picking a radio saves that value and clears the write-in; typing a write-in
-		// saves it verbatim and clears the radios (the value isn't one of them), same as the
-		// kind custom field and after-the-fact follower-card editing. `apply(value)` stores
-		// it in the right `_selections` slot. (Picking a radio leaves its card's highlight alone here.)
-		const bindSuggestionOrCustom = (radioName, customClass, apply) =>
-			bindSuggestionPair(html, radioName, customClass, apply, _refreshNextButton, { markSelected: false });
-		bindSuggestionOrCustom("onboard-crew-instinct", ".onboard-crew-instinct-custom", v => this._selections.crew.instinct = v);
-		bindSuggestionOrCustom("onboard-crew-cost", ".onboard-crew-cost-custom", v => this._selections.crew.cost = v);
+		// Crew and companion instinct and cost (bindSuggestionOrCustom). Picking a radio leaves its
+		// card's highlight alone here.
+		const bindPair = (radioName, customClass, apply) =>
+			bindSuggestionOrCustom(html, radioName, customClass, apply, _refreshNextButton, { markSelected: false });
+		bindPair("onboard-crew-instinct", ".onboard-crew-instinct-custom", v => this._selections.crew.instinct = v);
+		bindPair("onboard-crew-cost", ".onboard-crew-cost-custom", v => this._selections.crew.cost = v);
 
 		// ── Animal Companion ─────────────────────────────────────────
 		html.find("[name='onboard-ac-type']").on("change", ev => {
@@ -3826,21 +3802,18 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const checked = ev.currentTarget.checked;
 			const typeData = this._rawAnimalCompanion?.types?.find(t => t.slug === this._selections.animalCompanion.type);
 			const limit = this._companionTraitLimit(typeData);
-			if (checked) {
-				if (this._selections.animalCompanion.traits.length < limit && !this._selections.animalCompanion.traits.includes(trait)) {
-					this._selections.animalCompanion.traits.push(trait);
-				} else { ev.currentTarget.checked = false; return; }
-			} else {
-				this._selections.animalCompanion.traits = this._selections.animalCompanion.traits.filter(t => t !== trait);
-			}
+			const { ok, sel } = togglePick(this._selections.animalCompanion, "traits", trait, checked, limit);
+			if (!ok) { ev.currentTarget.checked = false; return; }
+			this._selections.animalCompanion.traits = sel.traits;
 			ev.currentTarget.closest(".stonetop-onboarding-tag-option")
 				?.classList.toggle("is-selected", ev.currentTarget.checked);
-			html.find(".stonetop-onboarding-ac-trait-count").text(this._selections.animalCompanion.traits.length);
-			_refreshCompanionOver(this._selections.animalCompanion.traits.length, limit);
-			const atLimit = this._selections.animalCompanion.traits.length >= limit;
-			html.find("[name='onboard-ac-trait']:not(:checked)").prop("disabled", atLimit);
-			const traitCustom = html.find(".onboard-ac-trait-custom");
-			traitCustom.prop("disabled", atLimit && !traitCustom.val().trim());
+			const picked = sel.traits.length;
+			_refreshCompanionOver(picked, limit);
+			paintPickLimit({
+				count:  html.find(".stonetop-onboarding-ac-trait-count"),
+				boxes:  html.find("[name='onboard-ac-trait']"),
+				custom: html.find(".onboard-ac-trait-custom"),
+			}, picked, limit);
 			_refreshNextButton();
 		});
 		// Custom trait write-in: the value isn't one of the listed options, so it spends
@@ -3859,8 +3832,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			html.find("[name='onboard-ac-trait']:not(:checked)").prop("disabled", traits.length >= limit);
 			_refreshNextButton();
 		});
-		bindSuggestionOrCustom("onboard-ac-instinct", ".onboard-ac-instinct-custom", v => this._selections.animalCompanion.instinct = v);
-		bindSuggestionOrCustom("onboard-ac-cost", ".onboard-ac-cost-custom", v => this._selections.animalCompanion.cost = v);
+		bindPair("onboard-ac-instinct", ".onboard-ac-instinct-custom", v => this._selections.animalCompanion.instinct = v);
+		bindPair("onboard-ac-cost", ".onboard-ac-cost-custom", v => this._selections.animalCompanion.cost = v);
 		html.find(".onboard-ac-name").on("input", ev => {
 			this._selections.animalCompanion.name = ev.currentTarget.value;
 		});

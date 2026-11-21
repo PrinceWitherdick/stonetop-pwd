@@ -206,12 +206,16 @@ export function drawableMinorSlugs(options = [], held = new Set()) {
  *   "stays"        the major held has play on it: it stays, and no second one is offered
  *   "replace"      release the as-granted major, then ask
  *   "ask"          no major held: ask
+ *
+ * `locked` (a GM's grant, seekerOfferedMajors): the grant is owed even beside a played major, so
+ * that major stays held and the grant is asked for ("ask", not "stays").
  */
-export function seekerMajorSwitchPlan({ major = "", held = true, offered = [], asGranted = false } = {}) {
+export function seekerMajorSwitchPlan({ major = "", held = true, offered = [], asGranted = false, locked = false } = {}) {
 	if (!offered.length) return "none";
 	if (!major || !held) return "ask";
 	if (offered.includes(major)) return "keep";
-	return asGranted ? "replace" : "stays";
+	if (asGranted) return "replace";
+	return locked ? "ask" : "stays";
 }
 
 /**
@@ -236,10 +240,11 @@ export function seekerOfferedMajors({ listed = [], grant = "", open = false, maj
  * character holds none of them and no creation major either (`major`, the one creation or the
  * Details tab gave; a played one kept from an earlier background counts, as the "stays" plan
  * keeps it). `owned` are the slugs held, leads left out. "Choose later" on the ask leaves this true.
+ * With a GM's grant (`locked`) only the grant settles it: an older creation major held does not.
  */
-export function seekerMajorOwed({ offered = [], owned = [], major = "" } = {}) {
+export function seekerMajorOwed({ offered = [], owned = [], major = "", locked = false } = {}) {
 	if (!offered.length) return false;
 	const held = new Set(owned);
-	if (major && held.has(major)) return false;
+	if (major && !locked && held.has(major)) return false;
 	return !offered.some(slug => held.has(slug));
 }

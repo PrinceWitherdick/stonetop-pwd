@@ -2,7 +2,7 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { normalizePlaybookGlyphs } from "../../../utils/strings.js";
 import { STONETOP_SCOPE } from "../StonetopFlags.js";
 import { companionKindOptions, companionPaidTraits, companionTraitAllowance } from "../animal-companion.js";
-import { togglePick, suggestionView, paintPickLimit, bindSuggestionOrCustom } from "./pick-with-writein.js";
+import { togglePick, suggestionView, paintPickLimit, bindInstinctAndCost } from "./pick-with-writein.js";
 
 // ── CompanionSetupDialog ─────────────────────────────────────────────────────
 // Set up an animal companion the character is owed but has never been given: the Animal Companion
@@ -218,11 +218,7 @@ export class CompanionSetupDialog extends StonetopDialog {
 			refresh();
 		});
 
-		// A suggestion radio saves its value and clears the write-in; typing a write-in saves it and
-		// clears the radios, as onboarding's companion step does.
-		const setSel = key => value => { this._sel = { ...this._sel, [key]: value }; };
-		bindSuggestionOrCustom(html, "companion-setup-instinct", ".companion-setup-instinct-custom", setSel("instinct"), refresh);
-		bindSuggestionOrCustom(html, "companion-setup-cost", ".companion-setup-cost-custom", setSel("cost"), refresh);
+		bindInstinctAndCost(this, html, "companion-setup", refresh);
 
 		html.find(".stonetop-companion-setup-create").on("click", () => {
 			if (!companionSetupReady(this._sel, this._limit())) return;

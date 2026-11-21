@@ -15,6 +15,22 @@ export function resourceCheckName(title, index, max, label = null) {
 	return `${what} ${index + 1} of ${max}${label ? `: ${label}` : ""}`;
 }
 
+/**
+ * A row of `count` pips with `filled` of them set, as the sheet's Loyalty and Readiness pips draw
+ * them: `{ index, filled, label }`, `label` being the pip's spoken name ("Readiness 2 of 3").
+ */
+export function pipRow(title, filled, count) {
+	return Array.from({ length: count }, (_, i) => ({ index: i, filled: i < filled, label: resourceCheckName(title, i, count) }));
+}
+
+/**
+ * Readiness circles: `cap` of them, or as many as are held when more are (a shield dropped
+ * mid-fight), so an over-held pool stays visible and spendable.
+ */
+export function readinessPips(held, cap) {
+	return pipRow("Readiness", held, Math.max(cap, held));
+}
+
 /** Every circle of `resource`, in order: `{ checked, label, index, name }`. */
 export function resourceCheckItems(resource) {
 	if (!resource) return [];

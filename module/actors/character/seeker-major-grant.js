@@ -71,6 +71,24 @@ export async function loadMajorArcana({ homebrew = true } = {}) {
 }
 
 /**
+ * The players' "Choose a different arcanum", from onboarding's step and the Details tab's ask alike:
+ * any major, the background's own first, homebrew ones only with both world switches on. `majors`
+ * defaults to loadMajorArcana(); onboarding passes the ones it has already loaded.
+ * @returns {Promise<string|null>}  The picked slug, or null when dismissed.
+ */
+export async function pickOtherSeekerMajor({ majors = null, background = null, selected = "" } = {}) {
+	const homebrew = playersSeeHomebrewMajors();
+	const pool = majors ?? await loadMajorArcana({ homebrew });
+	return pickMajorArcanum({
+		majors:      pool.filter(m => homebrew || !m.homebrew),
+		listed:      background?.majorArcana ?? [],
+		selected,
+		title:       localize("stonetop.seekerMajor.otherTitle"),
+		buttonLabel: localize("stonetop.seekerMajor.otherButton"),
+	});
+}
+
+/**
  * The GM's "Give a major arcanum": pick any major (shipped or homebrew) for this Seeker, or the
  * background's own three again. Before creation the grant alone is enough (onboarding reads it).
  * After creation the card is given now, with its 1 mark asked for (SeekerMajorArcanumDialog), and
