@@ -1422,10 +1422,30 @@
         "boostedBy": " <strong>(with {moves})</strong>"
       }
     },
+    "moments": {
+      "fight": {
+        "title": "A fight breaks out",
+        "onTheRoad": "On the road to {place}"
+      },
+      "setOut": {
+        "title": "The expedition sets out"
+      },
+      "home": {
+        "title": "Home again"
+      },
+      "arrive": {
+        "title": "The party arrives",
+        "reached": "Reached {place}"
+      }
+    },
     "settings": {
       "attackFx": {
         "name": "Attack Effects on the Map",
         "hint": "When on, a blow that lands is drawn on the map and heard at the table: a sword swings, an arrow flies, a thrown spear arcs, a bite snaps on the one bitten. A ranged miss flies wide, and pressing Apply bursts on every token that loses HP, or clanks when armor held. The pictures need the Sequencer and JB2A modules, and the sounds need the SoundFx Library module; without them, that half does nothing. Anyone whose system asks for reduced motion, who has switched Sequencer's Enable Effects off, or who has switched Foundry's Photosensitive Mode on, keeps the sounds without the pictures."
+      },
+      "tableMoments": {
+        "name": "Table moments",
+        "hint": "Show a brief banner on everyone's screen when a fight begins, when an expedition sets out or comes home, and when the party reaches a stop on a route the players can see. A player's own Reduce Motion setting stills it."
       },
       "weatherSceneFx": {
         "name": "Weather on the Scene (FXMaster)",
@@ -3640,6 +3660,13 @@
       "start": {
         "offTheMap": "That click was past the printed edge of {map}, so where they set out from is unchanged. Click inside the map itself.",
         "pinLabel": "setting out"
+      },
+      "rail": {
+        "done": "done"
+      },
+      "fight": {
+        "start": "Start a fight…",
+        "hint": "Opens Start a fight with every character on this map already ticked."
       }
     },
     "suggestionMenu": {

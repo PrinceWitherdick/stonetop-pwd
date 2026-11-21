@@ -1249,6 +1249,17 @@ export function registerSettings() {
 		default: true,
 	});
 
+	// Table moments (moments/moment-broadcast.js): a world switch, as attackFx is, because a moment
+	// plays on every screen. A reader who wants it still has Reduce Motion, which stills it.
+	game.settings.register(SYSTEM_ID, "tableMoments", {
+		name: "stonetop.settings.tableMoments.name",
+		hint: "stonetop.settings.tableMoments.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: true,
+	});
+
 	// The season last picked in the Weather roll dialog (see dialogs/WeatherDialog.js),
 	// so it reopens to where the GM left off. Client-scoped — it's a GM convenience,
 	// not shared world state.
@@ -2766,6 +2777,11 @@ export function isFightRingOn() {
 /** Does this world draw and sound its attacks (combat/attack-fx.js)? Defaults to yes. */
 export function isAttackFxOn() {
 	return getBooleanSetting("attackFx", true);
+}
+
+/** Does this world show its table moments (moments/moment-broadcast.js)? Defaults to yes. */
+export function isTableMomentsOn() {
+	return getBooleanSetting("tableMoments", true);
 }
 
 /** This reader's timeline layout: "horizontal" (the default) or "vertical". */

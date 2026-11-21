@@ -53,7 +53,6 @@ describe("a wash under a panel", () => {
 		".stonetop-lore-arcana-img",
 		":is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link:hover",
 		".stonetop-monster-ref:hover",
-		".stonetop-journey .stonetop-journey-nomap",
 	]);
 	const BLACK_WASH = /rgba?\(\s*0[\s,]+0[\s,]+0\s*[,/]\s*(0?\.\d+|\d+%)\s*\)/g;
 	const faint = v => [...v.matchAll(BLACK_WASH)].some(m => (m[1].endsWith("%") ? parseFloat(m[1]) / 100 : +m[1]) < 0.2);

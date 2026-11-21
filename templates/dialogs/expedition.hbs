@@ -23,6 +23,10 @@
       <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
     </div>
 
+    {{!-- Setting out is the first thing that happens on Running the journey, so its stamp opens
+          the step (`tripStamp.atTop`); Going home's stays at the foot, after the homecoming. --}}
+    {{#if this.tripStamp.atTop}}{{> stonetopTripStamp}}{{/if}}
+
     {{!-- Expedition-log bar: name the current trip, switch between logged trips, or
           start a fresh one. Each trip with content becomes its own Chronicle page.
           The opening step only — see the `editable` note in ExpeditionDialog getData.
@@ -277,6 +281,16 @@
     </div>
     {{/if}}
 
+    {{!-- A fight on the road, GM-only and only with the Fight tab on: opens Start a fight. --}}
+    {{#if this.fight}}
+    <div class="stonetop-gm-struggle-bar stonetop-exp-fight">
+      <button type="button" class="stonetop-exp-fight-btn stonetop-spring-roll-btn">
+        <i class="fas fa-swords" aria-hidden="true"></i> {{localize "stonetop.expedition.fight.start"}}
+      </button>
+      <span class="stonetop-gm-struggle-hint">{{localize "stonetop.expedition.fight.hint"}}</span>
+    </div>
+    {{/if}}
+
     {{!-- The charted list, on Running the journey: the to-do list Chart a Course made, with the
           book's advice for working through it. Only the tick is live; the words were settled on
           that step. --}}
@@ -486,10 +500,13 @@
     </div>
     {{/if}}
 
+    {{#if this.tripStamp}}{{#unless this.tripStamp.atTop}}{{> stonetopTripStamp}}{{/unless}}{{/if}}
+
     {{!-- The trip's stamp for this step: on Running the journey whether they have set out, on
           Going home whether they are home (and so on the timeline). Asked on the first Next in;
-          this says where it stands, for whom, and stamps, redoes or clears it. GM-only. --}}
-    {{#if this.tripStamp}}
+          this says where it stands, for whom, and stamps, redoes or clears it. GM-only. Written
+          once and drawn in one of two places (see `atTop` under the banner). --}}
+    {{#*inline "stonetopTripStamp"}}
     <div class="stonetop-exp-timeline">
       <p class="stonetop-exp-timeline-note">
         <i class="fas {{this.tripStamp.icon}}" aria-hidden="true"></i>
@@ -502,7 +519,7 @@
         {{/each}}
       </div>
     </div>
-    {{/if}}
+    {{/inline}}
 
     </div>
 
@@ -603,7 +620,7 @@
       <button type="button" class="stonetop-spring-done stonetop-guide-btn--primary">Done <span aria-hidden="true">✦</span></button>
     </span>
     {{else}}
-    <button type="button" class="stonetop-spring-next">Next<span class="stonetop-nav-arrow" aria-hidden="true"></span></button>
+    <button type="button" class="stonetop-spring-next stonetop-guide-btn--primary">Next<span class="stonetop-nav-arrow" aria-hidden="true"></span></button>
     {{/if}}
   </div>
 

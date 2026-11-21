@@ -665,7 +665,7 @@ delete an entry when it is done.
 3. **`--st-slate-rule` and `--st-slate-rgb` are not re-pointed by any palette.** They render as
    they always did. On Lamplit and Slate the hover wash token goes to bone while these stay slate;
    whether they should follow is a look to judge on screen, not in a diff.
-4. **Four washes are literal black on purpose**, on grounds that don't turn with the page. Listed
+4. **Three washes are literal black on purpose**, on grounds that don't turn with the page. Listed
    in `token-literals.test.js`.
 
 **Type**

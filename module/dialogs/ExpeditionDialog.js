@@ -11,7 +11,7 @@ import { partyFollowersOf } from "../actors/character/follower-roster.js";
 import { sign, rollSeasonsCard, pbtaDiceFormula } from "../utils/roll-engine.js";
 import { normalizeRollMode, wireModePicker } from "./RollDialog.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
-import { getSetting, setWorldSetting } from "../settings.js";
+import { getSetting, isFightTabEnabled, setWorldSetting } from "../settings.js";
 import { capitalizeFirst, escHtml, htmlToPlainText, joinNames } from "../utils/strings.js";
 import { portraitOrNone, documentPortraitFrame } from "../utils/portrait-frame.js";
 import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.js";
@@ -106,6 +106,7 @@ import { usablePosterScene } from "../book2-art/poster-map-catalog.js";
 import { askRouteScenePosterMap } from "../book2-art/mark-poster-scene.js";
 import { format, localize } from "../utils/i18n.js";
 import { periodLabel } from "../seasons/current-season.js";
+import { sendMoment } from "../moments/moment-broadcast.js";
 import { loadGatedClause, overLoadGate } from "../actors/character/load-gates.js";
 import {
 	clearRouteOnScene, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
@@ -450,6 +451,8 @@ const _STEPS = [
 		// The days the GM glosses still eat (Book I p.89, p.304): "N days pass" spends each one's
 		// supplies from the packs of the party on this trip (dialogs/RoadRationsDialog.js).
 		roadDays: true,
+		// A fight on the road: the Start a fight window, which also plays the curtain (fight/fight-curtain.js).
+		fight: true,
 		// What was charted, as the to-do list the book calls it (p.303), ticked off as each is dealt
 		// with (p.323). The words were settled on Chart a Course; a challenge they couldn't have seen
 		// coming, or one added because a requirement went unmet (p.322), is added from here too.
@@ -597,6 +600,28 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	get _steps() { return _STEPS; }
+
+	/** Each new step fades in (StepperDialog#_stepMotion; the keyframes are `stonetop-guide-step-in`). */
+	get _stepMotion() { return true; }
+
+	/**
+	 * The rail's entries with a done tick on each step the current trip has already settled
+	 * (guide-toc.hbs `isDone`). Applied in getData, not in `_stepNav`, whose other callers only ask
+	 * which step is showing and should not read the log or solve the route to learn it.
+	 */
+	_railTicks(entries) {
+		const trip = this._currentExpedition();
+		if (!trip) return entries;
+		const done = {
+			chart:       () => chartPicked(trip.chart).length > 0 || !!String(trip.chart?.route ?? "").trim(),
+			journey:     () => this._journeyRoute()?.legs?.length > 0,
+			requisition: () => trip.requisitioned?.length > 0,
+			running:     () => !!trip.setOut?.season,
+			home:        () => !!trip.timelineRecorded?.season,
+		};
+		const steps = this._steps;
+		return entries.map(entry => ({ ...entry, isDone: !!done[steps[entry.index]?.key]?.() }));
+	}
 
 	/**
 	 * The log setting changed. Fold another GM's write into this window's copy.
@@ -843,6 +868,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// Called from the journey, so the struggle starts with "part of a journey" ticked.
 		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true, only: this._tripParty().map(a => a.id) }));
 		html.find(".stonetop-exp-road-btn").on("click", () => this._openRoadDays());
+		html.find(".stonetop-exp-fight-btn").on("click", () => this._startRoadFight());
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
 		// width without a flicker, and a render here would rebuild the route step's map panel
@@ -1028,6 +1054,7 @@ export class ExpeditionDialog extends StepperDialog {
 		const label     = current && expeditionLabel(current, currentAt);
 		const data = {
 			...nav,
+			steps:      this._railTicks(nav.steps),
 			isGM:       game.user?.isGM ?? false,
 			// The banner's second line. Past the opening page it carries the trip's name,
 			// where a read-only nameplate under the log bar used to say it: kept short, as
@@ -1084,6 +1111,8 @@ export class ExpeditionDialog extends StepperDialog {
 			struggle:  step.struggle && game.user?.isGM ? gmStruggleCall() : null,
 			// "N days pass", GM-only: it writes every pack on the trip.
 			roadDays:  !!step.roadDays && !!game.user?.isGM,
+			// Start a fight is the Fight tab's window, so it is offered only where that tab is on.
+			fight:     !!step.fight && !!game.user?.isGM && isFightTabEnabled(),
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			// The same, at the foot of the step rather than under its opening prose.
@@ -2285,7 +2314,32 @@ export class ExpeditionDialog extends StepperDialog {
 		else if (act === "clear") done = await record.clearTripHome({ store });
 		else done = await record.recordTrip({ store, redate: act === "redo" });
 		if (!done) this.render(false);
+		else if (act === "stamp") this._stampMoment(kind);
 		return done;
+	}
+
+	/**
+	 * "The expedition sets out" / "Home again" on every screen, for a stamp just written. The trip's
+	 * name only once the players have been shown its route (`sharedRouteState` "same"); a failed
+	 * moment never fails the stamp. Guarded by tests/dialogs/expedition-polish.test.js.
+	 */
+	_stampMoment(kind) {
+		try {
+			const trip = this._currentExpedition();
+			if (!trip) return;
+			const shown = sharedRouteState(readSharedRoute(), {
+				expeditionId: trip.id, journey: trip.journey, hasRoute: !!this._journeyRoute()?.legs?.length, title: trip.title ?? "",
+			}) === "same";
+			const list = this._log().list;
+			const stamp = kind === "setOut" ? trip.setOut : trip.timelineRecorded;
+			sendMoment({
+				kind: kind === "setOut" ? "setOut" : "home",
+				title: shown ? expeditionLabel(trip, list.findIndex(e => e.id === trip.id)) : "",
+				sub: stamp?.season ? periodLabel(stamp) : "",
+			});
+		} catch (err) {
+			warn("could not show the trip's moment", err);
+		}
 	}
 
 	/**
@@ -2341,6 +2395,8 @@ export class ExpeditionDialog extends StepperDialog {
 			kind, note, buttons,
 			party: names.length ? format(`${key}.party`, { names: joinNames(names) }) : "",
 			icon:  kind === "setOut" ? "fa-person-hiking" : "fa-timeline",
+			// Setting out is the first thing Running the journey does, so its stamp opens the step.
+			atTop: kind === "setOut",
 		};
 	}
 
@@ -4655,6 +4711,14 @@ export class ExpeditionDialog extends StepperDialog {
 	_tripParty() {
 		const out = this._currentExpedition()?.partyOut ?? {};
 		return charactersInPlay().filter(actor => !out[actor.id]);
+	}
+
+	/**
+	 * Running the journey's "Start a fight": every character on the map ticked. `preselect` could narrow
+	 * it to the trip's party, but it also stops the window ticking their followers and the foes in sight.
+	 */
+	_startRoadFight() {
+		return game.stonetop?.fight?.openStart?.({ preselectPcs: true });
 	}
 
 	/**

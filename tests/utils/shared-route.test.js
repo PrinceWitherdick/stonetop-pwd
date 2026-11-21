@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 const {
 	isSharedRoute, readSharedRoute, sharedRoutePayload, sharedRouteState, sharedRouteView,
 	sharedRouteCardHtml, sharedRouteChip, sharedLegLine, shareRoute, stopSharingRoute,
-	sharedRequirementLines, sharedRequirementsHtml, publicRoute,
+	sharedRequirementLines, sharedRequirementsHtml, publicRoute, sharedNextStop,
 } = await import("../../module/utils/shared-route.js");
 const { frameFor } = await import("../../module/data/travel-times.js");
 const { journeyMapLayer } = await import("../../module/dialogs/journey-map-layer.js");
@@ -127,6 +127,19 @@ describe("where the share stands against the GM's trip", () => {
 	// The scene button's lesson: with no route in hand, there must still be a way to take it off.
 	it("is orphan when something is shown and this trip has no route", () => {
 		expect(sharedRouteState(crossroads(), { expeditionId: "trip-1", journey: {}, hasRoute: false })).toBe("orphan");
+	});
+});
+
+describe("sharedNextStop", () => {
+	it("names the stop the party is bound for by the share's own words, and nothing once arrived", () => {
+		const share = crossroads();
+		const legs = sharedRouteView(share).legs;
+		expect(sharedNextStop(share)).toBeNull();
+		expect(sharedNextStop({ ...share, progress: { reached: 0 } })).toBeTruthy();
+		expect(legs[0].text).toContain(sharedNextStop({ ...share, progress: { reached: 0 } }));
+		expect(sharedNextStop({ ...share, progress: { reached: legs.length } })).toBeNull();
+		expect(sharedNextStop({ ...share, progress: { reached: 0.5 } })).toBeNull();
+		expect(sharedNextStop(null)).toBeNull();
 	});
 });
 

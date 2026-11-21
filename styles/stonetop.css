@@ -20374,6 +20374,166 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	80%      { rotate: 5deg; }
 }
 
+/* ── TABLE MOMENTS ─────────────────────────────────────────────────────────────────────────────
+   The brief band every screen shows when a fight begins, an expedition sets out or comes home, or
+   the party reaches a stop (moments/moment-overlay.js). On <body> above the windows, so it is
+   fixed and takes no pointer: a click lands on whatever is beneath it. Guarded by
+   tests/styles/moments.test.js.
+
+   Self-coloured, so it reads the same in every palette: bone on a near-black umber, over 15:1. */
+#stonetop-moment {
+	--stonetop-moment-ground: #1b1009;
+	--stonetop-moment-ink: #f4ecd8;
+	--stonetop-moment-rule: #c9a227;
+	--stonetop-moment-veil: rgb(0 0 0 / 0.45);
+	/* The title's size. The icon's line box is the title's, so both centre on the same capitals. */
+	--stonetop-moment-size: calc(2.2rem * var(--stonetop-font-scale, 1));
+
+	position: fixed;
+	inset: 0;
+	z-index: var(--st-z-above-windows);
+	pointer-events: none;
+	user-select: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--font-stonetop);
+	/* Unseen until the script puts its words in and starts it (MOMENT_VOICE_DELAY_MS). */
+	opacity: 0;
+}
+
+#stonetop-moment.is-playing,
+#stonetop-moment.is-still {
+	opacity: 1;
+}
+
+.stonetop-moment-veil {
+	position: absolute;
+	inset: 0;
+	background: var(--stonetop-moment-veil);
+}
+
+.stonetop-moment-band {
+	position: relative;
+	box-sizing: border-box;
+	display: flex;
+	/* The icon sits on the title's line, not the middle of title and sub together (moments.test.js). */
+	align-items: flex-start;
+	justify-content: center;
+	gap: 1rem;
+	width: 100%;
+	padding: 1.5rem 2rem;
+	border-block: 2px solid var(--stonetop-moment-rule);
+	background: var(--stonetop-moment-ground);
+	box-shadow: 0 4px 24px rgb(0 0 0 / 0.5);
+	color: var(--stonetop-moment-ink);
+}
+
+#stonetop-moment .stonetop-moment-icon {
+	flex: none;
+	margin: 0;
+	font-size: var(--stonetop-moment-size);
+	line-height: 1.15;
+	color: var(--stonetop-moment-rule);
+	/* The glyphs' ink sits about 1px under the title's capitals in a matched line box, the swords
+	   half that (measured on the ink at 1x / 1.25x / 1.5x, roots 14 to 22). A whole-pixel lift,
+	   since the miss did not grow with the size. */
+	position: relative;
+	top: -1px;
+}
+
+#stonetop-moment.stonetop-moment--fight .stonetop-moment-icon {
+	top: -0.5px;
+}
+
+.stonetop-moment-words {
+	min-width: 0;
+	text-align: start;
+}
+
+.stonetop-moment-title {
+	margin: 0;
+	font-size: var(--stonetop-moment-size);
+	font-weight: 600;
+	line-height: 1.15;
+	overflow-wrap: anywhere;
+}
+
+.stonetop-moment-sub {
+	margin: 0.3rem 0 0;
+	font-size: calc(1.05rem * var(--stonetop-font-scale, 1));
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+
+/* The small band: a stop reached on the road, a card near the top rather than a curtain. Centred
+   by its margins rather than a translate, which the rise animation would overwrite. */
+#stonetop-moment.stonetop-moment--small {
+	--stonetop-moment-size: calc(1.3rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-moment--small .stonetop-moment-band {
+	position: absolute;
+	top: 18%;
+	left: 0;
+	right: 0;
+	width: fit-content;
+	max-width: min(90vw, 40rem);
+	margin: 0 auto;
+	gap: 0.6rem;
+	padding: 0.6rem 1.25rem;
+	border: 2px solid var(--stonetop-moment-rule);
+	border-radius: var(--st-radius-lg);
+}
+
+/* The motion, only for a reader who hasn't asked for less (the OS's setting or the system's own
+   Reduce Motion). The root fades in, holds, and fades out at --stonetop-moment-out-at, set by the
+   script; its `stonetop-moment-out` end is what takes the band down. */
+@media (prefers-reduced-motion: no-preference) {
+	:root:not(.stonetop-reduce-motion) #stonetop-moment.is-playing {
+		animation:
+			stonetop-moment-in 0.2s ease-out both,
+			stonetop-moment-out 0.4s ease-in var(--stonetop-moment-out-at, 2s) forwards;
+	}
+
+	:root:not(.stonetop-reduce-motion) #stonetop-moment.is-playing .stonetop-moment-band {
+		animation: stonetop-moment-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	}
+
+	:root:not(.stonetop-reduce-motion) #stonetop-moment.stonetop-moment--fight.is-playing .stonetop-moment-band {
+		animation: stonetop-moment-wipe 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	}
+
+	:root:not(.stonetop-reduce-motion) #stonetop-moment.stonetop-moment--fight.is-playing .stonetop-moment-title {
+		animation: stonetop-moment-settle 0.35s ease-out 0.15s both;
+	}
+}
+
+@keyframes stonetop-moment-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
+@keyframes stonetop-moment-out {
+	from { opacity: 1; }
+	to   { opacity: 0; }
+}
+
+@keyframes stonetop-moment-rise {
+	from { translate: 0 12px; opacity: 0; }
+	to   { translate: 0 0; opacity: 1; }
+}
+
+@keyframes stonetop-moment-wipe {
+	from { clip-path: inset(0 100% 0 0); }
+	to   { clip-path: inset(0); }
+}
+
+@keyframes stonetop-moment-settle {
+	from { scale: 1.08; opacity: 0; }
+	to   { scale: 1; opacity: 1; }
+}
+
 /* ── The hold tray ─────────────────────────────────────────────────────────────────
    What the steading is still owed or still owes, between the title and the clock. Usually
    empty: the rule for earning a place here is that the thing must be UNRESOLVED and must go
@@ -36911,6 +37071,23 @@ th:has(> .stonetop-roll-table-btn) {
 }
 .stonetop-guide-toc-item.is-active .stonetop-guide-toc-count { color: inherit; }
 
+/* A step the trip has already settled (Expedition's `isDone`). Drawn on the words' line like the
+   icon; the word beside it is for a screen reader, since a tick alone says nothing aloud. The
+   negative margins take its width out of the gap and the button's padding rather than the words:
+   at full width "Chart a Course" wrapped to two lines in the 168px rail. */
+.stonetop-guide-toc-done {
+	flex: none;
+	margin-inline: -4px;
+	line-height: inherit;
+	font-size: var(--st-fs-xs);
+	font-size: round(var(--st-fs-xs), 1px);
+	color: var(--st-green-text);
+}
+.stonetop-guide-toc-done-label {
+	position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+	overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
 /* Active page: subtle fill + accent text/icon (green = active accent per tokens). */
 .stonetop-guide-toc-item.is-active .stonetop-guide-toc-btn {
 	background: var(--st-on-dark-selected, rgb(var(--st-ink-rgb) / 0.06));
@@ -37831,6 +38008,8 @@ th:has(> .stonetop-roll-table-btn) {
 	gap: 8px 12px;
 	margin-top: 14px;
 }
+/* Running the journey's stamp opens the step, where the column's own gap already spaces it. */
+.stonetop-guide-banner + .stonetop-exp-timeline { margin-top: 0; }
 
 .stonetop-exp-timeline-note {
 	display: flex;
@@ -41494,7 +41673,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    says where it went beneath the name. */
 .stonetop-expedition-dialog .stonetop-exp-asset.is-elsewhere .stonetop-exp-asset-btn {
 	cursor: default; color: var(--st-text-faint); text-decoration: line-through;
-	text-decoration-color: rgba(0,0,0,0.35);
+	text-decoration-color: rgb(var(--st-ink-rgb) / 0.35);
 }
 .stonetop-expedition-dialog .stonetop-exp-asset.is-elsewhere .stonetop-exp-asset-btn:hover { background: none; }
 .stonetop-expedition-dialog .stonetop-exp-asset-where {
@@ -41659,7 +41838,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
 	font-size: var(--st-fs-2xs);
 	color: var(--st-text-muted);
-	border: 1px solid rgba(0,0,0,0.16); border-radius: 999px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.16); border-radius: 999px;
 	background: transparent;
 }
 .stonetop-journey .stonetop-journey-tier {
@@ -42079,8 +42258,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey .stonetop-journey-nomap {
 	margin: 0; padding: 14px 12px;
 	font-size: var(--st-fs-xs); color: var(--st-text-muted); font-style: italic; text-align: center;
-	border: 1px dashed rgba(0,0,0,0.2); border-radius: var(--st-radius-lg);
-	background: rgba(0,0,0,0.02);
+	border: 1px dashed rgb(var(--st-ink-rgb) / 0.2); border-radius: var(--st-radius-lg);
+	background: rgb(var(--st-ink-rgb) / 0.02);
 }
 
 /* The answer. */
@@ -42204,7 +42383,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-family: var(--font-stonetop); font-size: var(--st-fs-2xs); font-weight: 700;
 	text-transform: uppercase; letter-spacing: 0.08em;
 	color: var(--st-text-muted);
-	padding-bottom: 3px; border-bottom: 1px solid rgba(0,0,0,0.1);
+	padding-bottom: 3px; border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.1);
 }
 /* EVERY FOLD HEAD READS THE SAME. One of them used to take the gold, following whichever group
    held the destination (or, with nothing chosen, whichever map was showing) — and both of those
@@ -47184,6 +47363,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 		background-color: var(--st-warm-hover-bg);
 	}
 }
+/* The Reduce Motion setting likewise. Its blanket zeroes the 5s fade, which lands the row on the
+   fade's transparent last frame, so the drawn row showed no wash at all. */
+:root.stonetop-reduce-motion .stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash,
+:root.stonetop-reduce-motion .stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
+:root.stonetop-reduce-motion .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
+	animation: none;
+	background-color: var(--st-warm-hover-bg);
+}
 
 /* -- "I wonder..." tab ----------------------------------------------------
    The GM's running list of open questions (Book I p.33). The playbook prints
@@ -49076,6 +49263,44 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: inline-flex; align-items: center; gap: 6px;
 	width: auto; flex: 0 0 auto; margin-top: 8px; padding: 3px 10px; line-height: 1.4;
 	font-size: var(--st-fs-2xs);
+}
+/* The expedition's and the route windows' own buttons, off core's `transition: all 0.5s`: a
+   button that animates its box flickers under the pointer (STYLEGUIDE section 5, Motion).
+   Guarded by expedition-polish.test.js. */
+.stonetop-expedition-dialog .stonetop-exp-load-chip,
+.stonetop-expedition-dialog .stonetop-exp-asset-btn,
+.stonetop-expedition-dialog .stonetop-exp-surplus-step,
+.stonetop-expedition-dialog .stonetop-exp-home-asset-btn,
+.stonetop-expedition-dialog .stonetop-exp-home-reset-btn,
+.stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn,
+.stonetop-expedition-dialog .stonetop-exp-timeline-btn,
+.stonetop-journey .stonetop-journey-tier,
+.stonetop-journey .stonetop-journey-to-scene,
+.stonetop-journey .stonetop-journey-share,
+.stonetop-journey .stonetop-journey-share-hide,
+.stonetop-journey .stonetop-journey-share-reword,
+.stonetop-journey .stonetop-journey-place-site,
+.stonetop-journey .stonetop-journey-clear-drawn,
+.stonetop-shared-route .stonetop-shared-route-stop {
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+/* Each new step of the walkthrough slides in from the side it came from (StepperDialog `enterStep`,
+   which adds the class only for a reader who has not asked for less motion). Guarded by
+   tests/dialogs/stepper-step-motion.test.js. */
+.stonetop-expedition-dialog .stonetop-guide-main.is-entering {
+	animation: stonetop-guide-step-in 0.18s ease-out both;
+}
+.stonetop-expedition-dialog .stonetop-guide-main.is-entering--back {
+	animation-name: stonetop-guide-step-back;
+}
+@keyframes stonetop-guide-step-in {
+	from { opacity: 0; translate: 8px 0; }
+}
+@keyframes stonetop-guide-step-back {
+	from { opacity: 0; translate: -8px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-expedition-dialog .stonetop-guide-main.is-entering { animation: none; }
 }
 /* The window's announcement channel (SharedRouteWindow `_announce`). On the window frame, outside
    the content AppV1 replaces, and read by a screen reader only: the same words are on screen. */
@@ -56802,6 +57027,31 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	color: color-mix(in srgb, var(--st-past-death-ink) 60%, var(--st-text));
 }
 
+/* The load disc's initial. White on the band fills measured 2.4 to 4.8:1 here (these pages lift
+   the fills toward bone), so each band wears its whole family: wash, ring and ink. Overloaded keeps
+   a solid fill and letters it in the page. Portraits wear no band. Guarded by expedition-polish.test.js. */
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
+	color: var(--st-btn-primary-text);
+	background: var(--st-btn-primary-bg);
+	box-shadow: inset 0 0 0 1px var(--st-btn-primary-border);
+}
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
+	color: var(--st-green-text);
+	background: var(--st-green-bg);
+	box-shadow: inset 0 0 0 1px var(--st-green-border);
+}
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
+	color: var(--st-red-text);
+	background: var(--st-red-bg);
+	box-shadow: inset 0 0 0 1px var(--st-red-border);
+}
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
+	color: var(--st-page);
+}
+
+/* The route readout's leg arrow: the faint step is 4.47:1 on the gold wash here. */
+:where(:root.stonetop-dark) .stonetop-journey .stonetop-journey-legs .j-arw { color: var(--st-text-muted); }
+
 /* A broken cross-link on our own sheets. Core's `--color-text-bad` fallback is a #aa2222 pitched
    for paper (about 2:1 here). Journal pages are left out: they keep core's paper and its theme. */
 :where(:root.stonetop-dark) :is(.stonetop-so-entry-body, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link.broken {
@@ -57554,6 +57804,21 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 :root.stonetop-high-contrast .stonetop-playbook-picker-tooltip-complexity {
 	color: #d8d8d8;   /* 10.1:1 on #2a2a2a */
 }
+
+/* The expedition's load disc, light and heavy bands: white on their fills was 6.1:1. They take
+   their whole family instead, as on the dark pages (see the Lamplit block). */
+:root.stonetop-high-contrast .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
+	color: var(--st-green-text);
+	background: var(--st-green-bg);
+	box-shadow: inset 0 0 0 1px var(--st-green-border);
+}
+:root.stonetop-high-contrast .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
+	color: var(--st-red-text);
+	background: var(--st-red-bg);
+	box-shadow: inset 0 0 0 1px var(--st-red-border);
+}
+/* The route readout's leg arrow: the faint step is 6.7:1 on the gold wash. */
+:root.stonetop-high-contrast .stonetop-journey .stonetop-journey-legs .j-arw { color: var(--st-text-muted); }
 
 /* THE BLACK-PAPER SCOPES, which keep the skin of every token they DECLARE (they declare it on
    their own element, and an element beats an ancestor however specific the ancestor is). What

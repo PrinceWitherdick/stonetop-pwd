@@ -582,6 +582,17 @@ describe("the shared left rail centres its words by trimming them", () => {
 		expect(declared(body, "top")).toBeNull();
 	});
 
+	// The Expedition's done tick (partials/guide-toc.hbs `isDone`), measured 11-20 against its words'
+	// first-line cap middle: within 0.64px in Signika, Caslon and Fell, roots 16 and 20, 1x/1.25x/1.5x.
+	it("draws the done tick on the words' line at a whole-pixel size, unnudged", () => {
+		const body = ownRule(MAIN, ".stonetop-guide-toc-done");
+		expect(body, "the tick has no rule").toBeTruthy();
+		expect(declared(body, "line-height")).toBe("inherit");
+		expect(declared(body, "font-size")).toMatch(/^round\(.+, 1px\)$/);
+		expect(declared(body, "margin-top")).toBeNull();
+		expect(declared(body, "top")).toBeNull();
+	});
+
 	it("lays the Welcome guide's bold-width copy over the words' line, so the trim's bottom edge is theirs", () => {
 		const body = ownRule(MAIN, ".stonetop-welcome-split .stonetop-guide-toc-text::after");
 		expect(declared(body, "margin-top")).toBe("-1lh");

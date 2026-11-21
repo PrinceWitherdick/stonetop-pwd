@@ -233,6 +233,17 @@ export function sharedRoutePlace(payload) {
 	return sharedRouteDestination(sharedPublicRoute(payload));
 }
 
+/**
+ * The stop the party is on the way to, as the players read it, or null: with no `progress` on the
+ * share, or with every leg travelled. Never from the trip log, which players are not shown.
+ */
+export function sharedNextStop(payload) {
+	const reached = payload?.progress?.reached;
+	if (!Number.isInteger(reached) || reached < 0) return null;
+	const leg = sharedPublicRoute(payload)?.legs?.[reached];
+	return leg?.toName || null;
+}
+
 export function sharedRouteView(payload) {
 	const route = sharedPublicRoute(payload);
 	if (!route) return null;

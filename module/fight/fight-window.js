@@ -152,6 +152,20 @@ function canSeeSomeoneInCombat(combat, _scene, user) {
 let onScene = fightOnScene;
 let canSeeIn = canSeeSomeoneIn;
 
+/**
+ * The fight on the map this reader is looking at, and whether they can see anyone in it, by the
+ * same two picks the window decides with. Read by fight-curtain.js, so the curtain and the window
+ * never disagree about an ambush.
+ *
+ * @returns {{fightId: string|null, canSee: boolean}}
+ */
+export function fightThisReaderMeets() {
+	const scene = globalThis.canvas?.scene ?? null;
+	const fight = onScene(scene);
+	if (!fight) return { fightId: null, canSee: false };
+	return { fightId: fight.id ?? null, canSee: !!canSeeIn(fight, scene, globalThis.game?.user) };
+}
+
 /** Whether the pop-out is core's own, and so has to be put in its place from here. */
 let placePopout = false;
 
@@ -350,13 +364,14 @@ const hasFighters = combat => each(combat?.combatants).length > 0;
  * cue, folded into one run per frame: a combat made, ended or changed, somebody joining or leaving it,
  * a token hidden or revealed (which is what a player can see), and the map the reader is looking at.
  */
-export function installCombatWindow({ hooks = globalThis.Hooks, page = globalThis } = {}) {
+export function installCombatWindow({ hooks = globalThis.Hooks, page = globalThis, onSync = null } = {}) {
 	onScene = scene => combatOnScene(scene, hasFighters);
 	canSeeIn = canSeeSomeoneInCombat;
 	placePopout = true;
 	showInSidebar = false;
 
-	const sync = coalesceFrame(() => { syncFightWindow(); }, "Stonetop | Combat window:");
+	// `onSync` is the fight curtain (fight-boot.js passes it), run on the same cues as the window.
+	const sync = coalesceFrame(() => { syncFightWindow(); onSync?.(); }, "Stonetop | Combat window:");
 	for (const name of ["createCombat", "updateCombat", "deleteCombat",
 		"createCombatant", "updateCombatant", "deleteCombatant", "canvasReady"]) hooks.on(name, sync);
 	// A hidden token is nobody to a player, so revealing one can be the moment their window opens.

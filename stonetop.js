@@ -85,6 +85,7 @@ import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-ti
 import { onRenderPause } from "./module/hooks/RenderPause.js";
 import { registerBookBroadcast } from "./module/books/book-broadcast.js";
 import { registerEndOfSessionBroadcast } from "./module/dialogs/end-of-session-broadcast.js";
+import { registerMomentBroadcast } from "./module/moments/moment-broadcast.js";
 import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.js";
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
@@ -971,6 +972,9 @@ Hooks.once("ready", registerBookBroadcast);
 // The same for End of Session: a player's read-only copy of the GM's window, which follows the
 // GM's ticks. See module/dialogs/end-of-session-broadcast.js.
 Hooks.once("ready", registerEndOfSessionBroadcast);
+// Table moments: every user listens, since the players are who the band is for. See
+// module/moments/moment-broadcast.js.
+Hooks.once("ready", registerMomentBroadcast);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 
 // -- THREAT BOARD (opt-in on-canvas threat cards) --------------
