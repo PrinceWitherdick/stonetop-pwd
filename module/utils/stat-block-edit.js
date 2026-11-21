@@ -1,13 +1,13 @@
 // Inline-edit helpers shared by the two stat-block sheets (monster, NPC), which take the same
 // whitelisted field/move updates. `sheet` is the AppV1 sheet instance (uses sheet.actor /
-// sheet._editMode); the whitelist is passed per sheet. The header portrait all three sheets share
-// is wired by `wirePortraitPopout` in utils/actor-portrait-picker.js.
+// sheet._editMode); the rich-text whitelist is passed per sheet. The header portrait all three
+// sheets share is wired by `wirePortraitPopout` in utils/actor-portrait-picker.js.
 import { confirmOutcome } from "./ask-with-buttons.js";
 import { escHtml } from "./strings.js";
 
 // The only fields an inline stat-block edit may write to a move item (monsterMove / npcMove):
 // its name and its two schema fields, so a stray data-field can't write anywhere else.
-export const STAT_BLOCK_MOVE_EDITABLE_FIELDS = new Set(["name", "system.description", "system.rollFormula"]);
+const MOVE_EDITABLE_FIELDS = new Set(["name", "system.description", "system.rollFormula"]);
 
 // Persist an inline edit to one of the actor's own system fields, whitelisted to `richTextFields`
 // (an array of { key } entries) so a stray data-field can't write anywhere else.
@@ -16,9 +16,9 @@ export async function updateRichTextField(sheet, richTextFields, field, value) {
 	await sheet.actor.update({ [`system.${field}`]: value ?? "" });
 }
 
-// Persist an inline edit to one of a move item's fields, whitelisted to `editableFields` (a Set).
-export async function updateMoveField(sheet, editableFields, itemId, field, value) {
-	if (!editableFields.has(field)) return;
+// Persist an inline edit to one of a move item's fields, whitelisted to MOVE_EDITABLE_FIELDS.
+export async function updateMoveField(sheet, itemId, field, value) {
+	if (!MOVE_EDITABLE_FIELDS.has(field)) return;
 	const item = sheet.actor.items.get(itemId);
 	if (!item) return;
 	await item.update({ [field]: value ?? "" });

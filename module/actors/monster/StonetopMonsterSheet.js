@@ -9,7 +9,6 @@ import { capitalizeFirst, escHtml, isDefaultImg } from "../../utils/strings.js";
 import { headerPortraitContext, wirePortraitPopout } from "../../utils/actor-portrait-picker.js";
 import {
 	updateRichTextField, updateMoveField, itemFromRow, confirmDeleteMove, wireStatBlockInlineEdits,
-	STAT_BLOCK_MOVE_EDITABLE_FIELDS,
 } from "../../utils/stat-block-edit.js";
 import { findMonsterTag } from "../../data/monster-tags.js";
 import { getHoverDescriptionSetting, getOpenSheetsInEditMode, isFightTabEnabled } from "../../settings.js";
@@ -810,7 +809,7 @@ export function createStonetopMonsterSheetClass(Base) {
 		 * @param {string} value   the new value
 		 */
 		async _updateMoveField(itemId, field, value) {
-			return updateMoveField(this, STAT_BLOCK_MOVE_EDITABLE_FIELDS, itemId, field, value);
+			return updateMoveField(this, itemId, field, value);
 		}
 	};
 }

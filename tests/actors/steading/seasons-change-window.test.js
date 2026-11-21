@@ -73,9 +73,9 @@ afterEach(() => { delete globalThis.ui; });
 // reset taken (StonetopSteading#openingFortunes), not whatever the window read when it was opened:
 // one opened early to look would file a mid-play figure.
 describe("the Seasons Change Chronicle entry's Fortunes", () => {
-	it("files the season's opening Fortunes over the figure it was handed", async () => {
+	it("files the season's opening Fortunes over the live figure", async () => {
 		const steading = fakeSteading({ openingFortunes: vi.fn(() => -1) });
-		await sheetFor(steading)._saveSeasonChange("summer", emptyRoot(), 2, 1, 2);
+		await sheetFor(steading)._saveSeasonChange("summer", emptyRoot(), 1, 2);
 		expect(steading.openingFortunes).toHaveBeenCalledWith(2, "summer");
 		expect(recordSeasonsChange).toHaveBeenCalledWith(expect.objectContaining({ seasonId: "summer", year: 2, fortunes: -1 }));
 	});
@@ -83,7 +83,7 @@ describe("the Seasons Change Chronicle entry's Fortunes", () => {
 	// Read before the gains' write, which is what can move the steading under it.
 	it("reads the opening figure before the gains are applied", async () => {
 		const steading = fakeSteading({ openingFortunes: vi.fn(() => 1) });
-		await sheetFor(steading)._saveSeasonChange("summer", emptyRoot(), null, 1, 2);
+		await sheetFor(steading)._saveSeasonChange("summer", emptyRoot(), 1, 2);
 		expect(steading.openingFortunes.mock.invocationCallOrder[0])
 			.toBeLessThan(steading.applyChanges.mock.invocationCallOrder[0]);
 	});
@@ -91,15 +91,15 @@ describe("the Seasons Change Chronicle entry's Fortunes", () => {
 	// Noted as 0 is a real figure, not "nothing noted".
 	it("keeps an opening Fortunes of 0", async () => {
 		const steading = fakeSteading({ openingFortunes: vi.fn(() => 0) });
-		await sheetFor(steading)._saveSeasonChange("summer", emptyRoot(), 2, 1, 2);
+		await sheetFor(steading)._saveSeasonChange("summer", emptyRoot(), 1, 2);
 		expect(recordSeasonsChange).toHaveBeenCalledWith(expect.objectContaining({ fortunes: 0 }));
 	});
 
 	// Nothing noted: the window never saw the roll nor the reset, so the live figure is still the
-	// season's own. The window's close-out hands nothing over.
-	it("falls back to the live Fortunes when none was noted and none handed over", async () => {
+	// season's own.
+	it("falls back to the live Fortunes when none was noted", async () => {
 		const steading = fakeSteading({ getStatValue: vi.fn(stat => (stat === "fortunes" ? 3 : 0)) });
-		await sheetFor(steading)._saveSeasonChange("autumn", emptyRoot(), null, 0, 2);
+		await sheetFor(steading)._saveSeasonChange("autumn", emptyRoot(), 0, 2);
 		expect(recordSeasonsChange).toHaveBeenCalledWith(expect.objectContaining({ fortunes: 3 }));
 	});
 });

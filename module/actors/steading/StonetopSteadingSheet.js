@@ -1873,10 +1873,7 @@ export function createStonetopSteadingSheetClass(Base) {
 		//
 		// Fortunes is NOT reset here: that is its own button on the roll step, so the GM takes
 		// it deliberately after the roll rather than as a side effect of closing the window.
-		//
-		// `fortunes` is only the figure to file when the season's opening Fortunes was never
-		// noted, and the live figure when it is omitted: the opening figure wins whenever there is one.
-		async _saveSeasonChange(seasonId, html, fortunes = null, initialSurplus = null, year = this._seasonsCurrentYear()) {
+		async _saveSeasonChange(seasonId, html, initialSurplus = null, year = this._seasonsCurrentYear()) {
 			const root = html?.jquery ? html[0] : (html?.[0] ?? html);
 			if (!root) return;
 			// The Fortunes the season OPENED with, the one its roll was made off — not the figure the
@@ -1886,8 +1883,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// which write the steading. Nothing noted means the window never saw the roll made nor the
 			// reset taken, so Fortunes has not been reset and the live figure is still the season's own.
 			const opening = this._stonetopSteading.openingFortunes?.(year, seasonId) ?? null;
-			const chronicleFortunes = opening
-				?? (Number.isFinite(fortunes) ? fortunes : this._stonetopSteading.getStatValue("fortunes"));
+			const chronicleFortunes = opening ?? this._stonetopSteading.getStatValue("fortunes");
 			const checkedKeys = Array.from(root.querySelectorAll(".stonetop-season-gain-check:checked"))
 				.map(el => el.dataset.gainKey);
 			const gainNames = checkedKeys
@@ -2845,9 +2841,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						recordBtn.disabled = true;
 						try {
 							// `surplus` (captured at open) is the baseline for the Chronicle's net change.
-							// Fortunes is NOT the figure captured at open: _saveSeasonChange files the
-							// season's opening Fortunes, and the live one when none was noted.
-							await this._saveSeasonChange(seasonId, root, null, surplus, year);
+							await this._saveSeasonChange(seasonId, root, surplus, year);
 						} catch (err) { recordBtn.disabled = false; throw err; }
 						dialog.close();
 					});
