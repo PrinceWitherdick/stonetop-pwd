@@ -512,7 +512,9 @@ New steps in those flows reuse those classes.
   In JS set the attribute the same way; do not write `.title`. A `title` stays only where
   Foundry's tooltip cannot reach (markup drawn inside pdf.js's iframe) or where it is not hover
   help at all (`journal-image-titles.js` sets one for a single synchronous read by core).
-  When there are no words, remove the attribute: an empty one is still an attribute.
+  When there are no words, remove the attribute: an empty one is still an attribute. A tooltip
+  that JS changes or clears goes through `setTooltip` (`module/utils/set-tooltip.js`), which
+  picks the spelling and removes both on empty; `js-tooltip-conventions.test.js` holds this.
 
 ---
 

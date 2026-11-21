@@ -1,5 +1,7 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WINTER_DEBT_STEP, SURPLUS_SEASON_STEP, REMINDER_SEASON_STEP, INN_ROLL_SEASON_STEP, isHerdAsset } from "./StonetopSteading.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { renderAfterWrite } from "../../utils/render-after-write.js";
+import { setTooltip } from "../../utils/set-tooltip.js";
 import { flatRequirementItems, forceCompleteTicks } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, SEASONAL_GAIN_LIST, seasonsRollFlags, seasonsRollKey} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
@@ -2758,10 +2760,8 @@ export function createStonetopSteadingSheetClass(Base) {
 					function refreshResetLock() {
 						if (!resetFortunesBtn || steading.seasonStepApplied("fortunesReset", year, seasonId)) return;
 						const rolled = steading.seasonStepApplied("fortunesRoll", year, seasonId);
-						// Foundry's tooltip, not a native title (STYLEGUIDE.md, "Hover help"). Taken
-						// off once the roll is made, since an empty one is still an attribute.
-						if (rolled) resetFortunesBtn.removeAttribute("data-tooltip");
-						else resetFortunesBtn.dataset.tooltip = "The reset comes after the roll: you will be asked whether it has been made.";
+						// Taken off once the roll is made.
+						setTooltip(resetFortunesBtn, rolled ? "" : "The reset comes after the roll: you will be asked whether it has been made.");
 					}
 					refreshResetLock();
 					resetFortunesBtn?.addEventListener("click", async () => {
@@ -3405,13 +3405,17 @@ export function createStonetopSteadingSheetClass(Base) {
 				.catch(err => console.warn("Stonetop | Could not offer to clear a returned asset off the sheet:", err));
 		}
 
+		/** Repaint once `work` settles, and surface a failed write instead of dropping it (utils/render-after-write.js). */
+		_renderAfter(work) {
+			return renderAfterWrite(this, work, "steading sheet");
+		}
+
 		async _onListItemAdd(list) {
 			if (list === "residents" || list === "neighbors") {
 				const kind = list === "neighbors" ? "neighbor" : "resident";
 				const data = await new AddSteadingMemberDialog(kind).promise();
 				if (!data) return;
-				await this._addPersonRow(list, data);
-				this.render(false);
+				await this._renderAfter(this._addPersonRow(list, data));
 				return;
 			}
 			const labels = { resources: "resource", fortifications: "fortification", assets: "asset" };
@@ -3426,8 +3430,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						callback: async (html) => {
 							const name = html.find("[name=entry-name]").val()?.trim();
 							if (!name) return;
-							await this._stonetopSteading.editList(list, arr => { arr.push({ name, checked: false }); });
-							this.render(false);
+							await this._renderAfter(this._stonetopSteading.editList(list, arr => { arr.push({ name, checked: false }); }));
 						},
 					},
 					cancel: { label: "Cancel" },
@@ -3438,11 +3441,10 @@ export function createStonetopSteadingSheetClass(Base) {
 		}
 
 		async _onListItemDelete(list, index) {
-			await this._stonetopSteading.editList(list, arr => {
+			await this._renderAfter(this._stonetopSteading.editList(list, arr => {
 				if (!arr[index]) return false;
 				arr.splice(index, 1);
-			});
-			this.render(false);
+			}));
 		}
 
 		async _onPlaceChange(index, value) {

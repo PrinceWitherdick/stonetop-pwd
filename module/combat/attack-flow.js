@@ -28,6 +28,7 @@ import {crewWeaponChoices} from "./crew-weapons.js";
 import {weaponMetaFromNote} from "../data/weapon-from-note.js";
 import {weaponMeta, isClashWeapon, isLetFlyWeapon, isMeleeWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META, MELEE_RANGES, ALL_IN_THE_WRIST, withWristThrow, BRONZE_WEAPONS, bronzeMeta, weaponMaterial, EXTRA_ARROWS_SLUG} from "../data/weapons.js";
 import {escHtml, joinNames, stripHtmlToText} from "../utils/strings.js";
+import {setTooltip} from "../utils/set-tooltip.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, damageKeywordsHtml, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard, whisperedAs} from "../utils/chat.js";
 import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult, messageOfRoll} from "../utils/roll-engine.js";
 import {cardCountedTier, outcomeTier, CRITICAL_TOTAL} from "../utils/counted-tier.js";
@@ -195,14 +196,9 @@ export function grantedWeaponAttackFor(actor, item) {
  * Hover help on a control this file draws on a fight card: Foundry's tooltip, not a native `title`
  * (STYLEGUIDE.md, "Hover help is Foundry's tooltip"). Every one is a plain sentence, several name
  * a user (a gate's refusal, "Ana will press this"), and one control takes either kind in different
- * branches, so all are `data-tooltip-text`: core draws a plain `data-tooltip` as HTML. No words
- * takes the tooltip away, since an empty attribute is still an attribute.
- * tests/templates/js-tooltip-conventions.test.js keeps `.title =` out of the modules.
+ * branches, so all are `data-tooltip-text`: core draws a plain `data-tooltip` as HTML.
  */
-function setTip(el, words) {
-	if (words) el.dataset.tooltipText = words;
-	else delete el.dataset.tooltipText;
-}
+const setTip = (el, words) => setTooltip(el, words, { text: true });
 
 function isFriendly(disposition) {
 	return disposition === CONST.TOKEN_DISPOSITIONS.FRIENDLY;

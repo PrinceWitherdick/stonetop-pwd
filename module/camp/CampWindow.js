@@ -5,6 +5,7 @@ import { partyCharacters } from "../utils/playbook-actors.js";
 import { orphanedPartyFollowers } from "../actors/character/follower-roster.js";
 import { isOutOfPlaySafe } from "../actors/character/deaths-door-actor.js";
 import { escHtml } from "../utils/strings.js";
+import { setTooltip } from "../utils/set-tooltip.js";
 import { personOptionLabel } from "../utils/people-groups.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import {
@@ -281,8 +282,7 @@ export class CampWindow extends LiveDocumentWindow {
 		for (const button of select.parentElement?.querySelectorAll?.("[data-camp-action]") ?? []) {
 			const off = button.dataset.campAction !== fits;
 			button.disabled = off;
-			if (off) button.dataset.tooltip = button.dataset.campBlocked;
-			else delete button.dataset.tooltip;
+			setTooltip(button, off ? button.dataset.campBlocked : "");
 		}
 		return undefined;
 	}

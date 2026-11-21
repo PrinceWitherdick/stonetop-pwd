@@ -52,6 +52,33 @@ const offences = ({ rel, source }) => source.split("\n").flatMap((line, i) => {
 	return found;
 });
 
+// A TOOLTIP THAT COMES AND GOES IS SET THROUGH setTooltip (module/utils/set-tooltip.js). Taking one
+// away by hand meant each site picked its own form and its own idea of "no words", and a site that
+// cleared `data-tooltip` left a `data-tooltip-text` behind. So no module deletes or removes either
+// attribute itself, except:
+//   · utils/set-tooltip.js, the helper.
+//   · utils/clip-tooltips.js, which clears its own set (the HTML form and the direction too), all
+//     of which only it ever writes.
+const CLEAR_EXCEPTIONS = new Set(["module/utils/set-tooltip.js", "module/utils/clip-tooltips.js"]);
+const CLEAR = /delete\s+[\w$.?]+\.dataset\.tooltip(?:Text)?\b(?!Html|Direction)|removeAttribute\(\s*["']data-tooltip(?:-text)?["']/;
+const clears = ({ rel, source }) => source.split("\n")
+	.flatMap((line, i) => (code(line) && CLEAR.test(line) ? [`${rel}:${i + 1}`] : []));
+
+describe("a tooltip cleared in JS", () => {
+	it("tells a hand-written clear from everything else", () => {
+		const probe = source => clears({ rel: "x.js", source });
+		expect(probe("delete btn.dataset.tooltip;")).toHaveLength(1);
+		expect(probe("delete el.dataset.tooltipText;")).toHaveLength(1);
+		expect(probe("btn.removeAttribute(\"data-tooltip\");")).toHaveLength(1);
+		expect(probe("delete el.dataset.tooltipDirection;")).toHaveLength(0);
+		expect(probe("setTooltip(btn, \"\");")).toHaveLength(0);
+	});
+
+	it("goes through setTooltip, outside the stated exceptions", () => {
+		expect(FILES.filter(f => !CLEAR_EXCEPTIONS.has(f.rel)).flatMap(clears)).toEqual([]);
+	});
+});
+
 describe("a tooltip built in JS", () => {
 	it("read the modules, and tells an element's title from a data object's", () => {
 		expect(FILES.length).toBeGreaterThan(300);

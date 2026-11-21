@@ -1,4 +1,5 @@
 import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHeroAsterisk.js";
+import { setTooltip } from "./set-tooltip.js";
 import { WOUND_STATUS_LABEL } from "../actors/character/wound-display.js";
 import { normalizeWoundList } from "../actors/character/wound-record.js";
 import { reminderChips, chipLine } from "../actors/character/gear-reminders.js";
@@ -199,8 +200,7 @@ function _resultTableLadder(resultTable, tier) {
 }
 
 // The title row's "?" that reveals a hidden move description, shared by every card that carries one.
-// It is saved into the message's flavor, so a card posted before 2026-11-20 keeps the native
-// `title` it was posted with; only new cards carry Foundry's tooltip.
+// It is saved into the message's flavor, so wireDescToggle brings an older card's toggle up to date.
 const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" aria-expanded="false" aria-label="Show move description" data-tooltip="Show move description"><i class="fas fa-circle-question" aria-hidden="true"></i></button>`;
 
 /** The toggle's name and tooltip for each state: it says what the next press does. */
@@ -212,18 +212,19 @@ const DESC_TOGGLE_SAYS = { false: "Show move description", true: "Hide move desc
  * The open state lives on the card (`desc-revealed`, which the stylesheet reads); the button only
  * mirrors it. Its name and tooltip are restated from that class at wire time and on every press, so
  * a screen reader hears "Hide…" and `aria-expanded="true"` once the description is showing, and a
- * card saved before the toggle carried either (an older flavor) is brought up to date here.
+ * card saved before the toggle carried either (an older flavor) is brought up to date here. Such a
+ * card also loses the native `title` it was posted with, which would show beside Foundry's tooltip.
  * tests/utils/roll-desc-toggle.test.js
  */
 export function wireDescToggle(root) {
 	const toggle = root?.querySelector?.(".stonetop-roll-card-desc-toggle");
 	const card = toggle?.closest(".stonetop-roll-card");
 	if (!toggle || !card) return;
+	toggle.removeAttribute("title");
 	const say = () => {
 		const open = card.classList.contains("desc-revealed");
 		toggle.setAttribute("aria-expanded", String(open));
-		toggle.setAttribute("aria-label", DESC_TOGGLE_SAYS[open]);
-		toggle.setAttribute("data-tooltip", DESC_TOGGLE_SAYS[open]);
+		setTooltip(toggle, DESC_TOGGLE_SAYS[open], { name: true });
 	};
 	say();
 	toggle.addEventListener("click", () => {

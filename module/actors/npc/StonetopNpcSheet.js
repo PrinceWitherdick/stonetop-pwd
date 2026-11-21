@@ -17,7 +17,8 @@ import {
 } from "../../utils/stat-block-edit.js";
 import { getOpenSheetsInEditMode, isClassicLayout, layoutClasses, stampLayoutClass } from "../../settings.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
-import { buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice, wireRelationshipDropHighlight } from "../../utils/relationship-hearts.js";
+import { buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice } from "../../utils/relationship-hearts.js";
+import { wireDropHighlight } from "../../utils/drop-highlight.js";
 import { relationshipViewContext, wireRelationshipBoard } from "../../utils/relationship-board.js";
 import { getDragEventData } from "../../utils/foundry-compat.js";
 import { openLedgerDialog } from "../../utils/ledger-dialog.js";
@@ -482,7 +483,7 @@ export function createStonetopNpcSheetClass(Base) {
 			// Drop a person onto the Relationships tab to put them on the list — a stranger
 			// (including another NPC) becomes a row, someone unticked is revealed.
 			const relSection = root.querySelector(".stonetop-npc-relationships");
-			const clearRelHighlight = wireRelationshipDropHighlight(relSection);
+			const clearRelHighlight = wireDropHighlight(relSection);
 			if (relSection) {
 				relSection.addEventListener("dragover", ev => ev.preventDefault());
 				relSection.addEventListener("drop", async ev => {

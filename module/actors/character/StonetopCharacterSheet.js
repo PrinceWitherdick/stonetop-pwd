@@ -1,5 +1,7 @@
 import {MoveResourceButton} from "./elements/move-resource-button.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
+import { renderAfterWrite } from "../../utils/render-after-write.js";
+import { setTooltip } from "../../utils/set-tooltip.js";
 import { confirmOutcome, askWithButtons } from "../../utils/ask-with-buttons.js";
 import { parseMovePickCount, backgroundMoveNames, backgroundPossessionSlugs, splitMarkedActions } from "./StonetopCharacter.js";
 import {BackgroundInputChoice} from "./elements/background-input-choice.js";
@@ -204,7 +206,8 @@ import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
 import {canAuthorCustomMoves, canAuthorCustomMovesOn, canCreateArcana} from "../../utils/authoring-gates.js";
 import {enrichMoveRefsInEl, fetchMoveRef} from "../../utils/move-refs.js";
-import {buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice, wireRelationshipDropHighlight} from "../../utils/relationship-hearts.js";
+import {buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice} from "../../utils/relationship-hearts.js";
+import {wireDropHighlight} from "../../utils/drop-highlight.js";
 import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview.js";
 import {relationshipViewContext, wireRelationshipBoard} from "../../utils/relationship-board.js";
 import {BEAST_CATALOG} from "../../data/beasts.js";
@@ -1447,9 +1450,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				&& oldSrc === newImg.getAttribute("src")
 				&& oldStyle === (newImg.getAttribute("style") ?? "")) {
 				// The portrait's tooltip is its name (actor-header.hbs), and a rename keeps the picture.
-				const tip = newImg.getAttribute("data-tooltip-text");
-				if (tip === null) oldImg.removeAttribute("data-tooltip-text");
-				else oldImg.setAttribute("data-tooltip-text", tip);
+				setTooltip(oldImg, newImg.getAttribute("data-tooltip-text"), { text: true });
 				oldImg.alt = newImg.alt;
 				newImg.replaceWith(oldImg);
 			}
@@ -1596,25 +1597,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			injectHeaderToggle(this, "Character", { lockLabel: "Lock Sheet" });
 		}
 
-		/**
-		 * Repaint once `work` settles, and surface a failed write instead of dropping it.
-		 *
-		 * A dozen handlers below share the shape "write to the actor, then re-render". Written
-		 * as a bare `.then(() => this.render(false))` the rejection went nowhere: the repaint
-		 * never ran, so the sheet kept showing the state the player had been told they were in —
-		 * the arcanum they just "revealed", the insert they just "chose" — with nothing in the
-		 * console and nothing on screen to say otherwise.
-		 *
-		 * The render runs on the failure path TOO, deliberately: falling back to what actually
-		 * stored is the whole point, and it is what makes the optimistic DOM honest again.
-		 */
+		/** Repaint once `work` settles, and surface a failed write instead of dropping it (utils/render-after-write.js). */
 		_renderAfter(work) {
-			return Promise.resolve(work)
-				.catch(err => {
-					console.error("Stonetop | character sheet write failed", err);
-					ui.notifications?.error("That change could not be saved. The sheet has been refreshed.");
-				})
-				.finally(() => this.render(false));
+			return renderAfterWrite(this, work, "character sheet");
 		}
 
 		// Jump to this character's page in the shared "Player Introductions" Chronicle
@@ -4103,10 +4088,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// badge), and all three clears are folded into clearDropHint because the
 			// sheet-wide drop handler runs in the capture phase and stops propagation before
 			// a listener on any of them would ever see the drop.
-			const clearDraggingHint = wireRelationshipDropHighlight(html[0], "stonetop-dragging-playbook");
-			const clearPlaybookZone = wireRelationshipDropHighlight(
+			const clearDraggingHint = wireDropHighlight(html[0], "stonetop-dragging-playbook");
+			const clearPlaybookZone = wireDropHighlight(
 				html[0].querySelector(".stonetop-playbook-drop-zone"), "drag-over");
-			const clearRelHighlight = wireRelationshipDropHighlight(
+			const clearRelHighlight = wireDropHighlight(
 				html[0].querySelector(".stonetop-character-relationships"));
 			const clearDropHint = () => {
 				clearDraggingHint();

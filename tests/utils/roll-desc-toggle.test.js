@@ -60,6 +60,8 @@ describe("the roll card's description toggle", () => {
 		const { root, toggle } = card({ legacy: true });
 		wireDescToggle(root);
 		expect(said(toggle)).toEqual({ expanded: "false", label: "Show move description", tooltip: "Show move description" });
+		// Its native title would show beside Foundry's tooltip.
+		expect(toggle.hasAttribute("title")).toBe(false);
 	});
 
 	it("leaves a card with no toggle alone", () => {
