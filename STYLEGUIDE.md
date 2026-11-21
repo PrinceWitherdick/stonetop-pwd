@@ -248,14 +248,22 @@ for a hover pop-over opened from inside a window (a tooltip, a preview, an autoc
 - Transitions change **colour and opacity only**, and name their properties:
   `transition: background-color 0.15s, border-color 0.15s, color 0.15s`. Never `transition: all`
   and never a metric on a button — core's `transition: all 0.5s` on window buttons makes a resizing
-  button flicker under the pointer.
+  button flicker under the pointer. To take a whole window's buttons off it, scope one rule to the
+  window root at a bare button's weight, `:where(.stonetop-x-dialog) button { transition: … }`
+  (core's rule is layered, so it loses; a class-named transition of ours still wins), rather than
+  listing the buttons one class at a time.
 - Durations, written in seconds: **0.15s** for a colour change, **0.12s** for a hover reveal, `--st-popout-fade`
   (250ms) for a pop-out tile, `--st-edit-reveal-delay` (reader's setting, default 1s) before an
   edit pencil fades in.
-- Every animation needs both exits: the `.stonetop-reduce-motion` setting class (which zeroes
-  durations inside `.stonetop` automatically) **and** an
-  `@media (prefers-reduced-motion: reduce)` rule. JS checks `prefersReducedMotion()` from
-  `module/utils/reduced-motion.js`.
+- Motion off is **one root class**: `:root.stonetop-less-motion`, which `applyReduceMotion`
+  (settings.js) puts on when the OS asks (`prefers-reduced-motion: reduce`) or the Reduce Motion
+  setting is on. Write the stopped state as `:root.stonetop-less-motion .x { animation: none; … }`,
+  or gate the motion itself as `:root:not(.stonetop-less-motion) .x { animation: … }`. Never write the
+  media query yourself, and name the end state (the wash, `opacity: 0`) rather than relying on a
+  zeroed duration. `.stonetop-reduce-motion` is the setting alone: it drives the blanket that zeroes
+  durations inside `.stonetop` and hides the hover-zoom popups, and nothing else uses it. JS checks
+  `prefersReducedMotion()` from `module/utils/reduced-motion.js`. Guarded by
+  `tests/styles/reduced-motion-exits.test.js`.
 
 ---
 
@@ -608,7 +616,13 @@ What that means for a new component:
   difference is specificity.
 - **`!important` is a last resort with a comment** saying what it has to beat. The sanctioned uses
   are the master checkbox skin, the `.stonetop-field-btns` stretch, the primary fill on
-  `.stonetop-cta`, and the No Italics / Reduce Motion blankets.
+  `.stonetop-cta`, the `hidden` rule below, and the No Italics / Reduce Motion blankets.
+- **`hidden` hides on its own.** One rule near the top,
+  `:where([class*="stonetop-"])[hidden] { display: none !important; }`, makes the attribute beat any
+  `display` on an element wearing a `stonetop-` class, so don't write a `.x[hidden]` re-hide for one
+  (the UA's `[hidden]` loses to any author `display`; that trap used to need a re-hide per class). An
+  element with no `stonetop-` class still needs its own. To keep a hidden element's space, out-weigh
+  it on purpose with a class-named `!important`, as `.stonetop-timeline-colours-reset[hidden]` does.
 - **State a fill once.** If two classes wear the same skin, put them in one selector list rather
   than two rules that will drift.
 - **Comment the why.** Lead with the reason the rule exists or the trap it avoids, name the test
@@ -644,6 +658,8 @@ What that means for a new component:
 | `dialog-button-specificity`, `dialog-danger-button` | Footer overrides carry the shared scope; the red confirm reads `--st-red-*` |
 | `spiral-bullets` | No list draws the browser's disc; bullets seat on the first line |
 | `caslon-metrics`, `glyph-baseline` | Font metric overrides; glyph boxes sit on the baseline |
+| `hidden-hides` | One `[hidden]` rule for our classes; no per-class re-hides creep back |
+| `reduced-motion-exits` | Motion rules key on `.stonetop-less-motion`, never the media query; `applyReduceMotion` sets it for the OS and the setting |
 
 When you add a guard, follow their pattern: derive the answer from the values in the file rather
 than from a comment, exempt by exact selector, and include a check that the scan found something.

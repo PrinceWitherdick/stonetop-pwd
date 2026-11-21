@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { readRepo as read } from "../fakes/css.js";
+import { readRepo as read, readCss, hiddenHides } from "../fakes/css.js";
 import { pickCountLabel } from "../../module/utils/move-picks.js";
 import { pickListsHtml, normalizePickPools, tierPickCounts } from "../../module/utils/roll-engine.js";
 import { pickableMoveDescription } from "../../module/utils/chat.js";
@@ -772,12 +772,12 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 		expect(body).toContain("if (readout) readout.hidden = !offered;");
 	});
 
-	// This file has learned twice over what a `display` landing on a hidden element costs
-	// (.stonetop-roll-tier-action[hidden], .stonetop-custom-move-section[hidden]), so the UA rule
-	// is said outright rather than relied on.
-	it("says the hide outright in CSS, for both halves of it", () => {
-		expect(read("styles/stonetop.css"))
-			.toContain(":is(.stonetop-picklist, .stonetop-picklist-count)[hidden] { display: none; }");
+	// A `display` landing on a hidden element beats the UA's `[hidden]`, so the stylesheet's own
+	// `hidden` rule is what hides both halves.
+	it("is hidden by the stylesheet's own [hidden] rule, for both halves of it", () => {
+		const css = readCss();
+		expect(hiddenHides(css, "stonetop-picklist")).toBe(true);
+		expect(hiddenHides(css, "stonetop-picklist-count")).toBe(true);
 	});
 
 	it("is styled in every home the checklist has, chat and dialog alike", () => {

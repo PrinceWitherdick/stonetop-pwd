@@ -289,16 +289,10 @@ describe("the notice's look", () => {
 
 	// The drop and the shake only for a reader who hasn't asked for stillness, either way of asking.
 	it("moves only for a reader who hasn't asked for less motion", () => {
-		const block = /@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/g;
-		const animated = [...CSS.matchAll(/animation:\s*stonetop-letter-notice-/g)].length;
-		const guarded = [...CSS.matchAll(block)]
-			.map(m => m[1])
-			.filter(body => body.includes("stonetop-letter-notice"))
-			.join("\n");
-		expect(animated).toBeGreaterThan(0);
-		expect([...guarded.matchAll(/animation:\s*stonetop-letter-notice-/g)].length).toBe(animated);
-		for (const line of guarded.split("\n").filter(l => l.includes(".stonetop-letter-notice") && l.includes("{"))) {
-			expect(line).toContain(":root:not(.stonetop-reduce-motion)");
+		const rules = [...CSS.matchAll(/([^{}]+)\{[^{}]*animation:\s*stonetop-letter-notice-[^{}]*\}/g)];
+		expect(rules.length).toBeGreaterThan(0);
+		for (const [, selector] of rules) {
+			expect(selector.trim()).toMatch(/^:root:not\(\.stonetop-less-motion\) /);
 		}
 	});
 });

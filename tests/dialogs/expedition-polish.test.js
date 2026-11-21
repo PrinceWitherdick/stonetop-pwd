@@ -167,30 +167,19 @@ describe("the stylesheet", () => {
 		}
 	});
 
-	it("takes the window's own buttons off core's transition: all", () => {
-		for (const sel of [
-			".stonetop-expedition-dialog .stonetop-exp-load-chip",
-			".stonetop-expedition-dialog .stonetop-exp-asset-btn",
-			".stonetop-expedition-dialog .stonetop-exp-surplus-step",
-			".stonetop-expedition-dialog .stonetop-exp-home-asset-btn",
-			".stonetop-expedition-dialog .stonetop-exp-home-reset-btn",
-			".stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn",
-			".stonetop-expedition-dialog .stonetop-exp-timeline-btn",
-			".stonetop-journey .stonetop-journey-tier",
-			".stonetop-journey .stonetop-journey-to-scene",
-			".stonetop-journey .stonetop-journey-share",
-			".stonetop-journey .stonetop-journey-share-hide",
-			".stonetop-journey .stonetop-journey-share-reword",
-			".stonetop-journey .stonetop-journey-place-site",
-			".stonetop-journey .stonetop-journey-clear-drawn",
-			".stonetop-shared-route .stonetop-shared-route-stop",
-		]) {
-			expect(declarations(CSS, sel), sel).toMatch(/transition:\s*background-color 0\.15s, border-color 0\.15s, color 0\.15s/);
+	it("takes every button in the window and the map windows off core's transition on all properties", () => {
+		// Scoped to the window roots, so a new button is covered without being listed. `:where()`
+		// keeps it at a bare `button`'s weight: core's rule is layered and loses anyway, and a
+		// class-named transition of ours still wins over this one.
+		expect(declarations(CSS, ":where(.stonetop-expedition-dialog, .stonetop-journey) button"))
+			.toMatch(/transition:\s*background-color 0\.15s, border-color 0\.15s, color 0\.15s/);
+		for (const tpl of ["expedition-journey.hbs", "../travel-map.hbs", "../shared-route.hbs"]) {
+			expect(read(`templates/dialogs/partials/${tpl}`), tpl).toMatch(/class="[^"]*\bstonetop-journey\b/);
 		}
 	});
 
-	it("keeps the drawn fate row's wash under the Reduce Motion setting, not only the OS preference", () => {
-		const body = declarations(CSS, ":root.stonetop-reduce-motion .stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash");
+	it("keeps the drawn fate row's wash with motion off, whichever way the reader asked", () => {
+		const body = declarations(CSS, ":root.stonetop-less-motion .stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash");
 		expect(body).toMatch(/animation:\s*none/);
 		expect(body).toMatch(/background-color:\s*var\(--st-warm-hover-bg\)/);
 	});

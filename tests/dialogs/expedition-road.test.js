@@ -206,12 +206,11 @@ describe("the banner's status chip", () => {
 });
 
 describe("the stylesheet", () => {
-	it("walks the marker by keyframes, with both reduced-motion exits", () => {
+	it("walks the marker by keyframes, stopped by the less-motion class", () => {
 		expect(declarations(CSS, ".stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking"))
 			.toMatch(/animation:\s*stonetop-exp-trail-walk 0\.9s/);
-		expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.stonetop-expedition-dialog \.stonetop-exp-trail-marker\.is-walking,\s*\.stonetop-expedition-dialog \.stonetop-exp-trail-marker\.is-walking > i \{ animation: none; \}/);
-		// The Reduce Motion setting's blanket rule reaches it, being inside `.stonetop`; the script skips the walk too
-		// (flash-highlight.js `playClassOnce` plays nothing for reduced motion).
+		expect(CSS).toMatch(/:root\.stonetop-less-motion \.stonetop-expedition-dialog \.stonetop-exp-trail-marker\.is-walking,\s*:root\.stonetop-less-motion \.stonetop-expedition-dialog \.stonetop-exp-trail-marker\.is-walking > i \{ animation: none; \}/);
+		// The script skips the walk too (flash-highlight.js `playClassOnce` plays nothing for less motion).
 		expect(read("module/dialogs/ExpeditionDialog.js")).toMatch(/playClassOnce\(marker, \["is-walking"\]/);
 		expect(read("module/utils/flash-highlight.js")).toMatch(/export function playClassOnce\(el, classes, \{ fallbackMs \}\) \{\s*if \([^)]*prefersReducedMotion\(\)\) return false;/);
 		expect(declarations(CSS, ".stonetop-expedition-dialog .stonetop-exp-trail-marker")).not.toMatch(/transition/);

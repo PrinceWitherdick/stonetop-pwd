@@ -2497,8 +2497,26 @@ export function applyEditPencilRevealDelay(value) {
 	document.documentElement.style.setProperty("--st-edit-reveal-delay", `${safe}s`);
 }
 
+let _reduceMotionSetting = false;
+let _osReducedMotion = null;
+
+/**
+ * Two root classes, because they promise different things.
+ * - `stonetop-reduce-motion` is the setting alone. Its blanket zeroes every duration inside
+ *   `.stonetop` and hides the hover-zoom popups, which only the setting's hint promises.
+ * - `stonetop-less-motion` is the setting OR the OS asking. Every motion rule keys on this one class,
+ *   so no rule can honour one exit and forget the other (tests/styles/reduced-motion-exits.test.js).
+ * The OS query is watched once, so turning reduced motion on in the OS reaches an open table.
+ */
 export function applyReduceMotion(value) {
-	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
+	_reduceMotionSetting = !!value;
+	if (!_osReducedMotion && typeof globalThis.matchMedia === "function") {
+		_osReducedMotion = globalThis.matchMedia("(prefers-reduced-motion: reduce)") ?? null;
+		_osReducedMotion?.addEventListener?.("change", () => applyReduceMotion(_reduceMotionSetting));
+	}
+	const root = document.documentElement;
+	root.classList.toggle("stonetop-reduce-motion", _reduceMotionSetting);
+	root.classList.toggle("stonetop-less-motion", _reduceMotionSetting || _osReducedMotion?.matches === true);
 }
 
 /**

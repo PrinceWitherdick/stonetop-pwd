@@ -139,9 +139,8 @@
 :root {
 	--font-avara: "Avara", serif;
 	/* The old-book face worn as a LABEL on the cards that are props rather than sheet furniture: a
-	   threat's type, proximity and doom, a hazard's advance, a site's foundation. It was named
-	   outright in five rules. Falls back to the reader's own sheet font, which is what those rules
-	   already said. */
+	   threat's type, proximity and doom, a hazard's advance, a site's foundation. Falls back to the
+	   reader's own sheet font. */
 	--font-fell: "IM Fell English", var(--font-stonetop);
 	--font-primary: "Libre Caslon Text", Signika, sans-serif;
 	--font-stonetop: "Libre Caslon Text", Signika, sans-serif;
@@ -673,7 +672,7 @@
 	/* And the rung for our own hover pop-overs (a word's tooltip, the arcana and people previews,
 	   the playbook picker's, the autocomplete list, the basic-move panel): above every window AND
 	   level with core's tooltips, because each of them is opened from inside a window and has to
-	   clear it. Seven rules carried this as 10000 or 9999 by hand. */
+	   clear it. */
 	--st-z-popover: 10000;
 
 	/* ── Green "active/accent" tint ───────────────────────────────────────
@@ -836,11 +835,8 @@
 	   the names buy is that the accessibility scope at the foot of this file can reach them.
 
 	   `--st-quiet-ink` is the quiet label: a step title, a section caption, a picker's hint. It
-	   was written out as a bare `slategrey` in 46 places and measures 3.57:1 on the sheet's paper,
-	   which is under WCAG AA's 4.5:1 for body text — so the system's own quiet voice was part of
-	   the "lighter grey text" a player wrote in about. It stays slate here because that is the
-	   system's accent and nothing about normal contrast is being relitigated; it is simply now
-	   somewhere a scope can find it.
+	   measures 3.57:1 on the sheet's paper, under WCAG AA's 4.5:1 for body text, so the
+	   accessibility scope re-points it. It stays slate here because that is the system's accent.
 
 	   `--st-accent-fill` is the same colour doing the opposite job: the fill under a selected chip,
 	   a checked radio, an active nav entry, with a white label on it. That pairing measures 4.05:1,
@@ -850,14 +846,11 @@
 	--st-quiet-ink:   slategrey;
 	--st-accent-fill: slategrey;
 	/* THE SAME SLATE AS A RULE: the border of an inline button, the tab rail's frame, the underline
-	   of the classic tab strip, a selected card's edge. 57 borders spelled it out. Kept apart from the
-	   two above for the reason they are kept apart from each other: a palette may want to move an
-	   edge without moving a label or a fill. No palette re-points it yet (slategrey is 3:1 or better
-	   as a boundary on every page), so every one of those borders renders as it did. */
+	   of the classic tab strip, a selected card's edge. Kept apart from the two above for the reason
+	   they are kept apart from each other: a palette may want to move an edge without moving a label
+	   or a fill. No palette re-points it yet: slategrey is 3:1 or better as a boundary on every page. */
 	--st-slate-rule: slategrey;
-	/* AND AS A WASH. The translucent slate under a selected option, a lane, a pip, was written
-	   three ways (100/116/139, 112/128/144 and 106/120/128, some sixty rules between them). One
-	   channel now, at the value two thirds of them already used, read as
+	/* AND AS A WASH. The translucent slate under a selected option, a lane, a pip, read as
 	   rgb(var(--st-slate-rgb) / a) like the ink and paper channels above. */
 	--st-slate-rgb: 100 116 139;
 
@@ -875,10 +868,19 @@
 	scrollbar-color: slategrey hsl(30deg 20% 94%);
 }
 
-/* Motion off: the pop-out tiles are simply there on hover and simply gone after it. */
-@media (prefers-reduced-motion: reduce) {
-	:root { --st-popout-fade: 0ms; }
-}
+/* Motion off: the pop-out tiles are simply there on hover and simply gone after it.
+   `stonetop-less-motion` is on the root when the OS or the Reduce Motion setting asks
+   (settings.js#applyReduceMotion). Every motion rule keys on it, never on the media query:
+   tests/styles/reduced-motion-exits.test.js. */
+:root.stonetop-less-motion { --st-popout-fade: 0ms; }
+
+/* `hidden` hides, on anything of ours. The UA's `[hidden] { display: none }` loses to ANY author
+   `display`, so a flex or grid element that JS hides stayed on screen until it got a re-hide of its
+   own. `!important` so no `display` rule can beat it; `:where()` so its weight is only `[hidden]`'s,
+   and the one element that keeps its space while hidden (the timeline's colour reset) can still win
+   with a class-named `!important` of its own. An element with no `stonetop-` class (a `.wd-section`,
+   a `.cm-next`) still needs its own re-hide. tests/styles/hidden-hides.test.js. */
+:where([class*="stonetop-"])[hidden] { display: none !important; }
 
 /* Whole-app base font (sidebar, chat, hotbar, everything). This is intentional
    global theming of the Foundry UI, not window/modal chrome, so it stays global. */
@@ -6316,12 +6318,10 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 /* Motion off: the same wash, arriving and leaving without the fade. It still clears on its own,
    since the class comes off on the same timer either way. */
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-setting-flash {
-		animation: none;
-		background-color: var(--st-gold-bg);
-		box-shadow: 0 0 0 4px var(--st-gold-bg);
-	}
+:root.stonetop-less-motion .stonetop-setting-flash {
+	animation: none;
+	background-color: var(--st-gold-bg);
+	box-shadow: 0 0 0 4px var(--st-gold-bg);
 }
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__content {
@@ -6871,11 +6871,6 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
-}
-/* display:flex above out-specifies the UA [hidden]{display:none}; re-hide non-active tiers
-   (the render marks all but the rolled tier hidden; a GM Shift Up/Down swaps which shows). */
-:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-roll-tier-action[hidden] {
-	display: none;
 }
 
 /* Confirm reads as the primary action of the tier (slate CTA tokens), like Apply damage. */
@@ -9822,7 +9817,6 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 
 /* One group of fields per panel; only the active one shows (JS toggles `hidden`). */
 .stonetop-custom-move-section { display: flex; flex-direction: column; gap: 10px; }
-.stonetop-custom-move-section[hidden] { display: none; }
 
 /* Save/Cancel at one end of the shared footer row, Back/Next at the other (the buttons
    themselves use the shared .stonetop-guide-nav button style). */
@@ -10142,7 +10136,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
    scrolls on its own beside the rail. */
 .stonetop-pb-review-body { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; font-size: var(--st-fs-base); }
 .stonetop-pb-review-panel { display: flex; flex-direction: column; gap: 14px; }
-.stonetop-pb-review-panel[hidden] { display: none; }
 /* The rail sizes to its longest section name (the Welcome rail's rule), and a section holding a
    hard-to-place piece shows its count in the red the piece itself wears (gold was too easy to miss). */
 .stonetop-pb-review-split > .stonetop-guide-toc { width: max-content; }
@@ -10297,7 +10290,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	gap: 10px;
 	padding: 0 16px 12px;
 }
-.stonetop-improvement-builder-section[hidden] { display: none; }
 
 .stonetop-improvement-builder-field { display: flex; flex-direction: column; gap: 3px; }
 .stonetop-improvement-builder-field > label {
@@ -10344,8 +10336,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	font-weight: bold;
 	color: var(--st-danger-ink, #a02020);
 }
-.stonetop-improvement-builder-error[hidden],
-.stonetop-improvement-builder-preview-notes[hidden] { display: none; }
 .stonetop-improvement-builder-form input[aria-invalid="true"] {
 	border-color: var(--st-danger-ink, #a02020);
 }
@@ -11068,16 +11058,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	padding: 6px 8px 8px;
 	color: var(--st-text-body);
 }
-/* Belt and braces: the UA's [hidden]{display:none} already hides the non-active tiers, and
-   nothing here sets a display that would out-specify it — but the tier ACTIONS learned that
-   lesson the hard way (see .stonetop-roll-tier-action[hidden] above), so say it outright. */
-.stonetop-roll-tier-picklist[hidden] { display: none; }
-/* And the printed list of a tier that never reached it — Helior's Unblinking Eye on a 6-, where
-   "the GM makes a move" and there is nothing to choose. Hidden with its tally by
-   stonetop.js#_paintPickCount, which is a live toggle rather than markup: a GM's Shift Up/Down
-   brings both back with the tier that grants them. Nothing above sets a `display` on either, so
-   the UA rule already does this — said outright on the same lesson as the line before it. */
-:is(.stonetop-picklist, .stonetop-picklist-count)[hidden] { display: none; }
 /* Three homes, one checklist: a roll card's own pick list (a love letter's pool, a homefront
    move's per-tier options), and the options a move prints in its TEXT — which is tickable in
    place wherever that text is shown, on a posted move card and on a roll card's description
@@ -11253,11 +11233,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete)[hidden] {
-	display: none;
-}
-:is(#chat, #chat-notifications, #chat-popout) .message
-	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
 	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete):disabled {
 	opacity: 0.4;
 	cursor: default;
@@ -11308,11 +11283,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	flex-wrap: wrap;
 	gap: 4px;
 	margin: 3px 0 5px 22px;
-}
-:is(#chat, #chat-notifications, #chat-popout) .message
-	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	.stonetop-invoke-debility[hidden] {
-	display: none;
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
@@ -14636,11 +14606,6 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 	min-height: 0;
 }
 
-/* The sections set `display: flex` below, which out-specifies the UA's `[hidden] { display: none }`
-   and would leave every panel on screen at once. The same trap `.wd-section[hidden]` and
-   `.stonetop-custom-move-section[hidden]` are here for. */
-.stonetop-roster-panel[hidden] { display: none; }
-
 /* Height only, so the art keeps its own proportions whatever they are — `width: auto` on an
    <img> with a stated height is the one direction that never distorts. `max-width` is the guard
    for a wide mark in a narrow window; the two together letterbox nothing.
@@ -15236,7 +15201,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-style: italic;
 	color: var(--st-text-secondary);
 }
-
 
 /* The empty "Drop a playbook here" hint is hidden by default so a fresh sheet
    isn't cluttered with a confusing dashed box — the whole sheet still accepts a
@@ -15860,7 +15824,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--color-text-dark-secondary);
 	transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-
 
 .asm-info:hover,
 .asm-randomize:hover {
@@ -17816,8 +17779,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 /* ── The two pieces of motion ──────────────────────────────────────
-   Both are decoration, so both sit behind prefers-reduced-motion: with motion off the moods
-   still read entirely from colour. */
+   Both are decoration, so both play only without `stonetop-less-motion`: with motion off the
+   moods still read entirely from colour. */
 @keyframes deaths-door-breathe {
 	0%, 100% { opacity: 0.62; }
 	50%      { opacity: 1; }
@@ -17830,20 +17793,18 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	100% { opacity: 0; }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-	/* A slow breath in the one pool of light left while the dice are in hand — failing
-	   consciousness, not a pulse to look at. Waved-off has no lamp left to gutter. */
-	.stonetop-deathsdoor-dialog.deaths-door-mood--dusk::after {
-		animation: deaths-door-breathe 7.5s ease-in-out infinite;
-	}
+/* A slow breath in the one pool of light left while the dice are in hand — failing
+   consciousness, not a pulse to look at. Waved-off has no lamp left to gutter. */
+:root:not(.stonetop-less-motion) .stonetop-deathsdoor-dialog.deaths-door-mood--dusk::after {
+	animation: deaths-door-breathe 7.5s ease-in-out infinite;
+}
 
-	/* One shot, on the render where the mood CHANGES to --door (the class is stamped only
-	   then), so the roll that lands the 6- snuffs the room and picking a fate afterwards
-	   doesn't replay it. */
-	.deaths-door-mood--door.deaths-door-mood-entering::after {
-		background: #000;
-		animation: deaths-door-snuff 0.85s ease-out both;
-	}
+/* One shot, on the render where the mood CHANGES to --door (the class is stamped only
+   then), so the roll that lands the 6- snuffs the room and picking a fate afterwards
+   doesn't replay it. */
+:root:not(.stonetop-less-motion) .deaths-door-mood--door.deaths-door-mood-entering::after {
+	background: #000;
+	animation: deaths-door-snuff 0.85s ease-out both;
 }
 
 /* ── The sheet of someone past the Last Door ───────────────────────
@@ -19660,7 +19621,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding-left: 18px;
 }
 
-
 .stonetop-eos-footer {
 	display: flex;
 	justify-content: flex-end;
@@ -20364,14 +20324,12 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* The drop from the top edge, with a little bounce, and the envelope shaken as it lands. Only
    for a reader who hasn't asked for less motion (the OS's setting or the system's own Reduce
    motion); for them it simply appears. The bells ring either way: sound isn't motion. */
-@media (prefers-reduced-motion: no-preference) {
-	:root:not(.stonetop-reduce-motion) #stonetop-letter-notice.is-arriving {
-		animation: stonetop-letter-notice-drop 0.6s cubic-bezier(0.25, 1.4, 0.5, 1);
-	}
+:root:not(.stonetop-less-motion) #stonetop-letter-notice.is-arriving {
+	animation: stonetop-letter-notice-drop 0.6s cubic-bezier(0.25, 1.4, 0.5, 1);
+}
 
-	:root:not(.stonetop-reduce-motion) #stonetop-letter-notice.is-arriving .stonetop-letter-notice__icon {
-		animation: stonetop-letter-notice-shake 0.7s ease-in-out 0.45s;
-	}
+:root:not(.stonetop-less-motion) #stonetop-letter-notice.is-arriving .stonetop-letter-notice__icon {
+	animation: stonetop-letter-notice-shake 0.7s ease-in-out 0.45s;
 }
 
 @keyframes stonetop-letter-notice-drop {
@@ -20503,24 +20461,22 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* The motion, only for a reader who hasn't asked for less (the OS's setting or the system's own
    Reduce Motion). The root fades in, holds, and fades out at --stonetop-moment-out-at, set by the
    script; its `stonetop-moment-out` end is what takes the band down. */
-@media (prefers-reduced-motion: no-preference) {
-	:root:not(.stonetop-reduce-motion) #stonetop-moment.is-playing {
-		animation:
-			stonetop-moment-in 0.2s ease-out both,
-			stonetop-moment-out 0.4s ease-in var(--stonetop-moment-out-at, 2s) forwards;
-	}
+:root:not(.stonetop-less-motion) #stonetop-moment.is-playing {
+	animation:
+		stonetop-moment-in 0.2s ease-out both,
+		stonetop-moment-out 0.4s ease-in var(--stonetop-moment-out-at, 2s) forwards;
+}
 
-	:root:not(.stonetop-reduce-motion) #stonetop-moment.is-playing .stonetop-moment-band {
-		animation: stonetop-moment-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-	}
+:root:not(.stonetop-less-motion) #stonetop-moment.is-playing .stonetop-moment-band {
+	animation: stonetop-moment-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 
-	:root:not(.stonetop-reduce-motion) #stonetop-moment.stonetop-moment--fight.is-playing .stonetop-moment-band {
-		animation: stonetop-moment-wipe 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-	}
+:root:not(.stonetop-less-motion) #stonetop-moment.stonetop-moment--fight.is-playing .stonetop-moment-band {
+	animation: stonetop-moment-wipe 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 
-	:root:not(.stonetop-reduce-motion) #stonetop-moment.stonetop-moment--fight.is-playing .stonetop-moment-title {
-		animation: stonetop-moment-settle 0.35s ease-out 0.15s both;
-	}
+:root:not(.stonetop-less-motion) #stonetop-moment.stonetop-moment--fight.is-playing .stonetop-moment-title {
+	animation: stonetop-moment-settle 0.35s ease-out 0.15s both;
 }
 
 @keyframes stonetop-moment-in {
@@ -21714,15 +21670,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* A wash over the page, and the flat colour that wash RESOLVES to, declared together.
    The second is for the cut-outs drawn on this card — the currency fields' legends notch their
    own borders with a patch of background, and a patch can only disappear if it is the colour of
-   what it is drawn on. Reading `--stonetop-bg` there was the bug: that is the PANEL tone, not
-   this card, and the two only looked alike while the page happened to sit between them.
+   what it is drawn on. Not `--stonetop-bg`: that is the PANEL tone, not this card.
    `color-mix` rather than a second hand-picked hex so the wash and its resolved colour cannot
    drift; the alpha is written once and read by both.
 
-   BOTH READ THE INK CHANNEL, not a literal black. On paper that is the same black wash it always
-   was. On the dark pages a black wash over a near-black page is nothing at all, and these cards
-   were left reading by their border alone while the character sheet's cards (`--st-card-fill`)
-   lifted; a wash of the ink is a faint light there, which is what every other raised surface is. */
+   BOTH READ THE INK CHANNEL, not a literal black: on the dark pages a black wash over a
+   near-black page is nothing at all, and a wash of the ink is a faint light there, which is what
+   every other raised surface is. */
 .steading-card,
 .stonetop-character-relationships {
 	--st-card-wash: 0.035;
@@ -22678,11 +22632,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	100% { opacity: 0; }
 }
 /* Motion off: the check is simply gone, which is where the fade ends. */
-@media (prefers-reduced-motion: reduce) {
-	.steading-edit-section > .steading-section-edit-toggle.steading-section-toggle-faded {
-		animation: none;
-		opacity: 0;
-	}
+:root.stonetop-less-motion .steading-edit-section > .steading-section-edit-toggle.steading-section-toggle-faded {
+	animation: none;
+	opacity: 0;
 }
 
 /* ── Steading section folds ───────────────────────────────────────────────
@@ -25142,13 +25094,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	margin-top: 8px;
 }
 
-/* The `display: flex` above out-specifies the UA's `[hidden] { display: none }`, so an action
-   row that JS hides stays on screen — the same trap `.stonetop-roll-tier-action[hidden]` and
-   `.stonetop-custom-move-section[hidden]` are here for. Winter's walkthrough is the one that
-   pays for it: it hides `#stonetop-winter-step1` (an action row) when the consumption has been
-   rolled, and the dead button sat there above the result the whole time. */
-.stonetop-season-actions[hidden] { display: none; }
-
 .stonetop-season-btn {
 	width: 100%;
 	padding: 7px 12px;
@@ -25166,11 +25111,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 }
 
 .stonetop-season-btn:hover { background: var(--st-btn-primary-bg-hover); }
-
-/* Same trap as `.stonetop-season-actions[hidden]` above: the `display: flex` out-specifies the
-   UA's `[hidden]`. An upkeep's Pay button is drawn hidden while the steading cannot afford it,
-   and shown when the Surplus rises in the same window. */
-.stonetop-season-btn[hidden] { display: none; }
 
 /* Disbanding the Standing Watch is the one seasonal button that TAKES something away for good,
    so it reads as the reluctant option beside "Feed the watch" rather than a peer of it.
@@ -25318,7 +25258,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	line-height: 1.4;
 	color: var(--st-text-secondary);
 }
-
 
 /* Free-text notes recorded onto the season's Chronicle page. */
 .stonetop-season-notes-wrap {
@@ -25566,10 +25505,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	font-weight: bold;
 	color: var(--st-text-body);
 }
-
-/* Empty until something is picked. Said outright rather than left to the UA's
-   [hidden]{display:none}, which any `display` landing on this span would beat. */
-.stonetop-tb-special-chosen[hidden] { display: none; }
 
 .stonetop-homestead-trigger {
 	margin: 0;
@@ -27472,10 +27407,6 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	color: var(--st-red-text);
 }
 
-.stonetop-onboarding-background-picks-flag[hidden] {
-	display: none;
-}
-
 /* Beast-Bonded actions are full sentences, so stack them instead of wrapping pills. */
 .stonetop-onboarding-background-actions-list {
 	flex-direction: column;
@@ -27857,11 +27788,8 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	to   { opacity: 1; transform: scale(1); }
 }
 /* Motion off: both previews that grow in with it are simply there. */
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-avatar-preview,
-	.stonetop-arcana-preview-popup {
-		animation: none;
-	}
+:root.stonetop-less-motion :is(.stonetop-avatar-preview, .stonetop-arcana-preview-popup) {
+	animation: none;
 }
 
 .stonetop-arcana-preview-popup {
@@ -29494,8 +29422,6 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
    .stonetop-guide-split rail): dice / traits / moves / the batch, one panel at a time,
    above a pinned Call them up / Back / Next footer. */
 .stonetop-call-up-dialog .stonetop-cu-panel { display: flex; flex-direction: column; gap: 10px; }
-/* The panels' display:flex beats the UA [hidden] rule; this puts it back. */
-.stonetop-call-up-dialog .stonetop-cu-panel[hidden] { display: none; }
 .stonetop-call-up-dialog .stonetop-cu-nav-btns { display: flex; gap: 10px; }
 .stonetop-call-up-dialog .stonetop-cu-rule {
 	margin: 0;
@@ -36223,10 +36149,6 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-welcome-nav { flex: 0 0 auto; }
 
-/* One step per panel; only the active one shows (JS toggles `hidden`). Plain block
-   flow inside, so the panels' paragraph/button/notice margins below still apply. */
-.stonetop-welcome-section[hidden] { display: none; }
-
 /* Banner title + its optional "optional" tag, kept side by side (the tag toggles as
    panels switch, so it sits beside the title span rather than inside it). */
 .stonetop-welcome-banner-titlewrap {
@@ -39068,9 +38990,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 8px 10px 10px;
 	background: rgb(var(--st-paper-rgb) / 0.35);
 }
-/* Only the active section shows; the rail toggles `hidden` on the others (an explicit
-   display:none survives V13's cascade layers). */
-.stonetop-arcanum-edit .stonetop-arc-section[hidden] { display: none; }
 
 .stonetop-arcanum-edit .stonetop-arc-row {
 	display: flex;
@@ -39274,10 +39193,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	top: 0;
 	z-index: 2;
 }
-
-/* Identity and Followers hold no rich editor, so the bar is hidden there. `display: flex`
-   above out-specifies the UA `[hidden] { display: none }`; re-hide here. */
-.stonetop-arcanum-edit .stonetop-arc-glyphbar[hidden] { display: none; }
 
 .stonetop-arcanum-edit .stonetop-arc-glyphbar-label {
 	font-size: var(--st-fs-xs);
@@ -39683,11 +39598,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 10px;
 }
 
-/* "Next" vanishes on the last section. The shared `.stonetop-guide-nav button` rule sets
-   display:inline-flex, which out-specifies the UA `[hidden] { display: none }`; re-hide
-   here — same reason as `.create-monster .cm-next[hidden]`. */
-.stonetop-arcanum-edit .stonetop-arc-next[hidden] { display: none; }
-
 /* ── Pin modal footers to the bottom ──────────────────────────────────────
    Foundry makes each dialog template's outer wrapper fill the window
    (core `.window-content > * { flex: 1 }`), so when a window is dragged
@@ -39978,9 +39888,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 @media (max-width: 720px) {
 	.stonetop .threat-move-list { columns: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-	.stonetop .threat-portent__box, .stonetop .threat-portent__box::after { transition: none; }
-}
+:root.stonetop-less-motion .stonetop .threat-portent__box,
+:root.stonetop-less-motion .stonetop .threat-portent__box::after { transition: none; }
 
 /* --- the Threats & Dangers and Sites tabs ---------------------------------- */
 
@@ -41237,11 +41146,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	--control-active-border-color: var(--st-accent-fill, slategrey);
 	--control-hover-border-color: var(--st-accent-fill, slategrey);
 }
-
-/* `hidden` has to be re-asserted: the display above would otherwise beat the UA rule that
-   makes the attribute mean anything, and the button would stay on screen on scenes that
-   carry no pins of ours. #id[hidden] outweighs the #id rules above it. */
-#stonetop-map-pin-names[hidden] { display: none; }
 
 /* A whisper of a mark saying "you have told this map something", which is what makes the
    right-click-to-follow line in the tooltip worth reading. Deliberately not a badge: it is
@@ -42663,9 +42567,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	from { opacity: 0; transform: scale(0.92); }
 	to   { opacity: 1; transform: scale(1); }
 }
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-people-preview { animation: none; }
-}
+:root.stonetop-less-motion .stonetop-people-preview { animation: none; }
 .stonetop-people-preview {
 	position: fixed;
 	z-index: var(--st-z-popover);
@@ -42808,11 +42710,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 1px solid rgb(var(--st-slate-rgb) / 0.25);
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
-}
-/* The rule above sets display:flex, which outranks the UA stylesheet's [hidden] and would
-   leave a filtered-out portrait on screen. Pair the two explicitly. */
-.stonetop-people-gallery .stonetop-people-pick[hidden] {
-	display: none;
 }
 .stonetop-people-gallery .stonetop-people-pick:hover {
 	border-color: var(--st-btn-primary-border);
@@ -44966,7 +44863,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-style: dashed;
 }
 
-
 /* Unticked under the pencil: shown only while editing, matching the table's row treatment. */
 .stonetop-rel-card--hidden .stonetop-rel-card-name,
 .stonetop-rel-card--hidden .stonetop-rel-portrait { opacity: 0.45; }
@@ -45522,9 +45418,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Cards are lifted by a compositor transform, so a lane needs no scroll container of its
    own; the drag scrolls the sheet instead (see AUTOSCROLL_EDGE in relationship-board.js). */
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-rel-card.is-dragging { box-shadow: none; }
-}
+:root.stonetop-less-motion .stonetop-rel-card.is-dragging { box-shadow: none; }
 
 /* ── Board view: exact-value drop zones ───────────────────────────────────────
    Hostile and Trusted each hold two ratings (1|2, 4|5), so a drop into them can name a
@@ -47379,21 +47273,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* Motion off: the same wash, arriving and leaving with no fade at all. It still clears on
-   its own — the class comes off on the same 5s timer either way — so nothing is lost but
-   the transition. Same treatment the Death's Door moods get further up this file. */
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash,
-	.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
-	.stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
-		animation: none;
-		background-color: var(--st-warm-hover-bg);
-	}
-}
-/* The Reduce Motion setting likewise. Its blanket zeroes the 5s fade, which lands the row on the
-   fade's transparent last frame, so the drawn row showed no wash at all. */
-:root.stonetop-reduce-motion .stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash,
-:root.stonetop-reduce-motion .stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
-:root.stonetop-reduce-motion .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
+   its own (the class comes off on the same 5s timer either way), so nothing is lost but the
+   transition. It must name `animation: none` and the wash: the setting's blanket alone would zero
+   the 5s fade and land the row on its transparent last frame. */
+:root.stonetop-less-motion .stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash,
+:root.stonetop-less-motion .stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
+:root.stonetop-less-motion .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
 	animation: none;
 	background-color: var(--st-warm-hover-bg);
 }
@@ -49290,33 +49175,23 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: auto; flex: 0 0 auto; margin-top: 8px; padding: 3px 10px; line-height: 1.4;
 	font-size: var(--st-fs-2xs);
 }
-/* The expedition's and the route windows' own buttons, off core's `transition: all 0.5s`: a
-   button that animates its box flickers under the pointer (STYLEGUIDE section 5, Motion).
-   Guarded by expedition-polish.test.js. */
-.stonetop-expedition-dialog .stonetop-exp-load-chip,
-.stonetop-expedition-dialog .stonetop-exp-asset-btn,
-.stonetop-expedition-dialog .stonetop-exp-surplus-step,
-.stonetop-expedition-dialog .stonetop-exp-home-asset-btn,
-.stonetop-expedition-dialog .stonetop-exp-home-reset-btn,
-.stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn,
-.stonetop-expedition-dialog .stonetop-exp-timeline-btn,
-.stonetop-journey .stonetop-journey-tier,
-.stonetop-journey .stonetop-journey-to-scene,
-.stonetop-journey .stonetop-journey-share,
-.stonetop-journey .stonetop-journey-share-hide,
-.stonetop-journey .stonetop-journey-share-reword,
-.stonetop-journey .stonetop-journey-place-site,
-.stonetop-journey .stonetop-journey-clear-drawn,
-.stonetop-shared-route .stonetop-shared-route-stop {
+/* Every button in the expedition window and the map windows (`.stonetop-journey` is on the
+   journey step, the travel map and the shared route), off core's `transition: 0.5s` on all
+   properties: a button that animates its box flickers under the pointer (STYLEGUIDE section 5,
+   Motion). Core's rule sits in a cascade layer, so this bare-`button` weight beats it, while any
+   class-named transition of ours (the zoom button's fade) still wins. Guarded by
+   expedition-polish.test.js. */
+:where(.stonetop-expedition-dialog, .stonetop-journey) button {
 	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
-/* Each new step of the walkthrough slides in from the side it came from (StepperDialog `enterStep`,
-   which adds the class only for a reader who has not asked for less motion). Guarded by
+/* Each new step of a walkthrough slides in from the side it came from (StepperDialog `enterStep`,
+   which adds the class only for a stepper whose `_stepMotion` is on and a reader who has not asked
+   for less motion; unscoped, so that switch alone turns it on). Guarded by
    tests/dialogs/stepper-step-motion.test.js. */
-.stonetop-expedition-dialog .stonetop-guide-main.is-entering {
+.stonetop-guide-main.is-entering {
 	animation: stonetop-guide-step-in 0.18s ease-out both;
 }
-.stonetop-expedition-dialog .stonetop-guide-main.is-entering--back {
+.stonetop-guide-main.is-entering--back {
 	animation-name: stonetop-guide-step-back;
 }
 @keyframes stonetop-guide-step-in {
@@ -49325,9 +49200,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 @keyframes stonetop-guide-step-back {
 	from { opacity: 0; translate: -8px 0; }
 }
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-expedition-dialog .stonetop-guide-main.is-entering { animation: none; }
-}
+:root.stonetop-less-motion .stonetop-guide-main.is-entering { animation: none; }
 
 /* ── Running the journey's road panel (partials/expedition-trail.hbs) ──
    A row per leg down a track, a marker beside the next leg, and the GM's Travel. The state of a leg
@@ -49418,10 +49291,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	from { rotate: -6deg; }
 	to   { rotate: 6deg; }
 }
-@media (prefers-reduced-motion: reduce) {
-	.stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking,
-	.stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking > i { animation: none; }
-}
+:root.stonetop-less-motion .stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking,
+:root.stonetop-less-motion .stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking > i { animation: none; }
 /* Travel, Back a leg and the days offer: a row of buttons spaced by gap. */
 .stonetop-expedition-dialog .stonetop-exp-trail-buttons {
 	display: flex;
@@ -49519,7 +49390,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
 	padding: 0.15rem 0.6rem; line-height: 1.6;
 }
-
 
 /* -- A move that charges before it rolls ------------------------ */
 /* Danu's Grasp: "spend 1 Stock and roll +WIS". The price and the purse sit above the results, so
@@ -51378,8 +51248,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	font-size: var(--relmap-bar-font);
 }
 
-.stonetop-relmap-groupbar .stonetop-relmap-tiebar-btn[hidden] { display: none; }
-
 /* THE LABEL'S BAR IS LAID OUT LIKE A SMALL WINDOW: a title row, the body, and a foot with Save, each
    divided from the next by the card rule, in the bars' own panel and type. A fixed width, so the
    label box can fill it. (After the tags window in Dom Bosco's pull request to the module.) */
@@ -51627,7 +51495,6 @@ div.stonetop-relmap-personbar {
 	padding: 0;
 	list-style: none;
 }
-.stonetop-relmap-personbar-worn[hidden] { display: none; }
 
 .stonetop-relmap-personbar-worn-item {
 	display: inline-flex;
@@ -51714,7 +51581,6 @@ button.stonetop-relmap-chip:focus-visible,
 	padding-top: 6px;
 	border-top: 1px solid var(--st-card-rule);
 }
-.stonetop-relmap-chipform[hidden] { display: none; }
 
 .stonetop-relmap-chipform-row {
 	display: flex;
@@ -52403,11 +52269,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	pointer-events: none;
 	color: var(--st-quiet-ink);
 }
-/* Said outright, because the `display: grid` above is an AUTHOR rule and the UA's
-   `[hidden] { display: none }` loses to any author declaration whatever its specificity. Without
-   this line `_toggleEmpty(false)` sets the attribute and the panel goes on covering a board that
-   now has people on it. The same lesson as `.stonetop-roll-tier-picklist[hidden]` above. */
-.stonetop-relmap-empty[hidden] { display: none; }
 
 /* ⚠ THE WORDS SIT ON THEIR OWN PAPER, because the panel is `inset: 0` and centres its content over
    whatever the board happens to be drawing there. It is only ever seen over an EMPTY board today,
@@ -52480,11 +52341,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	background: var(--stonetop-bg);
 	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
 }
-
-/* `display: flex` above beats the attribute on its own, so the hidden state has to be said. */
-.stonetop-relmap-tiebar[hidden],
-.stonetop-relmap-groupbar[hidden],
-.stonetop-relmap-personbar[hidden] { display: none; }
 
 /* THE WRITING FIELD, CLIPPED OFF THE BAR.
 
@@ -52750,10 +52606,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
-.stonetop-relmap-inkpop[hidden],
-.stonetop-relmap-dashpop[hidden],
-.stonetop-relmap-sizepop[hidden] { display: none; }
-
 /* OVER THE BAR INSTEAD OF UNDER IT, for a line so near the foot of the board that there is no room
    below -- `_placePop` decides and writes the offset. The shadow turns over with it, or a panel
    sitting above the bar reads as lit from underneath. */
@@ -52828,11 +52680,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	cursor: pointer;
 }
 
-/* ⚠ SAID OUTRIGHT BECAUSE `display` BEATS THE ATTRIBUTE. Both the empty slots in the row below and
-   any swatch a future block hides are `hidden`, and an `inline-flex` declared above would go on
-   showing them -- an empty disc that is a tab stop and somewhere an arrow key can land. */
-.stonetop-relmap-inkpop-swatch[hidden] { display: none; }
-
 /* THE DISC ITSELF. A hairline in the page tone and a rule outside it, so the palest ink in the grid
    is still a disc against the panel rather than a smudge in it -- and so the deepest is still a
    disc rather than a hole. 18px inside a 26px target: the ring outside it comes to 22px, which
@@ -52870,8 +52717,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	padding-top: 0.45em;
 	border-top: 1px solid var(--st-card-rule);
 }
-
-.stonetop-relmap-inkpop-mine[hidden] { display: none; }
 
 /* ⚠ IN PIXELS LIKE EVERYTHING ELSE IN HERE, and smaller than the discs it introduces. The swatches
    are pinned in pixels because core anchors a BUTTON's font-size that way; a heading in `--st-fs-sm`
@@ -52929,8 +52774,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	flex: none;
 	margin: 0;
 }
-
-.stonetop-relmap-tiebar-hex[hidden] { display: none; }
 
 /* ⚠ SIZED HERE, NOT LEFT TO CORE. This element brings two inputs of its own and core sizes them for
    a settings form -- which beside a 26px row is a control half again as tall as everything near it.
@@ -53286,9 +53129,6 @@ button.stonetop-relmap-subtitle:focus-visible {
 	row-gap: 0.35em;
 	margin-inline-start: auto;
 }
-
-/* `display: flex` above beats the attribute on its own, so the hidden state has to be said. */
-.stonetop-relmap-foot[hidden] { display: none; }
 
 /* A grid row, for the reason the tools beside it are one: core anchors a checkbox's size in PIXELS,
    so an em-matched label drifts off its box at other font scales. The whole label is the target,
@@ -56210,8 +56050,6 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	margin-top: 4px;
 }
 
-.stonetop-timeline-entry-tag-form[hidden] { display: none; }
-
 .stonetop-timeline-entry-tag-name {
 	flex: 1 1 auto;
 	min-width: 0;
@@ -56347,8 +56185,10 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	cursor: pointer;
 }
 
+/* Hidden but keeping its space, so the row doesn't shift when a colour is repainted. `!important`
+   to win over the stylesheet's own `hidden` rule near the top. */
 .stonetop-timeline-colours-reset[hidden] {
-	display: inline-flex;
+	display: inline-flex !important;
 	visibility: hidden;
 }
 
@@ -56365,14 +56205,11 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	color: var(--st-text-faint);
 }
 
-.stonetop-timeline-colours-note[hidden] { display: none; }
-
 .stonetop-timeline-colours-actions {
 	display: flex;
 	gap: 8px;
 	margin-top: 4px;
 }
-
 
 /* ══ SETTLEMENT SHEETS: a steading that is not Stonetop ══════════════════════════════════════
    Marshedge, Gordin's Delve, a Hillfolk band, a homebrew city (module/actors/settlement/). An

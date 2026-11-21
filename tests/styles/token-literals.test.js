@@ -112,8 +112,8 @@ describe("the slate on a native control", () => {
 });
 
 describe("a slate edge", () => {
-	// The half of the bare-slate guard that tests/styles/high-contrast.test.js said it could not
-	// yet hold: 57 borders were literal and "want a rule token of their own". They have it.
+	// A slate border or outline reads `--st-slate-rule`, so the palettes that re-point the token
+	// (dark, high contrast) re-point every edge with it.
 	it("reads --st-slate-rule", () => {
 		const bare = PAPER.filter(([, body]) => values(body, "(?:border|outline)[a-z-]*")
 			.some(v => /(?<![-\w])slategr[ae]y(?![-\w])/.test(v.replace(/var\([^()]*\)/g, ""))));

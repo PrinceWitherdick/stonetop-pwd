@@ -80,6 +80,17 @@ export function readCss(rel = "styles/stonetop.css") {
 	return readRepo(rel).replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
+/** The stylesheet's one rule that makes the `hidden` attribute hide anything wearing a `stonetop-` class. */
+export const HIDDEN_HIDES = ':where([class*="stonetop-"])[hidden] { display: none !important; }';
+
+/**
+ * Does the `hidden` attribute hide an element wearing this class, whatever `display` its own rules
+ * set? The UA's `[hidden]` loses to any author `display`, so it is the stylesheet's rule that does it.
+ */
+export function hiddenHides(css, cls) {
+	return cls.includes("stonetop-") && css.includes(HIDDEN_HIDES);
+}
+
 /**
  * The last value declared for one property in a rule body, whitespace-collapsed, or null. Split on
  * `;` only, so a declaration that lost its semicolon reads as swallowing the next one and fails.

@@ -16,7 +16,7 @@ vi.mock("../../../module/seasons/current-season.js", async importOriginal => ({
 }));
 
 const { createStonetopSteadingSheetClass, refreshUpkeepAfford, militiaLead } = await import("../../../module/actors/steading/StonetopSteadingSheet.js");
-const { readRepo, readCss, declarations } = await import("../../fakes/css.js");
+const { readRepo, readCss, hiddenHides } = await import("../../fakes/css.js");
 
 const SHEET = readRepo("module/actors/steading/StonetopSteadingSheet.js");
 
@@ -137,7 +137,7 @@ describe("an upkeep's Pay button in the Seasons Change window", () => {
 
 	// `.stonetop-season-btn` sets `display: flex`, which out-specifies the UA's `[hidden]`.
 	it("can actually be hidden", () => {
-		expect(declarations(readCss(), ".stonetop-season-btn[hidden]")).toMatch(/display:\s*none/);
+		expect(hiddenHides(readCss(), "stonetop-season-btn")).toBe(true);
 	});
 });
 

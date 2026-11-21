@@ -4,8 +4,8 @@ import { contrastRatio } from "../fakes/contrast.js";
 
 // The table moment band (module/moments/moment-overlay.js, the TABLE MOMENTS block). It sits on
 // <body>, outside `.stonetop`, so the blanket Reduce Motion rule never reaches it: every animation
-// has to gate itself on both the OS preference and the system's own class, or a reader who asked
-// for stillness gets a curtain sweeping across their screen. It also must never eat a click.
+// has to gate itself on `stonetop-less-motion` (on when the OS or the setting asks), or a reader who
+// asked for stillness gets a curtain sweeping across their screen. It also must never eat a click.
 
 const CSS = readCss();
 
@@ -40,12 +40,10 @@ describe("the table moment's motion", () => {
 		expect(MOMENT_ANIMATIONS.length).toBeGreaterThanOrEqual(4);
 	});
 
-	it("plays only inside prefers-reduced-motion: no-preference, under :root:not(.stonetop-reduce-motion)", () => {
+	it("plays only under :root:not(.stonetop-less-motion)", () => {
 		for (const { value, scope } of MOMENT_ANIMATIONS) {
-			const media = scope.slice(0, -1);
-			expect(media, `${value} is not inside the no-preference query`).toContain("@media (prefers-reduced-motion: no-preference)");
 			for (const selector of scope.at(-1).split(",")) {
-				expect(selector.trim(), `${value} is not gated on the Reduce Motion class`).toMatch(/^:root:not\(\.stonetop-reduce-motion\) /);
+				expect(selector.trim(), `${value} is not gated on the less-motion class`).toMatch(/^:root:not\(\.stonetop-less-motion\) /);
 			}
 		}
 	});

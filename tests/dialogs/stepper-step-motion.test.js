@@ -105,10 +105,10 @@ describe("the step fade", () => {
 		}
 	});
 
-	it("is the Expedition walkthrough's, and its keyframes have the OS exit", () => {
+	it("is any opted-in stepper's, and the less-motion class stops it", () => {
 		const css = readCss();
-		expect(css).toMatch(/\.stonetop-expedition-dialog \.stonetop-guide-main\.is-entering \{\s*animation: stonetop-guide-step-in 0\.18s ease-out both;/);
-		expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.stonetop-expedition-dialog \.stonetop-guide-main\.is-entering \{ animation: none; \}/);
+		expect(css).toMatch(/\n\.stonetop-guide-main\.is-entering \{\s*animation: stonetop-guide-step-in 0\.18s ease-out both;/);
+		expect(css).toMatch(/\n:root\.stonetop-less-motion \.stonetop-guide-main\.is-entering \{ animation: none; \}/);
 		expect(css.match(/@keyframes stonetop-guide-step-(in|back) \{/g)).toHaveLength(2);
 	});
 });
