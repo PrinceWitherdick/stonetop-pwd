@@ -1397,12 +1397,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		return actions;
 	}
 
-	// The GM's grant, from the Major Arcanum step. The flag alone is written here (creation is not
-	// applied yet); the re-render reads it back and locks the step to it.
+	// The GM's grant, from the Major Arcanum step. The flag alone is written here, on a made Seeker
+	// too (`grantOnly`): Finish writes the card with this step's mark, and the re-render reads the
+	// grant back and locks the step to it.
 	async _giveSeekerMajor() {
 		const character = this._seekerActor?.typedActor;
 		if (!character) return;
-		const written = await giveSeekerMajor(character, { background: this._selectedBackground(), name: this._seekerActor?.name ?? "" });
+		const written = await giveSeekerMajor(character, { background: this._selectedBackground(), name: this._seekerActor?.name ?? "", grantOnly: true });
 		if (written) await this.render(false);
 	}
 

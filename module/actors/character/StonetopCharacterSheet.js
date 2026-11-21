@@ -15786,7 +15786,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			const oldPlaybook = this.actor.system?.playbook;
 			const newPlaybook = !oldPlaybook?.name || !_isSamePlaybook(oldPlaybook, playbookDoc);
 			if (oldPlaybook?.name && newPlaybook) {
+				// The GM may have given this Seeker's major during this walkthrough, and the grant sits
+				// on the actor with the old playbook's flags. It is the new playbook's, so it outlives
+				// the clear, or the given card is applied unlocked and a background change replaces it.
+				const grant = character.seekerMajorGrant();
 				await character.clearPlaybookData(oldPlaybook.name);
+				const listsMajors = (st.backgrounds ?? []).some(bg => bg?.majorArcana?.length);
+				if (grant && listsMajors) await character.setSeekerMajorGrant(grant);
 			}
 			// Read before anything below changes it: the moves the old background gave go
 			// (settleBackgroundMoves), and the free picks the player didn't pick again go too. The

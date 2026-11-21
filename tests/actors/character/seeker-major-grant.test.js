@@ -42,9 +42,10 @@ const CHOICE = {
 	},
 };
 
-function seeker() {
+// `slug` and `name` start the character on another playbook, for a rebuild as a Seeker.
+function seeker({ slug = "the-seeker", name = "The Seeker" } = {}) {
 	const made = buildLiveCharacter({
-		slug: "the-seeker", name: "The Seeker", seedStartingMoves: false, stats: SEEKER_STATS,
+		slug, name, seedStartingMoves: false, stats: SEEKER_STATS,
 		arcana: new FakeArcanaRepository(structuredClone(ARCANA)),
 	});
 	made.actor.typedActor = made.char;
@@ -225,6 +226,26 @@ describe("the GM gives a Seeker a major arcanum", () => {
 		expect(arcana(actor, "major")).toBe("mindgem");
 	});
 
+	// The walkthrough's give (CharacterOnboardingDialog#_giveSeekerMajor): Finish writes the card with
+	// the step's own mark, so the mark is not asked twice and Cancel gives no card.
+	it("from the walkthrough, a made Seeker gets the grant alone, and Finish gives the card", async () => {
+		const { actor, char, sheet, finish } = seeker();
+		await finish();
+		pickContentOption.mockResolvedValue("mindgem");
+		const ask = vi.spyOn(SeekerMajorArcanumDialog, "ask").mockResolvedValue(null);
+		expect(await giveSeekerMajor(char, { background: PATRIOT, grantOnly: true })).toBe(true);
+		expect(ask).not.toHaveBeenCalled();
+		expect(arcana(actor, "majorGrant")).toBe("mindgem");
+		expect(has(actor, "owned", "mindgem")).toBe(false);
+		expect(arcana(actor, "major")).toBe("hectumel-codex");
+		const choice = structuredClone(CHOICE);
+		Object.assign(choice.arcana, { major: "mindgem", majorMarks: ["front:1"], majorMarksFor: "mindgem" });
+		await sheet._applyPlaybookSelections(playbookDoc("the-seeker"), choice);
+		expect(arcana(actor, "major")).toBe("mindgem");
+		expect(ticked(actor, "mindgem")).toEqual(["mindgem:front:1"]);
+		expect(has(actor, "owned", "hectumel-codex")).toBe(false);
+	});
+
 	it("dismissing the picker writes nothing", async () => {
 		const { actor, char, finish } = seeker();
 		await finish();
@@ -332,6 +353,28 @@ describe("a re-run of creation and a given major", () => {
 		expect(has(actor, "owned", "mindgem")).toBe(true);
 		expect(ticked(actor, "mindgem")).toEqual(["mindgem:front:2"]);
 		expect(arcana(actor, "major")).toBe("mindgem");
+	});
+});
+
+// "New" onto a character of another playbook clears the old one's flags on Finish
+// (_applyPlaybookSelections → clearPlaybookData), and the grant given during this walkthrough sits
+// among them.
+describe("a rebuild as a Seeker and a given major", () => {
+	it("keeps the grant given during the walkthrough, so the card stays as given", async () => {
+		const { actor, char, sheet } = seeker({ slug: "the-ranger", name: "The Ranger" });
+		await char.setSeekerMajorGrant("mindgem");
+		const choice = structuredClone(CHOICE);
+		Object.assign(choice.arcana, { major: "mindgem", majorMarks: ["front:0"], majorMarksFor: "mindgem" });
+		await sheet._applyPlaybookSelections(playbookDoc("the-seeker"), choice);
+		expect(arcana(actor, "major")).toBe("mindgem");
+		expect(arcana(actor, "majorGrant")).toBe("mindgem");
+	});
+
+	it("a change of playbook alone still clears the grant", async () => {
+		const { actor, char } = seeker();
+		await char.setSeekerMajorGrant("mindgem");
+		await char.clearPlaybookData("The Seeker");
+		expect(arcana(actor, "majorGrant") ?? undefined).toBeUndefined();
 	});
 });
 

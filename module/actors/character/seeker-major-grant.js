@@ -94,14 +94,17 @@ export async function pickOtherSeekerMajor({ majors = null, background = null, s
  * After creation the card is given now, with its 1 mark asked for (SeekerMajorArcanumDialog), and
  * the old creation major goes only while it is as granted (settleSeekerArcana); "Choose later" leaves
  * the Arcana tab's owed cue. Taking the grant back keeps the card held (the GM removes it by hand).
- * Writes nothing for a player.
+ * With `grantOnly` (the creation walkthrough) the grant alone is written even on a made character:
+ * the walkthrough asks the mark and writes the card on Finish, so it is not asked twice and Cancel
+ * gives no card. Writes nothing for a player.
  *
  * @param {StonetopCharacter} character
- * @param {{background?: object, name?: string}} [options]  The selected background (for its list and
- *        the mark dialog's title) and the character's name (for the picker's title).
+ * @param {{background?: object, name?: string, grantOnly?: boolean}} [options]  The selected
+ *        background (for its list and the mark dialog's title), the character's name (for the
+ *        picker's title), and whether to write the grant alone.
  * @returns {Promise<boolean>}  Whether anything was written.
  */
-export async function giveSeekerMajor(character, { background = null, name = "" } = {}) {
+export async function giveSeekerMajor(character, { background = null, name = "", grantOnly = false } = {}) {
 	if (!game.user?.isGM) return false;
 	const current = character.seekerMajorGrant();
 	const slug = await pickMajorArcanum({
@@ -116,7 +119,7 @@ export async function giveSeekerMajor(character, { background = null, name = "" 
 	if (slug === null) return false;
 	if (slug === current) return false;
 	await character.setSeekerMajorGrant(slug);
-	if (!slug) return true;
+	if (!slug || grantOnly) return true;
 
 	const state = character.seekerCreationState();
 	const created = !!state.major || state.minorDraw.length > 0;
