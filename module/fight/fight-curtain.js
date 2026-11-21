@@ -22,10 +22,10 @@ let seeded = false;
  *
  * @param {{announced: Set<string>, seeded: boolean}} state
  * @param {{fightId: string|null, canSee: boolean, enabled: boolean}} input
- * @returns {{play: boolean}}
+ * @returns {boolean}
  */
 export function curtainStep({ announced: met, seeded: ready }, { fightId, canSee, enabled }) {
-	return { play: !!(ready && enabled && fightId && canSee && !met.has(fightId)) };
+	return !!(ready && enabled && fightId && canSee && !met.has(fightId));
 }
 
 /** Count every fight there is now as met. Once, at ready. */
@@ -43,14 +43,18 @@ export function fightRoadLine() {
 	return place ? format("stonetop.moments.fight.onTheRoad", { place }) : "";
 }
 
-/** Play the curtain if this reader has just met a fight. Called wherever the Fight window syncs. */
-export function syncFightCurtain() {
+/**
+ * Play the curtain if this reader has just met a fight. Called wherever the Fight window syncs, with
+ * the window's `readerFight()` so the fight is not looked up twice.
+ */
+export function syncFightCurtain(at) {
 	try {
-		if (!globalThis.game?.ready) return false;
-		const { fightId, canSee } = fightThisReaderMeets();
-		const { play } = curtainStep({ announced, seeded }, { fightId, canSee, enabled: isTableMomentsOn() });
+		// Runs on every fight change, so a fight already met is not looked at again.
+		if (!globalThis.game?.ready || !seeded) return false;
+		const { fightId, canSee } = fightThisReaderMeets(id => announced.has(id), at);
+		const play = curtainStep({ announced, seeded }, { fightId, canSee, enabled: isTableMomentsOn() });
 		// Met once seen, played or not, so switching Table moments on later never replays an old fight.
-		if (fightId && canSee && seeded) announced.add(fightId);
+		if (fightId && canSee) announced.add(fightId);
 		if (play) playMoment(momentView({ kind: "fight", sub: fightRoadLine() }));
 		return play;
 	} catch (err) {

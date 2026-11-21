@@ -26,7 +26,7 @@ import { combatantSide, snapshotFight, FIGHT_FLAG, SIDE_FLAG } from "./fight-sta
 import { refreshFightOverlay, invalidateFightOverlay, teardownFightOverlay } from "./fight-overlay.js";
 import { openStartFight, lineUpFight } from "./start-fight.js";
 import { sendAgainst, handleSendQuery, SEND_QUERY } from "./send-against.js";
-import { installCombatWindow, installFightWindow, syncFightWindow } from "./fight-window.js";
+import { installCombatWindow, installFightWindow, readerFight, syncFightWindow } from "./fight-window.js";
 import { fightVitalsKey } from "./fight-vitals.js";
 import { createFightTokenClass, installFightRing, syncFightRing } from "./fight-ring.js";
 import { installReadinessLoss } from "../combat/readiness-loss.js";
@@ -121,7 +121,14 @@ export function registerFightTab({ config = globalThis.CONFIG, hooks = globalThi
 		// The watcher follows an engagement change with a geometry run, which then paints afresh.
 		// Everything that can start, end or reveal a fight is an engagement change, so the Fight
 		// window (fight-window.js) opens and closes from here too.
-		onEngagement: () => { invalidateFightOverlay(); refreshFightTab(); syncFightWindow(); syncFightRing(); syncFightCurtain(); },
+		onEngagement: () => {
+			invalidateFightOverlay();
+			refreshFightTab();
+			const at = readerFight();
+			syncFightWindow(at);
+			syncFightRing();
+			syncFightCurtain(at);
+		},
 		onGeometry: () => refreshFightOverlay({ reuse: true }),
 	});
 	installFightWindow({ hooks });

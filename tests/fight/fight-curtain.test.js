@@ -21,15 +21,15 @@ describe("curtainStep", () => {
 	const input = p => ({ fightId: "f1", canSee: true, enabled: true, ...p });
 
 	it("plays once for a fight this reader has just met", () => {
-		expect(curtainStep(state(), input())).toEqual({ play: true });
-		expect(curtainStep(state(["f1"]), input())).toEqual({ play: false });
+		expect(curtainStep(state(), input())).toBe(true);
+		expect(curtainStep(state(["f1"]), input())).toBe(false);
 	});
 
 	it("plays nothing before ready, with Table moments off, with no fight, or with nobody to see", () => {
-		expect(curtainStep(state([], false), input())).toEqual({ play: false });
-		expect(curtainStep(state(), input({ enabled: false }))).toEqual({ play: false });
-		expect(curtainStep(state(), input({ fightId: null }))).toEqual({ play: false });
-		expect(curtainStep(state(), input({ canSee: false }))).toEqual({ play: false });
+		expect(curtainStep(state([], false), input())).toBe(false);
+		expect(curtainStep(state(), input({ enabled: false }))).toBe(false);
+		expect(curtainStep(state(), input({ fightId: null }))).toBe(false);
+		expect(curtainStep(state(), input({ canSee: false }))).toBe(false);
 	});
 });
 

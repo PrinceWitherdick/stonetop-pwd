@@ -3,6 +3,8 @@
 // payload shows; moment-overlay.js draws it and moment-broadcast.js carries it to the table.
 // Pure, so tests/moments/moment-view.test.js reads every kind without a DOM.
 
+import { clipText } from "../utils/strings.js";
+
 /** How long each kind holds fully visible, in ms, between its entrance and its fade. */
 export const MOMENT_HOLD_MS = Object.freeze({
 	fight: 1200,
@@ -26,7 +28,7 @@ export const MOMENT_TEXT_MAX = 80;
 function clip(value) {
 	if (typeof value !== "string") return "";
 	const text = value.trim();
-	return text.length > MOMENT_TEXT_MAX ? `${text.slice(0, MOMENT_TEXT_MAX - 1).trimEnd()}…` : text;
+	return text.length > MOMENT_TEXT_MAX ? `${clipText(text, MOMENT_TEXT_MAX - 1).trimEnd()}…` : text;
 }
 
 /**

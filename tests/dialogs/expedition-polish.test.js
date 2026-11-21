@@ -132,7 +132,7 @@ describe("the rail's done ticks", () => {
 	});
 
 	it("are drawn from getData, so the nav's other callers never read the log for them", () => {
-		expect(read("module/dialogs/ExpeditionDialog.js")).toMatch(/steps:\s+this\._railTicks\(nav\.steps\)/);
+		expect(read("module/dialogs/ExpeditionDialog.js")).toMatch(/steps:\s+this\._railTicks\(nav\.steps, route\)/);
 	});
 
 	it("tick nothing on a trip just begun, nor before any trip", () => {

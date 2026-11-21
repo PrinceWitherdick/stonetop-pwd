@@ -5,7 +5,7 @@ import { warn } from "../utils/logger.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { getWalkthroughResume, patchWalkthroughResume, saveWalkthroughPosition } from "./walkthrough-resume.js";
 import { mayClose, notePristineWork } from "../utils/close-guard.js";
-import { prefersReducedMotion } from "../utils/reduced-motion.js";
+import { playClassOnce } from "../utils/flash-highlight.js";
 
 /** How long a step's entrance class may stay on when its `animationend` never comes (a hidden tab). */
 const STEP_ENTER_FALLBACK_MS = 400;
@@ -333,21 +333,10 @@ export class StepperDialog extends Application {
 }
 
 /**
- * Fade a step in: `is-entering` (and `is-entering--back` after a Back) until its animation ends, or
- * a fallback timer when no `animationend` comes. Nothing for a reader who asked for less motion.
+ * Fade a step in: `is-entering` (and `is-entering--back` after a Back) for one run of its animation.
  * Guarded by tests/dialogs/stepper-step-motion.test.js.
  */
 function enterStep(port, via) {
-	if (prefersReducedMotion()) return;
-	port.classList.add("is-entering");
-	if (via === "back") port.classList.add("is-entering--back");
-	let timer = null;
-	const done = event => {
-		if (event && event.target !== port) return;
-		clearTimeout(timer);
-		port.removeEventListener("animationend", done);
-		port.classList.remove("is-entering", "is-entering--back");
-	};
-	port.addEventListener("animationend", done);
-	timer = setTimeout(done, STEP_ENTER_FALLBACK_MS);
+	const classes = via === "back" ? ["is-entering", "is-entering--back"] : ["is-entering"];
+	playClassOnce(port, classes, { fallbackMs: STEP_ENTER_FALLBACK_MS });
 }

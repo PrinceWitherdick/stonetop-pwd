@@ -44,10 +44,11 @@ export function roadLegs(route, reached) {
 /**
  * "planning" | "road" | "arrived" | "home". Home once the homecoming is stamped; arrived once every
  * leg is travelled; on the road once they set out or have travelled a leg; planning before that.
+ * `progress` is `tripProgress(trip, route)`, passed by a caller that has it already.
  */
-export function tripStatus(trip, route) {
+export function tripStatus(trip, route, progress = tripProgress(trip, route)) {
 	if (trip?.timelineRecorded?.season) return "home";
-	const { started, arrived } = tripProgress(trip, route);
+	const { started, arrived } = progress;
 	if (arrived) return "arrived";
 	if (started || trip?.setOut?.season) return "road";
 	return "planning";

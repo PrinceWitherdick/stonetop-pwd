@@ -210,8 +210,10 @@ describe("the stylesheet", () => {
 		expect(declarations(CSS, ".stonetop-expedition-dialog .stonetop-exp-trail-marker.is-walking"))
 			.toMatch(/animation:\s*stonetop-exp-trail-walk 0\.9s/);
 		expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.stonetop-expedition-dialog \.stonetop-exp-trail-marker\.is-walking,\s*\.stonetop-expedition-dialog \.stonetop-exp-trail-marker\.is-walking > i \{ animation: none; \}/);
-		// The Reduce Motion setting's blanket rule reaches it, being inside `.stonetop`; the script skips the walk too.
-		expect(read("module/dialogs/ExpeditionDialog.js")).toMatch(/from === null \|\| Math\.round\(from\) === Math\.round\(to\) \|\| prefersReducedMotion\(\)/);
+		// The Reduce Motion setting's blanket rule reaches it, being inside `.stonetop`; the script skips the walk too
+		// (flash-highlight.js `playClassOnce` plays nothing for reduced motion).
+		expect(read("module/dialogs/ExpeditionDialog.js")).toMatch(/playClassOnce\(marker, \["is-walking"\]/);
+		expect(read("module/utils/flash-highlight.js")).toMatch(/export function playClassOnce\(el, classes, \{ fallbackMs \}\) \{\s*if \([^)]*prefersReducedMotion\(\)\) return false;/);
 		expect(declarations(CSS, ".stonetop-expedition-dialog .stonetop-exp-trail-marker")).not.toMatch(/transition/);
 	});
 

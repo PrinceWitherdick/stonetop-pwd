@@ -162,8 +162,13 @@ export function sharedRouteDestination(route) {
 export function sharedLegLine(leg) {
 	const where = `${leg.fromName} to ${leg.toName}`;
 	if (!leg.time) return where;
-	const time = leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time;
-	return `${where}, ${time}${leg.via ? ` (via ${leg.via})` : ""}`;
+	return `${where}, ${legTimeLabel(leg)}${leg.via ? ` (via ${leg.via})` : ""}`;
+}
+
+/** A leg's time in words: "about 2 days" when estimated (never a tilde, see above), "" with none. */
+export function legTimeLabel(leg) {
+	if (!leg?.time) return "";
+	return leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time;
 }
 
 /**

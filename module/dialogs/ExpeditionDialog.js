@@ -65,7 +65,7 @@ import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
 import { wireSidebarToggle } from "../utils/sidebar-toggle.js";
-import { SpinTrack, flashHighlight } from "../utils/flash-highlight.js";
+import { SpinTrack, flashHighlight, playClassOnce } from "../utils/flash-highlight.js";
 import { callStruggleAsOne, gmStruggleCall } from "../struggle/struggle-flow.js";
 import {
 	TRAVEL_MAPS, BEYOND_TIER,
@@ -92,11 +92,10 @@ import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-ar
 import { openTravelMap } from "./TravelMapWindow.js";
 import { journeyMapLayer, pinAnchors, timeLabel } from "./journey-map-layer.js";
 import {
-	readSharedRoute, shareRoute, sharedRequirementLines, sharedRoutePayload, sharedRouteState,
+	legTimeLabel, readSharedRoute, shareRoute, sharedRequirementLines, sharedRoutePayload, sharedRouteState,
 	sharedRoutePlace, sharedStopName, stopSharingRoute,
 } from "../utils/shared-route.js";
 import { roadLegs, steppedProgress, tripProgress, tripStatus } from "../utils/trip-progress.js";
-import { prefersReducedMotion } from "../utils/reduced-motion.js";
 import { postSharedRouteCard, sharedRouteNotice } from "./SharedRouteWindow.js";
 import { RoadRationsDialog } from "./RoadRationsDialog.js";
 import {
@@ -618,14 +617,15 @@ export class ExpeditionDialog extends StepperDialog {
 	/**
 	 * The rail's entries with a done tick on each step the current trip has already settled
 	 * (guide-toc.hbs `isDone`). Applied in getData, not in `_stepNav`, whose other callers only ask
-	 * which step is showing and should not read the log or solve the route to learn it.
+	 * which step is showing and should not read the log or solve the route to learn it. `route` is
+	 * the trip's `_journeyRoute()`, solved once by getData.
 	 */
-	_railTicks(entries) {
+	_railTicks(entries, route = this._journeyRoute()) {
 		const trip = this._currentExpedition();
 		if (!trip) return entries;
 		const done = {
 			chart:       () => chartPicked(trip.chart).length > 0 || !!String(trip.chart?.route ?? "").trim(),
-			journey:     () => this._journeyRoute()?.legs?.length > 0,
+			journey:     () => route?.legs?.length > 0,
 			requisition: () => trip.requisitioned?.length > 0,
 			running:     () => !!trip.setOut?.season,
 			home:        () => !!trip.timelineRecorded?.season,
@@ -1071,9 +1071,11 @@ export class ExpeditionDialog extends StepperDialog {
 		const currentAt = list.findIndex(e => e.id === currentId);
 		const current   = currentAt < 0 ? null : list[currentAt];
 		const label     = current && expeditionLabel(current, currentAt);
+		// Solved once for the rail, the road panel and the chip; no trip has no route.
+		const route     = current ? this._journeyRoute() : null;
 		const data = {
 			...nav,
-			steps:      this._railTicks(nav.steps),
+			steps:      this._railTicks(nav.steps, route),
 			isGM:       game.user?.isGM ?? false,
 			// The banner's second line. Past the opening page it carries the trip's name,
 			// where a read-only nameplate under the log bar used to say it: kept short, as
@@ -1132,9 +1134,9 @@ export class ExpeditionDialog extends StepperDialog {
 			roadDays:  !!step.roadDays && !!game.user?.isGM,
 			// Start a fight is the Fight tab's window, so it is offered only where that tab is on.
 			fight:     !!step.fight && !!game.user?.isGM && isFightTabEnabled(),
-			road:      step.road ? this._roadContext() : null,
+			road:      step.road ? this._roadContext(route) : null,
 			// The banner's chip, in place of the step count once there is a trip to say something of.
-			tripStatus: current ? this._tripStatusChip() : null,
+			tripStatus: current ? this._tripStatusChip(route) : null,
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			// The same, at the foot of the step rather than under its opening prose.
@@ -2349,9 +2351,7 @@ export class ExpeditionDialog extends StepperDialog {
 		try {
 			const trip = this._currentExpedition();
 			if (!trip) return;
-			const shown = sharedRouteState(readSharedRoute(), {
-				expeditionId: trip.id, journey: trip.journey, hasRoute: !!this._journeyRoute()?.legs?.length, title: trip.title ?? "",
-			}) === "same";
+			const shown = this._routeShownToPlayers(trip, this._journeyRoute());
 			const list = this._log().list;
 			const stamp = kind === "setOut" ? trip.setOut : trip.timelineRecorded;
 			sendMoment({
@@ -2362,6 +2362,16 @@ export class ExpeditionDialog extends StepperDialog {
 		} catch (err) {
 			warn("could not show the trip's moment", err);
 		}
+	}
+
+	/**
+	 * Whether the players are being shown this trip's way (`sharedRouteState` "same"), which is what
+	 * lets a moment name the trip or its stops. No requirements check: a moment says nothing of them.
+	 */
+	_routeShownToPlayers(trip, route, shared = readSharedRoute()) {
+		return sharedRouteState(shared, {
+			expeditionId: trip.id, journey: trip.journey, hasRoute: !!route?.legs?.length, title: trip.title ?? "",
+		}) === "same";
 	}
 
 	/**
@@ -4761,10 +4771,9 @@ export class ExpeditionDialog extends StepperDialog {
 	 * for a missing stamp (flag, never block): the sentence says they have not set out and goes on.
 	 * Guarded by tests/dialogs/expedition-road.test.js.
 	 */
-	_roadContext() {
+	_roadContext(route = this._journeyRoute()) {
 		const key = "stonetop.expedition.road";
 		const trip = this._currentExpedition();
-		const route = this._journeyRoute();
 		const { reached, total, started, arrived } = tripProgress(trip, route);
 		const base = { heading: localize(`${key}.heading`), canEdit: !!game.user?.isGM, hasRoute: total > 0, started, arrived };
 		if (!total) {
@@ -4778,8 +4787,7 @@ export class ExpeditionDialog extends StepperDialog {
 		const legs = roadLegs(route, reached).map(row => ({
 			...row,
 			line:       format(`${key}.legLine`, { from: row.fromName, to: row.toName }),
-			// "about", not a tilde: a tilde read aloud is the word "tilde" (shared-route.js#sharedLegLine).
-			time:       row.time && row.estimated ? format("stonetop.expedition.shared.estimated", { time: row.time }) : row.time,
+			time:       legTimeLabel(row),
 			stateLabel: row.state === "walked" ? localize(`${key}.walked`) : row.state === "next" ? localize(`${key}.next`) : "",
 		}));
 		const start = legs[0].fromName;
@@ -4799,11 +4807,11 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/** The banner's `{ key, label }`: Planning, On the road (leg n of total), Arrived, Home. */
-	_tripStatusChip() {
+	_tripStatusChip(route = this._journeyRoute()) {
 		const trip = this._currentExpedition();
-		const route = this._journeyRoute();
-		const key = tripStatus(trip, route);
-		const { reached, total } = tripProgress(trip, route);
+		const progress = tripProgress(trip, route);
+		const key = tripStatus(trip, route, progress);
+		const { reached, total } = progress;
 		const label = key === "road" && total
 			? format("stonetop.expedition.status.roadLeg", { n: Math.min(reached + 1, total), total })
 			: localize(`stonetop.expedition.status.${key}`);
@@ -4834,7 +4842,7 @@ export class ExpeditionDialog extends StepperDialog {
 			// whole window is drawn again instead, and the travel still counts.
 			let host = null;
 			try {
-				host = await this._refreshRoadPanel();
+				host = await this._refreshRoadPanel(route);
 			} catch (err) {
 				warn("could not redraw the road panel", err);
 				this.render(false);
@@ -4862,16 +4870,12 @@ export class ExpeditionDialog extends StepperDialog {
 	_arriveMoment(trip, route, reached) {
 		try {
 			const shared = readSharedRoute();
-			const shown = sharedRouteState(shared, {
-				expeditionId: trip.id, journey: trip.journey, hasRoute: !!route?.legs?.length, title: trip.title ?? "",
-			}) === "same";
-			const place = shown ? sharedStopName(shared, reached) : null;
+			const place = this._routeShownToPlayers(trip, route, shared) ? sharedStopName(shared, reached) : null;
 			if (!place) return;
-			const leg = route.legs[reached - 1];
 			sendMoment({
 				kind:  "arrive",
 				title: format("stonetop.moments.arrive.reached", { place }),
-				sub:   leg?.time ? (leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time) : "",
+				sub:   legTimeLabel(route.legs[reached - 1]),
 			});
 		} catch (err) {
 			warn("could not show the arrival moment", err);
@@ -4886,11 +4890,11 @@ export class ExpeditionDialog extends StepperDialog {
 	 * screen reader reads out (moment-overlay.js waits 100ms for the same reason). Guarded by
 	 * tests/dialogs/expedition-road-redraw.test.js. Answers the panel's host, or null.
 	 */
-	async _refreshRoadPanel() {
+	async _refreshRoadPanel(route = this._journeyRoute()) {
 		const root = this.element?.[0];
 		const host = root?.querySelector?.(".stonetop-exp-trail-wrap");
 		if (!host) return null;
-		const road = this._roadContext();
+		const road = this._roadContext(route);
 		const markup = await renderTemplate(TRAIL_TEMPLATE, { road });
 		if (!host.isConnected) return null;
 		const next = host.ownerDocument.createElement("div");
@@ -4913,7 +4917,7 @@ export class ExpeditionDialog extends StepperDialog {
 		this._watchRoadTrack(root);
 		const chip = root.querySelector("[data-exp-status]");
 		if (chip) {
-			const status = this._tripStatusChip();
+			const status = this._tripStatusChip(route);
 			chip.className = `stonetop-exp-status stonetop-exp-status--${status.key}`;
 			chip.textContent = status.label;
 		}
@@ -4950,21 +4954,10 @@ export class ExpeditionDialog extends StepperDialog {
 			: last.offsetTop + last.offsetHeight - size / 2;
 		const px = `${Math.round(to)}px`;
 		track.style.setProperty("--stonetop-trail-to", px);
-		if (from === null || Math.round(from) === Math.round(to) || prefersReducedMotion()) return;
+		if (from === null || Math.round(from) === Math.round(to)) return;
 		track.style.setProperty("--stonetop-trail-from", `${Math.round(from)}px`);
-		marker.classList.remove("is-walking");
-		// Restart the animation when a walk is already under way.
-		void marker.offsetWidth;
-		marker.classList.add("is-walking");
-		// The marker's own animationend only: the icon's step animation ends inside it and bubbles.
-		const ended = ev => { if (ev.target === marker) done(); };
-		const done = () => {
-			clearTimeout(timer);
-			marker.removeEventListener("animationend", ended);
-			marker.classList.remove("is-walking");
-		};
-		const timer = setTimeout(done, TRAIL_WALK_FALLBACK_MS);
-		marker.addEventListener("animationend", ended);
+		// Ends on the marker's own animationend: the icon's step animation inside it bubbles up too.
+		playClassOnce(marker, ["is-walking"], { fallbackMs: TRAIL_WALK_FALLBACK_MS });
 	}
 
 	/**
@@ -4978,8 +4971,8 @@ export class ExpeditionDialog extends StepperDialog {
 		this._dropRoadWatch();
 		const track = root?.querySelector?.(".stonetop-exp-trail-track");
 		if (!track) return;
-		this._placeRoadMarker(root);
-		if (typeof globalThis.ResizeObserver !== "function") return;
+		// The observer's first report places it, after layout and before paint; without one, now.
+		if (typeof globalThis.ResizeObserver !== "function") return this._placeRoadMarker(root);
 		this._roadWatch = new globalThis.ResizeObserver(() => this._placeRoadMarker(root));
 		this._roadWatch.observe(track);
 	}
