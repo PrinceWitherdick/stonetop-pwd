@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import * as esbuild from "esbuild";
-import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, STYLES_ENTRY, STYLES_OUTFILE, buildBundle, buildStyles, precompileTemplates, stripCssComments } from "../../scripts/bundle.js";
+import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, STYLES_ENTRY, STYLES_OPTIONS, STYLES_OUTFILE, buildBundle, buildStyles, precompileTemplates } from "../../scripts/bundle.js";
 import { RELMAP_WINDOW_CLASS } from "../../module/utils/window-restore.js";
 
 /**
@@ -147,50 +147,32 @@ describe("where a checkout and a release load the system from", () => {
 	});
 });
 
-describe("stripCssComments", () => {
-	it.each([
-		["a whole-line comment, line and all", "a{}\n/* note */\nb{}", "a{}\nb{}"],
-		["a comment spanning lines", "a{}\n  /* one\n     two */\nb{}", "a{}\nb{}"],
-		["a comment after a declaration, with the space before it", "a{color:red; /* why */\n}", "a{color:red;\n}"],
-		["a comment between values, keeping their spaces", "a{margin:0 /* x */ 1px}", "a{margin:0  1px}"],
-		["a comment left open at the end of the file", "a{}\n/* never closed", "a{}\n"],
-	])("removes %s", (_name, input, expected) => {
-		expect(stripCssComments(input)).toBe(expected);
-	});
-
-	it.each([
-		["a double-quoted string", `a{content:"/* not a comment */"}`],
-		["a single-quoted string", `a{content:'/* not a comment */'}`],
-		["a string with an escaped quote", String.raw`a{content:"\"/* kept */"}`],
-		["an unquoted url", "a{background:url(/x/*y*/z.webp)}"],
-		["an escaped slash", String.raw`.a\/*b{color:red}`],
-	])("leaves %s alone", (_name, css) => {
-		expect(stripCssComments(css)).toBe(css);
-	});
-
-	it("is not misled by an apostrophe inside a comment", () => {
-		expect(stripCssComments("a{}\n/* don't */\nb{content:'x'}")).toBe("a{}\nb{content:'x'}");
-	});
-
-	it("keeps two tokens apart when a comment was all that separated them", () => {
-		expect(stripCssComments("a{margin:1/* x */px}")).toBe("a{margin:1/**/px}");
-	});
-});
-
 describe("the release stylesheet", () => {
 	const source = read(STYLES_ENTRY);
 	const { css, bytes } = buildStyles({ write: false });
 
 	it("drops the comments, which are over half the source", () => {
 		expect(bytes).toBeLessThan(Buffer.byteLength(source) * 0.6);
-		expect(css.replace(/\/\*\*\//g, "")).not.toContain("/*");
+		expect(css).not.toContain("/*");
 	});
 
-	it("means exactly what the source means", async () => {
-		// esbuild's parser is independent of the scanner under test: both must reduce to the same rules.
+	it("keeps a /* that sits inside a string or url(), since only real comments go", () => {
+		const { code } = esbuild.transformSync(`a{content:"/* kept */";background:url(/x/*y*/z.webp)}`, STYLES_OPTIONS);
+		expect(code).toContain(`"/* kept */"`);
+		expect(code).toContain("url(/x/*y*/z.webp)");
+	});
+
+	it("means exactly what the source means: nothing is lowered for an older target", async () => {
+		// Compared minified, so formatting can't count. A line break after "(" in a custom property's
+		// value prints as a space there, which is insignificant whitespace, so it is folded away first.
 		const parsed = async (text) => (await esbuild.transform(text, {
 			loader: "css", minify: true, legalComments: "none", logLevel: "silent",
-		})).code;
+		})).code.replace(/\(\s+/g, "(");
 		expect(await parsed(css) === await parsed(source)).toBe(true);
+		expect(STYLES_OPTIONS).not.toHaveProperty("target");
+	});
+
+	it("keeps non-ASCII content as written", () => {
+		expect(esbuild.transformSync(`a{content:"—"}`, STYLES_OPTIONS).code).toContain(`"—"`);
 	});
 });
