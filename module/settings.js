@@ -2484,8 +2484,7 @@ function _safeFontScale(value) {
 
 /** This reader's sheet font scale (1 = as drawn), what `--stonetop-font-scale` is set from. */
 export function getSheetFontScale() {
-	try { return _safeFontScale(globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetFontScale")); }
-	catch (_) { return 1; }
+	return _safeFontScale(_readSetting("sheetFontScale"));
 }
 
 export function applySheetFontScale(value) {
@@ -2727,11 +2726,7 @@ export function timelineReachOf(value) {
 
 /** Where the GM has the timeline in this world. Defaults to "all", unregistered included. */
 export function getTimelineReach() {
-	try {
-		return timelineReachOf(globalThis.game?.settings?.get?.(SYSTEM_ID, "showTimeline"));
-	} catch (_) {
-		return "all";
-	}
+	return timelineReachOf(_readSetting("showTimeline"));
 }
 
 /** Is the timeline on in this world, anywhere? Defaults to yes, unregistered included. */
@@ -3023,12 +3018,7 @@ export function stampLayoutClass(app, sheet) {
 const _settingCache = new Map();
 function _cachedSetting(key, isValid, fallback) {
 	if (_settingCache.has(key)) return _settingCache.get(key);
-	let value;
-	try {
-		value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-	} catch (_) {
-		return fallback;
-	}
+	const value = _readSetting(key);
 	if (!isValid(value)) return fallback;
 	_settingCache.set(key, value);
 	return value;
@@ -3223,22 +3213,14 @@ function _readSetting(key) {
  * of which had grown its own copy of this try/catch and its own shape guard.
  */
 export function getObjectSetting(key) {
-	try {
-		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-		return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-	} catch (_) {
-		return {};
-	}
+	const value = _readSetting(key);
+	return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 /** A list setting, read with the same tolerance getObjectSetting reads an object one with. */
 export function getArraySetting(key) {
-	try {
-		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-		return Array.isArray(value) ? value : [];
-	} catch (_) {
-		return [];
-	}
+	const value = _readSetting(key);
+	return Array.isArray(value) ? value : [];
 }
 
 /**
@@ -3252,12 +3234,8 @@ export function getArraySetting(key) {
  * one that added the key, and neither should lose the card to a thrown setting lookup.
  */
 export function getBooleanSetting(key, fallback = false) {
-	try {
-		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-		return typeof value === "boolean" ? value : fallback;
-	} catch (_) {
-		return fallback;
-	}
+	const value = _readSetting(key);
+	return typeof value === "boolean" ? value : fallback;
 }
 
 /**
@@ -3417,8 +3395,8 @@ function _px(v) {
  */
 export function getSheetSize(actorId) {
 	if (!actorId) return { width: null, height: null };
-	const size = _readSetting("sheetSizes")?.[actorId];
-	const legacy = _readSetting("characterSheetWidths")?.[actorId];
+	const size = getObjectSetting("sheetSizes")[actorId];
+	const legacy = getObjectSetting("characterSheetWidths")[actorId];
 	return {
 		width: _px(size?.width) ?? _px(legacy),
 		height: _px(size?.height),
@@ -3450,7 +3428,7 @@ export function setSheetSize(actorId, { width, height } = {}) {
 // move groups, which differ only in the setting key they persist under.
 function getSectionList(key, actorId) {
 	if (!actorId) return [];
-	const arr = _readSetting(key)?.[actorId];
+	const arr = getObjectSetting(key)[actorId];
 	return Array.isArray(arr) ? arr : [];
 }
 
@@ -3550,8 +3528,7 @@ export function setSheetSectionsCollapsed(actorId, sections) {
 // expanded). Per-actor, per-user.
 export function getSidebarCollapsed(actorId) {
 	if (!actorId) return false;
-	const map = _readSetting("characterSidebarCollapsed");
-	return !!map?.[actorId];
+	return !!getObjectSetting("characterSidebarCollapsed")[actorId];
 }
 
 export function setSidebarCollapsed(actorId, collapsed) {
