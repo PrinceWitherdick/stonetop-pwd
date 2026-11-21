@@ -21,7 +21,7 @@ import { followsPartyAsWhole } from "./follower-party.js";
 import { readableFlags } from "./StonetopFlags.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { sendVerifiable, stillAsking } from "../../utils/owner-ask.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { moveChatCard } from "../../utils/chat.js";
 import { escHtml } from "../../utils/strings.js";
@@ -157,7 +157,7 @@ export async function changeFollowerLoyalty(character, { ftype, slug = "", delta
  */
 export async function handleFollowerLoyaltyQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, actors = globalThis.game?.actors, asking = stillAsking } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const asker = queryAsker(data, context, users);
 	const character = data?.characterUuid ? resolve(data.characterUuid) : null;
 	const delta = Math.sign(Number(data?.delta) || 0);

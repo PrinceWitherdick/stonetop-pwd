@@ -17,7 +17,7 @@ import { format, localize } from "../../utils/i18n.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { rollCardRoute } from "../../utils/roll-card-writer.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
@@ -140,7 +140,7 @@ export function wirePreparationDamage(message, html, deps = {}, { user = globalT
 export async function handlePreparationDamageQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, messages = globalThis.game?.messages,
 		scope = SYSTEM_ID } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const message = messages?.get?.(data?.messageId);
 	const holder = data?.holderUuid ? resolve(data.holderUuid) : null;

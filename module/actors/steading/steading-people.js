@@ -9,7 +9,7 @@ import { resolvePortrait, documentPortraitFrame } from "../../utils/portrait-fra
 import { enrichHTML } from "../../utils/foundry-compat.js";
 import { npcStatusMeta } from "../../data-models/npc-status.js";
 import { getStonetopSteadingActor } from "../../utils/world.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 // The roster's OWN empty-slot face, not the mark the actor wears. These tables are grids of
 // 22px avatars, where a column of the actor's dark disc reads as clutter rather than as
 // blanks — see utils/person-portrait.js, which owns both and counts either as "no art".
@@ -678,7 +678,7 @@ const _sweepsInFlight = new Set();
  * row already pointing at an actor, so it returns without writing again.
  */
 export async function onSteadingPeopleUpdate(actor) {
-	if (actor?.type !== "stonetop" || !game.user?.isGM || !isPrimaryGM()) return;
+	if (actor?.type !== "stonetop" || !isActingPrimaryGM()) return;
 	if (_sweepsInFlight.has(actor.id)) return;
 	_sweepsInFlight.add(actor.id);
 	try { await migrateSteadingPeople(actor); }

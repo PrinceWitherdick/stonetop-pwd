@@ -67,7 +67,7 @@ import {THRALL_MARK, hasThrallMark} from "../actors/character/thrall-marks.js";
 import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
-import {isPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
+import {isPrimaryGM, isActingPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
 import {resolveSync, queryAsker, chatModeIsPublic, currentChatMode, serverNow, askGMClient} from "../utils/foundry-compat.js";
 import {inCardTurn} from "../utils/card-queue.js";
 import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
@@ -3836,7 +3836,7 @@ async function askGMToApply(message) {
  * @returns {Promise<boolean>}  whether any row was applied
  */
 export async function handleApplyQuery(data, context = {}, { messages = game.messages, users = game.users } = {}) {
-	if (!game.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const message = messages?.get?.(data?.messageId);
 	const damage = message?.getFlag?.(SCOPE, "damage");
@@ -4619,7 +4619,7 @@ async function askGMToMoveRosterHit(message, rowUuid, toKey) {
  * @returns {Promise<boolean>}
  */
 export async function handleRosterMoveQuery(data, context = {}, { messages = game.messages, users = game.users, resolve = globalThis.fromUuidSync } = {}) {
-	if (!game.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const message = messages?.get?.(data?.messageId);
 	const damage = message?.getFlag?.(SCOPE, "damage");
@@ -5150,7 +5150,7 @@ async function postGmOnlyCard(pc, content, cardFlags) {
  * @returns {Promise<string|null>}
  */
 export async function handleSufferCardQuery(data, context = {}, { users = game.users, messages = game.messages, resolve = globalThis.fromUuid } = {}) {
-	if (!game.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const user = queryAsker(data, context, users);
 	const flags = data?.flags ?? {};
 	const keys = Object.keys(flags);

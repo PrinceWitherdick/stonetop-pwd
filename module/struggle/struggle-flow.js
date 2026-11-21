@@ -1,5 +1,5 @@
 import { contentElement } from "../utils/dialogv2-content.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { STRUGGLE_ASK_FLAG, STRUGGLE_FLAG, STRUGGLE_ROLL_FLAG, isLive } from "./struggle-rules.js";
@@ -118,7 +118,7 @@ async function askTheGmDialog(actor) {
 /** A player's ask, on the one GM client that answers them. */
 function answerAsk(actor) {
 	const ask = askOf(actor);
-	if (!ask || !isPrimaryGM() || !game.user?.isGM) return;
+	if (!ask || !isActingPrimaryGM()) return;
 	openStruggleSetup({ ask, askActor: actor, only: null, onClosed: answerNextAsk });
 }
 
@@ -128,7 +128,7 @@ function answerAsk(actor) {
  * setup's own refusal ("already under way") and would only open a setup that cannot call anything.
  */
 export function answerNextAsk() {
-	if (!game.user?.isGM || !isPrimaryGM() || liveStruggle()) return;
+	if (!isActingPrimaryGM() || liveStruggle()) return;
 	const first = pendingAsks()[0];
 	if (first) answerAsk(first.actor);
 }

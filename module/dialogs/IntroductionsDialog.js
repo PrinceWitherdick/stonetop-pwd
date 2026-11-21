@@ -21,7 +21,7 @@ import {
 	stepPcDone, nextActiveIndex, firstActiveIndex, prevActiveIndex, lastActiveIndex, turnsUntilActive,
 	cursorReaction, cursorPositionKey, withRecordedAnswer, withAnswerEdited, withoutAnswer,
 } from "./introductions-flow.js";
-import { isPrimaryGM, anyActiveGM, primaryGM } from "../utils/primary-gm.js";
+import { isPrimaryGM, isActingPrimaryGM, anyActiveGM, primaryGM } from "../utils/primary-gm.js";
 
 import { escHtml } from "../utils/strings.js";
 import { findOpenApp } from "../utils/open-windows.js";
@@ -29,7 +29,7 @@ import { merge3, diffHunks, mapIndex } from "../utils/text-rebase.js";
 import { SYSTEM_ID } from "../system-id.js";
 
 /** Whether this client runs the Introductions: the GM at the table (primary), the only one who writes it. */
-const runsIntroductions = () => !!game.user?.isGM && isPrimaryGM();
+const runsIntroductions = () => isActingPrimaryGM();
 
 // The player-authored answer/ask step data lives on the PC actor flag
 // flags.stonetop-pwd.intro. Scope MUST be the system id "stonetop-pwd" (not "stonetop",

@@ -1,5 +1,5 @@
 import { info, error } from "../utils/logger.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { WorldSetupDialog } from "../dialogs/WorldSetupDialog.js";
 import { PosterMapScenesDialog } from "../dialogs/PosterMapScenesDialog.js";
 import {
@@ -436,7 +436,7 @@ async function runFinishingTouches(dialog, updateClosed = null) {
  * do with the answer.
  */
 export async function offerPosterMapScenesOnce({ artOnDisk = null } = {}) {
-	if (!game.user?.isGM || !isPrimaryGM()) return;
+	if (!isActingPrimaryGM()) return;
 
 	let chosen = [];
 	await offerDurableArtOnce({

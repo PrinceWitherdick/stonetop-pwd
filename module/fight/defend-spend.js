@@ -101,7 +101,7 @@ import { carerStockAnswerer } from "../actors/character/healers-arts.js";
 import { spendOrAskOwner, answerOwnerAsk, gmAnswersNote } from "../utils/owner-ask.js";
 import { DIE_FLAG as INSPIRATION_DIE_FLAG } from "../actors/character/inspiration-flow.js";
 import { giveAdvantageButtonHtml } from "../actors/character/give-advantage.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM, isPrimaryGM } from "../utils/primary-gm.js";
 import { inCardTurn } from "../utils/card-queue.js";
 import { askGMClient, resolveSync, queryAsker } from "../utils/foundry-compat.js";
 import { NO_ANSWER, relayOutcome } from "../utils/relay-landed.js";
@@ -1080,7 +1080,7 @@ async function takeSpendSaying(message, kind, offer, options = {}) {
  * @returns {Promise<boolean>}
  */
 export async function handleSpendQuery(data, context = {}, { messages = globalThis.game?.messages, users = globalThis.game?.users, scope = SYSTEM_ID, offersOf = defendOffers } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const kind = data?.kind;
 	const message = messages?.get?.(data?.messageId);

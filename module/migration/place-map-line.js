@@ -15,7 +15,7 @@
  * Idempotent: a second pass finds nothing. Run once per version from Ready.js.
  */
 
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { bodyHashMatches, chronicleBodyHash } from "../utils/chronicle-core.js";
 import { CHRONICLE_PROSE_FLAG, withChronicleLock } from "../utils/chronicle-journals.js";
 import { findPlacesJournal, PLACE_PAGE_KEY_PREFIX } from "../utils/places-chronicle.js";
@@ -93,7 +93,7 @@ export async function clearPlaceMapLines(journal) {
  * @returns {Promise<number>} how many pages changed.
  */
 export async function clearAllPlaceMapLines() {
-	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	if (!isActingPrimaryGM()) return 0;
 	const count = await clearPlaceMapLines(findPlacesJournal());
 	if (count) console.log(`Stonetop | took the village-map line out of ${count} Places of Interest page(s)`);
 	return count;

@@ -16,7 +16,7 @@
 // speaker), which is why an added character leaves an existing assignment where it is.
 
 import { assignedToAnother, charactersPlayedBy } from "../../utils/playbook-actors.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { bringDialogToFront } from "../../utils/front-on-open.js";
 import { escHtml } from "../../utils/strings.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
@@ -342,7 +342,7 @@ function liveInsertRecordsDropped(data) {
 
 /** Drop an actor's greeting flag if the player it names can no longer be greeted. Primary GM only. */
 export function dropStaleAutoOpen(actor) {
-	if (!game.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	if (actor?.type !== "character") return null;
 	const target = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor");
 	if (!target) return null;

@@ -19,7 +19,7 @@
 
 import { getObjectSetting, setSetting } from "../settings.js";
 import { getPlayerCharacters } from "./playbook-actors.js";
-import { isPrimaryGM } from "./primary-gm.js";
+import { isActingPrimaryGM } from "./primary-gm.js";
 import { moveWithin } from "./list-reorder.js";
 import { isFight } from "../fight/fight-state.js";
 
@@ -184,13 +184,10 @@ export function introductionsRoster() {
  * ONCE, EVEN WHEN THERE IS NOTHING TO COPY: the marker is written either way, because a combat that
  * turns up later is a fight, not an introductions order someone arranged.
  *
- * `isGM` as well as `isPrimaryGM`, because the latter answers yes for a player when no GM is
- * connected, and only a GM can write a world setting.
- *
  * @returns {Promise<boolean>} whether an order was copied
  */
 export async function adoptLegacyIntroOrder() {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const { ids, adopted } = readIntroOrder();
 	if (ids.length || adopted) return false;
 	const legacy = legacyIntroOrderIds(legacyCombats(), getPlayerCharacters().map(actor => actor.id));

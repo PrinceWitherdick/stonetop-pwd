@@ -3,7 +3,7 @@ import { getSetting, setSetting } from "../settings.js";
 import { info, error } from "../utils/logger.js";
 import { compendiumRefTail, seededSourceKeys } from "../migration/compat.js";
 import { BESTIARY_ROOT_NAME, BESTIARY_FOLDER_COLOR, planBestiaryFolderTree } from "./bestiary-seed-core.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { progressSlice, SEED_FOLDER_PHASE, SEED_BULK_CREATE_FRACTION } from "../utils/progress-slice.js";
 import { countOf } from "../utils/plural.js";
 
@@ -34,7 +34,7 @@ const BESTIARY_PACK_ID = BESTIARY_PACK;
  * build without it) means there is nothing to seed either.
  */
 export function needsBestiaryActorSeed() {
-	if (!game.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	if (getSetting("bestiaryActorsSeeded")) return false;
 	return !!game.packs.get(BESTIARY_PACK_ID);
 }

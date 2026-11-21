@@ -4,7 +4,7 @@ import { RESCUABLE_SOURCE_IDS, PRIOR_SYSTEM_IDS } from "../../module/migration/c
 import { ITEM_FLAG_SCOPE, CUTOVER_KEY } from "../../module/system-id.js";
 import { OLD_ID as OLD, NEW_ID as NEW, collection, settingsStorage } from "../fakes/migration.js";
 
-vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => true }));
+vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => true, isActingPrimaryGM: () => !!globalThis.game?.user?.isGM }));
 const setSetting = vi.fn().mockResolvedValue(undefined);
 vi.mock("../../module/settings.js", () => ({ setSetting: (...a) => setSetting(...a) }));
 

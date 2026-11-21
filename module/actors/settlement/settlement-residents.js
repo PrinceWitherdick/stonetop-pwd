@@ -32,7 +32,7 @@
 // another settlement already goes by keeps its people under its old name (settleRenames leaves
 // their Homes alone) until it is given a name of its own.
 
-import { anyActiveGM, isPrimaryGM } from "../../utils/primary-gm.js";
+import { anyActiveGM, isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { inTurn } from "../../utils/turn-queue.js";
 import { isWorldSettlement, settlementActors } from "./settlement-type.js";
 import { settlementRow } from "./settlement-rows.js";
@@ -89,11 +89,8 @@ export function ownsItsName(settlement, settlements = settlementActors()) {
 	return settlementForHome(settlement?.name, settlements) === settlement;
 }
 
-/**
- * Whether this client files Residents from the hooks and the load sweep: the primary GM, and only a
- * GM, since isPrimaryGM() answers true on every client when no GM is connected.
- */
-export const isResidentsWriter = () => !!globalThis.game?.user?.isGM && isPrimaryGM();
+/** Whether this client files Residents from the hooks and the load sweep. */
+export const isResidentsWriter = () => isActingPrimaryGM();
 
 /** A world NPC: not a compendium's, not a token's synthetic copy. */
 export function isWorldNpc(actor) {

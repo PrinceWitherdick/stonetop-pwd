@@ -1,7 +1,7 @@
 import { JB2A_IDS, SEQUENCER_ID, SOUNDFX_ID } from "./attack-fx.js";
 import { getSetting, isAttackFxOn, setSetting } from "../settings.js";
 import { stonetopChatCard, whisperGm } from "../utils/chat.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 
 // ── "Your attacks could be seen and heard" ────────────────────────────────────
 // The attack effects (attack-fx.js) arrived in an update, and the only place a NEW world hears
@@ -45,11 +45,9 @@ export function missingAttackFxModules() {
  * @returns {Promise<boolean>} Whether a card was actually posted.
  */
 export async function postAttackFxSuggestionOnce({ greeted } = {}) {
-	// The primary GM only, like the greeting it follows: every GM client gets here, and two whose
-	// `ready` lands together would both read the latch unset and both whisper the card. A second GM
-	// leaves the latch for the primary. Paired with isGM because isPrimaryGM() alone is true when
-	// no GM is connected.
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	// The primary GM only, like the greeting it follows: two GMs whose `ready` lands together would
+	// both read the latch unset and both whisper the card.
+	if (!isActingPrimaryGM()) return false;
 	if (getSetting(ATTACK_FX_SUGGESTION_SETTING)) return false;
 
 	const missing = missingAttackFxModules();

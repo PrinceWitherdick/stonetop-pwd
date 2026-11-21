@@ -1,7 +1,7 @@
 import { getSetting, setSetting } from "../settings.js";
 import { info, error } from "../utils/logger.js";
 import { compendiumRefTail, seededSourceKeys } from "../migration/compat.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { progressSlice, SEED_FOLDER_PHASE, SEED_BULK_CREATE_FRACTION } from "../utils/progress-slice.js";
 import { ITEMS_PACK } from "../actors/character/StonetopFlags.js";
 import { TREASURE_CATALOG } from "../data/treasure-catalog.js";
@@ -43,7 +43,7 @@ const SECTION_COLOR = "#c9a227";
  * without it) means there is nothing to seed either.
  */
 export function needsTreasureItemSeed() {
-	if (!game.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	if (getSetting("treasureItemsSeeded")) return false;
 	return !!game.packs.get(ITEMS_PACK_ID);
 }
@@ -201,7 +201,7 @@ const wantsWriteup = item => item.type === "move"
 
 /** Returns how many items were filled in (0 when there was nothing to do). */
 export async function backfillTreasureWriteups() {
-	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	if (!isActingPrimaryGM()) return 0;
 	const lore = writeupsByName();
 	if (!lore.size) return 0;
 

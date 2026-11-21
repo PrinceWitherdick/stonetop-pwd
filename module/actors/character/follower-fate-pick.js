@@ -22,7 +22,7 @@ import { isCrewMemberRow, isCustomMemberRow } from "./follower-fate.js";
 import { rowButtonData, rowFromButton } from "./follower-roster-shifts.js";
 import { ownerUsers, autoOpenUserId } from "../../hooks/DeathsDoorPrompt.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { sendVerifiable, stillAsking, verifiedAsker } from "../../utils/owner-ask.js";
 import { wireLatchedButtons, withCardLatch } from "../../utils/card-latch.js";
 import { moveChatCard } from "../../utils/chat.js";
@@ -172,7 +172,7 @@ function queriedCharacter(data, resolve) {
  * window is open (the pick itself is not waited on).
  */
 export async function handleFollowerFateOpenQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync, open = openGmFatePick, asking = stillAsking } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const asker = queryAsker(data, context, users);
 	const character = queriedCharacter(data, resolve);
 	if (!asker || !character || !character.testUserPermission?.(asker, "OWNER") || !gmPicksFate(data?.fate)) return false;

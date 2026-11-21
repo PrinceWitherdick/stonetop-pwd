@@ -133,8 +133,7 @@ describe("the sweep's place in the load", () => {
 	// Primary GM only — it writes, and two connected GMs would both issue the same update.
 	it("runs on every load, gated to the primary GM, and cannot take the load down with it", () => {
 		expect(READY).toContain("renameAllSeasonYearPages");
-		const gated = READY.slice(READY.indexOf("if (game.user.isGM && isPrimaryGM()) {"));
-		expect(gated).toContain("await renameAllSeasonYearPages();");
-		expect(gated).toMatch(/try \{ await renameAllSeasonYearPages\(\); \}\s*\n\s*catch/);
+		const gated = READY.slice(READY.indexOf("if (isActingPrimaryGM()) {"));
+		expect(gated).toContain(`bestEffort("Chronicle year-page rename", renameAllSeasonYearPages)`);
 	});
 });

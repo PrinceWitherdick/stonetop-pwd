@@ -18,7 +18,7 @@ import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { carriedCopyOf } from "./homebrew-missing.js";
 import { ownershipLevels, deletionEntry } from "../utils/foundry-compat.js";
 import { escHtml, looseName, slugify } from "../utils/strings.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { findOrCreateFolder, folderIdOf } from "../utils/create-once.js";
 
 /**
@@ -102,7 +102,7 @@ function _moveFolderPicker(home, inserts = []) {
  * @returns {Promise<number>} how many moves were moved
  */
 export async function tidyHomebrewFolders() {
-	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	if (!isActingPrimaryGM()) return 0;
 	const updates = [];
 	for (const pb of (game.items ?? []).filter(isHomebrewPlaybookItem)) {
 		const home = folderIdOf(pb);

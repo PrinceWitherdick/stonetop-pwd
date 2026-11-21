@@ -20,7 +20,7 @@ import { engagedOpponents, foesInFight } from "../../fight/fight-targets.js";
 import { promptForText } from "../../dialogs/content-picker.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, deletionEntry, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { withCardLatch } from "../../utils/card-latch.js";
 import { cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
@@ -127,7 +127,7 @@ export async function giveAdvantage(giver, target, moveName, {
  */
 export async function handleGiveAdvantageQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const giver = data?.giverUuid ? resolve(data.giverUuid) : null;
 	const target = data?.targetUuid ? resolve(data.targetUuid) : null;

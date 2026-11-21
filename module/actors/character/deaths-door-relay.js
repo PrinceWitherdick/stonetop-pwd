@@ -30,7 +30,7 @@ import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat
 import { NO_ANSWER } from "../../utils/relay-landed.js";
 import { format } from "../../utils/i18n.js";
 import { moveChatCard } from "../../utils/chat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { inTurn } from "../../utils/turn-queue.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { writeCardRoll } from "../../utils/roll-card-writer.js";
@@ -152,7 +152,7 @@ export function askDeathsDoorBoost(actor, { nonce, messageId, boost, cost = null
 export async function handleDeathsDoorClaimQuery(data, context = {}, deps = {}) {
 	const game = globalThis.game;
 	const { users = game?.users, actors = game?.actors, messages = game?.messages, resolve = resolveSync, now: clock = Date.now } = deps;
-	if (!game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const arrived = clock();
 	const user  = queryAsker(data, context, users);
 	const actor = actorOf(data, { actors, resolve });
@@ -256,7 +256,7 @@ export async function handleDeathsDoorBoostQuery(data, context = {}, deps = {}) 
 	const {
 		users = game?.users, actors = game?.actors, messages = game?.messages, resolve = resolveSync, rewrite = rollRewrite(),
 	} = deps;
-	if (!game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const user  = queryAsker(data, context, users);
 	const actor = actorOf(data, { actors, resolve });
 	if (!user || !actor?.testUserPermission?.(user, "OWNER") || !rewrite) return null;

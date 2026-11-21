@@ -80,7 +80,7 @@ import { combatantSide, fightersOf, fightOnScene, gridOf } from "./fight-state.j
 import { rollerEngagement } from "./damage-seed.js";
 import { struckFoe } from "./struck-foe.js";
 import { resolveSync, askGMClient, queryAsker, serverNow } from "../utils/foundry-compat.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { escHtml } from "../utils/strings.js";
 import { damageRowActor } from "../utils/damage.js";
 import { stonetopChatCard } from "../utils/chat.js";
@@ -837,7 +837,7 @@ export async function spendRapierWitBlow(fox, attacker, {
  * GM owns), and the Fox still be owed that foe's +1d4. Whether it was spent.
  */
 export async function handleRapierWitQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const fox = data?.foxUuid ? resolve(data.foxUuid) : null;
 	const attacker = data?.attackerUuid ? resolve(data.attackerUuid) : null;
@@ -1138,7 +1138,7 @@ export async function spendCensureEnraged(roller, targets = [], {
  * rolled, and only entries the Judge still holds are let go. Whether anything was spent.
  */
 export async function handleCensureEnragedQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const judge = data?.judgeUuid ? resolve(data.judgeUuid) : null;
 	const roller = data?.rollerUuid ? resolve(data.rollerUuid) : null;

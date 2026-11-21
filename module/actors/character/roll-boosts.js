@@ -52,7 +52,7 @@ import { escHtml } from "../../utils/strings.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { rollCardRoute, writeCardRoll } from "../../utils/roll-card-writer.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
 import { holdForEach, shareHold } from "../../utils/share-hold.js";
@@ -379,7 +379,7 @@ async function askGMToBoost(message, offer) {
 export async function handleBoostQuery(data, context = {}, deps = {}) {
 	const { messages = globalThis.game?.messages, users = globalThis.game?.users, resolve = resolveSync,
 		rollerOf = speakerActor, ownersOf = ownerUsers, scope = SYSTEM_ID } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const message = messages?.get?.(data?.messageId);
 	const helper = data?.helperUuid ? resolve(data.helperUuid) : null;
@@ -644,7 +644,7 @@ export async function shareBlessing(lightbearer, targets, {
  */
 export async function handleBlessingQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, scope = SYSTEM_ID } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return [];
+	if (!isActingPrimaryGM()) return [];
 	const user = queryAsker(data, context, users);
 	const lightbearer = data?.lightbearerUuid ? resolve(data.lightbearerUuid) : null;
 	if (!user || !lightbearer?.testUserPermission?.(user, "OWNER") || !ownsLearnedMoveNamed(lightbearer, PIETY)) return [];

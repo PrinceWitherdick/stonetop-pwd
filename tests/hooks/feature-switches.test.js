@@ -150,7 +150,7 @@ describe("the GM's Timeline switch, from on/off to three places", () => {
 
 	it("runs on ready", () => {
 		const ready = readFileSync(new URL("../../module/hooks/Ready.js", import.meta.url), "utf8");
-		expect(ready).toContain("await migrateTimelineReach()");
+		expect(ready).toContain(`bestEffort("timeline switch migration", migrateTimelineReach)`);
 	});
 });
 
