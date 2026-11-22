@@ -37,10 +37,18 @@ import { journeyKey, journeyRoute, normalizeJourney } from "./travel-route.js";
 // flag has to carry whichever it is, in the one shape it round-trips through. See
 // utils/journey-start.js.
 import { startEnd } from "./journey-start.js";
-import { offMapNote, routeDots, routePath, tierDrawing } from "./route-path.js";
+import { clampInt } from "./clamp-int.js";
+import { offMapNote, routeDots, routePath, tierDrawing, walkedPath } from "./route-path.js";
 
 /** The Scene flag one route lives in. */
 export const SCENE_ROUTE_FLAG = "expeditionRoute";
+
+/**
+ * How far along that route the party is: `{ reached, key }`, legs travelled and the `journeyKey` of
+ * the route they were counted on. A sibling flag, so a travel step never rewrites the route; a `key`
+ * that is not the shown route's reads as no party. Guarded by tests/utils/scene-route.test.js.
+ */
+export const SCENE_ROUTE_PROGRESS_FLAG = "expeditionRouteProgress";
 
 /**
  * How heavily the line is drawn, in Scene pixels.
@@ -162,8 +170,50 @@ export function sceneJourney(scene) {
  * and every scope this package has shipped under, for the same reason `scopedFlag` walks them.
  */
 export function routeFlagTouched(changes) {
+	return routeJourneyTouched(changes) || routeProgressTouched(changes);
+}
+
+/** Did this update touch the route itself (a repaint), rather than only the party's place on it? */
+export function routeJourneyTouched(changes) {
+	return flagTouched(changes, SCENE_ROUTE_FLAG);
+}
+
+/** Did this update touch the party's progress flag (a walk, while the route stays the same)? */
+export function routeProgressTouched(changes) {
+	return flagTouched(changes, SCENE_ROUTE_PROGRESS_FLAG);
+}
+
+function flagTouched(changes, key) {
 	const flags = changes?.flags ?? {};
-	return flagScopes().some(scope => touchesKey(flags[scope], SCENE_ROUTE_FLAG));
+	return flagScopes().some(scope => touchesKey(flags[scope], key));
+}
+
+/**
+ * Legs travelled on the route this Scene shows, or null: no route, no progress, or a count made on
+ * a route that is no longer the one drawn. `journey` is the Scene's own, passed by a caller that
+ * has read it already.
+ */
+export function sceneRouteProgress(scene, journey = sceneJourney(scene)) {
+	const stored = scopedFlag(scene, SCENE_ROUTE_PROGRESS_FLAG);
+	const reached = Math.trunc(Number(stored?.reached));
+	if (!journey || !stored || !Number.isFinite(reached) || reached < 0) return null;
+	return stored.key === journeyKey(journey) ? reached : null;
+}
+
+/**
+ * Write how far along the shown route the party is, or take it off with `reached` null. No write
+ * when the Scene shows no route or already says exactly this. Returns whether it wrote.
+ */
+export async function setSceneRouteProgress(scene, reached) {
+	const journey = sceneJourney(scene);
+	if (!journey) return false;
+	const count = progressCount(reached);
+	const stored = !!scopedFlag(scene, SCENE_ROUTE_PROGRESS_FLAG);
+	if (count === null ? !stored : count === sceneRouteProgress(scene, journey)) return false;
+	await scene.update(count === null
+		? progressFlagDeletions(scene)
+		: { ...progressFlagDeletions(scene, { except: SYSTEM_ID }), ...progressWrite(count, journeyKey(journey)) });
+	return true;
 }
 
 /**
@@ -254,6 +304,8 @@ export function sceneRoutePlan(scene) {
 	if (!check.ok) return null;
 
 	const { path, aspect, width, height } = check;
+	const reached = sceneRouteProgress(scene, journey);
+	const walked = reached === null ? null : walkedPath(path, reached);
 	// OFFSET BY THE SCENE'S OWN ORIGIN, which is not (0,0) on a padded Scene. These marks go into
 	// the drawings layer, whose coordinates are the canvas rectangle — the scene plus its padding
 	// margin — while every fraction here is measured against the PICTURE. Ours are built unpadded,
@@ -283,7 +335,23 @@ export function sceneRoutePlan(scene) {
 			angle: head.angle,
 			size: head.waypoint ? ROUTE_WAYPOINT_HEAD_SIZE : ROUTE_HEAD_SIZE,
 		})),
+		// Drawn legs ending at or before each route stop (route-path.js `routeReach`), so the painter
+		// can turn a count of route legs into the run of `legs` the party walks.
+		reach: path.reach,
+		reached,
+		// Where the party stands, or null with no progress: a trip still being planned shows none.
+		party: walked ? at(walked) : null,
 	};
+}
+
+/** A count of legs travelled as the progress flag stores it: a whole number from 0, or null for none. */
+function progressCount(value) {
+	return value === null || value === undefined ? null : clampInt(value, 0, Infinity);
+}
+
+/** The write that sets the progress flag in the system's own scope. */
+function progressWrite(reached, key) {
+	return { [`flags.${SYSTEM_ID}.${SCENE_ROUTE_PROGRESS_FLAG}`]: { reached, key } };
 }
 
 /**
@@ -392,17 +460,26 @@ function publicMark(point) {
  * every client, including the players', because a Scene flag broadcasts and the point of this
  * button is the map the whole table is looking at.
  */
-export async function showRouteOnScene(scene, journey, { spare = null } = {}) {
+export async function showRouteOnScene(scene, journey, { spare = null, progress } = {}) {
 	const payload = storedJourney(journey);
 	if (!payload) return null;
 	const drawn = !!payload.custom;
 	const { custom, destination } = payload;
+	// The party's place rides the same write: `progress` (legs travelled) when the caller knows it,
+	// null for none. Left out, a count made on this same route is kept and any other dropped.
+	const key = journeyKey(payload);
+	const shown = sceneJourney(scene);
+	const reached = progress === undefined
+		? (shown && journeyKey(shown) === key ? sceneRouteProgress(scene, shown) : null)
+		: progressCount(progress);
 	// ONE write, and it takes any LEGACY copy down on the way past. `scopedFlag` answers with the
 	// first scope that holds one and walks the historical ids AHEAD of the pinned one, so a flag
 	// left behind by a rename would otherwise outrank the route being drawn right now.
 	await scene.update({
 		...routeFlagDeletions(scene, { except: SYSTEM_ID }),
+		...progressFlagDeletions(scene, { except: reached === null ? null : SYSTEM_ID }),
 		[`flags.${SYSTEM_ID}.${SCENE_ROUTE_FLAG}`]: payload,
+		...(reached === null ? {} : progressWrite(reached, key)),
 	});
 	// AND OFF EVERY OTHER SCENE, because a party is on one journey at a time and the line is a
 	// picture of that journey. The deletions above only reach other flag SCOPES on THIS scene, so
@@ -440,6 +517,16 @@ function routeFlagDeletions(scene, { except = null } = {}) {
 	return scopedFlagDeletions(scene, SCENE_ROUTE_FLAG, { except });
 }
 
+/** The same deletions for the party's progress flag. */
+function progressFlagDeletions(scene, { except = null } = {}) {
+	return scopedFlagDeletions(scene, SCENE_ROUTE_PROGRESS_FLAG, { except });
+}
+
+/** Both flags, for a route coming off a Scene: the party goes with the line. */
+function allRouteFlagDeletions(scene) {
+	return { ...routeFlagDeletions(scene), ...progressFlagDeletions(scene) };
+}
+
 /**
  * Take whatever route a Scene is showing back off it.
  *
@@ -452,7 +539,7 @@ function routeFlagDeletions(scene, { except = null } = {}) {
  */
 export async function clearRouteOnScene(scene) {
 	if (!sceneJourney(scene)) return false;
-	await scene.update(routeFlagDeletions(scene));
+	await scene.update(allRouteFlagDeletions(scene));
 	return true;
 }
 
@@ -479,7 +566,7 @@ export async function clearRouteElsewhere(keep, { scenes = globalThis.game?.scen
 		if (spare && (scene === spare || scene?.id === spare.id)) continue;
 		if (!sceneJourney(scene)) continue;
 		try {
-			await scene.update(routeFlagDeletions(scene));
+			await scene.update(allRouteFlagDeletions(scene));
 			cleared += 1;
 		} catch (_) {
 			// Left for the button, rather than failing the draw that has already landed.

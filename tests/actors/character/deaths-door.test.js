@@ -296,6 +296,14 @@ describe("deathsDoorRollOptions — the Heavy's two modifiers", () => {
 		expect(opts.statChoices.map(c => c.stat)).toEqual(["", "con"]);
 	});
 
+	// Playbook audit FOX-M2 (2026-11-22), "Laugh at Danger": "When you are about to roll +CON ... you can roll
+	// +CHA instead" (p.110). Hard to Kill's +CON is one, and the two meet through Dabbler or Seasoned Warrior.
+	it("adds +CHA when Laugh at Danger is learned beside Hard to Kill, and not without Hard to Kill", () => {
+		expect(deathsDoorRollOptions(["Hard to Kill", "Laugh at Danger"], {}).statChoices)
+			.toEqual([{ stat: "", label: "+nothing" }, { stat: "con", label: "+CON" }, { stat: "cha", label: "+CHA (Laugh at Danger)" }]);
+		expect(deathsDoorRollOptions(["Laugh at Danger"], {}).statChoices.map(c => c.stat)).toEqual([""]);
+	});
+
 	it("names the move that opened the choice up, so the dialog can print its description", () => {
 		expect(deathsDoorRollOptions(["Hard to Kill"], {}).statChoiceMove).toBe("Hard to Kill");
 		// The canonical spelling, not whatever case the owned copy happens to carry — the lookup

@@ -12,7 +12,7 @@
 import { formatPlaybookText, formatPlaybookInline, playbookTextFromHtml, plainLine } from "./playbook-text.js";
 import { CUSTOM_MOVE_ROLL_TYPES } from "../utils/roll-types.js";
 import { buildMoveTierResults } from "../utils/move-results.js";
-import { clampInt } from "../utils/custom-move-data.js";
+import { clampInt } from "../utils/clamp-int.js";
 import { slugify, looseName, clipText, sameNoun, uniqueSlugs } from "../utils/strings.js";
 import { parseTiersFromProse } from "../utils/move-tiers.js";
 import { stableStringify } from "../hooks/journal-sync-core.js";

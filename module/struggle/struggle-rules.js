@@ -69,13 +69,16 @@ export const STAT_LABELS = Object.freeze({ str: "STR", dex: "DEX", con: "CON", i
 export const ROLL_MODES = Object.freeze(["normal", "adv", "dis"]);
 
 /**
- * The playbook moves that name Struggle as One, and the two the book leaves to the table.
+ * The playbook moves that name Struggle as One, and those the book leaves to the table.
  *
  * Stone Cold and Home on the Range turn a 6- into a 7-9, each only when the fiction fits ("by
  * keeping calm and carrying on"; "when a journey requires you to"), so the GM confirms it. The
  * Tower Eternal says only "When you Defy Danger against magic", but Struggle as One's own trigger
  * is "When you Defy Danger as a group", so it is offered on the same terms: the GM ticks it when the
- * danger is magic.
+ * danger is magic. Slippery ("When you roll to escape being caught or controlled, treat a 6- as a
+ * 7-9", p.111) is any roll, so a group Defy Danger to slip a net or a grip is one too: the GM ticks it
+ * when that character is escaping. Its 12+ ("say how you turn the tables") rides along as a row note
+ * (struggle-view.js). Pinned by struggle-setup.test.js and struggle-view.test.js "Slippery".
  *
  * Many Hands Make Light Work is NOT offered to anybody in the struggle. It is not the Aid move, but
  * it is help given to someone who has just rolled, and the book's reason for barring Aid inside a
@@ -87,13 +90,23 @@ export const MOVE = Object.freeze({
 	STONE_COLD:        "Stone Cold",
 	HOME_ON_THE_RANGE: "Home on the Range",
 	TOWER_ETERNAL:     "The Tower Eternal",
+	SLIPPERY:          "Slippery",
 	BUNDLE_OF_STICKS:  "A Bundle of Sticks Unbroken",
 	TRAILBLAZER:       "Trailblazer",
 	MANY_HANDS:        "Many Hands Make Light Work",
 });
 
-/** The moves a GM confirms per row because they turn on how that character goes about it. */
-export const GM_TICKED_HALF_MISSES = Object.freeze([MOVE.STONE_COLD, MOVE.TOWER_ETERNAL]);
+/**
+ * The moves a GM confirms per row because they turn on how that character goes about it, each in ONE
+ * place: `when` the GM would tick it, in the move's own words (the setup's tick label), and any `note`
+ * a row with it ticked carries beyond the 6- (Slippery's 12+, in struggle-view.js).
+ */
+export const GM_TICKED_HALF_MISS_MOVES = Object.freeze({
+	[MOVE.STONE_COLD]:    Object.freeze({ when: "they keep calm and carry on" }),
+	[MOVE.TOWER_ETERNAL]: Object.freeze({ when: "the danger is magic" }),
+	[MOVE.SLIPPERY]:      Object.freeze({ when: "they are escaping being caught or controlled", note: "on a 12+, say how you turn the tables." }),
+});
+export const GM_TICKED_HALF_MISSES = Object.freeze(Object.keys(GM_TICKED_HALF_MISS_MOVES));
 
 /** Every move this feature reads off a character, for one pass over their items. */
 export const STRUGGLE_MOVES = Object.freeze(Object.values(MOVE));

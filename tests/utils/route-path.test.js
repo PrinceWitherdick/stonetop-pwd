@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { offMapNote, routeDots, routeLegs, routePath, tierDrawing } from "../../module/utils/route-path.js";
+import { offMapNote, routeDots, routeLegs, routePath, tierDrawing, walkedPath } from "../../module/utils/route-path.js";
 import { spotPercent, travelPlace } from "../../module/data/travel-times.js";
 
 // The beads that make the route read as a dotted line on a Scene.
@@ -166,5 +166,58 @@ describe("drawing a way the GM laid out by hand", () => {
 		expect(note.other).toBeNull();
 		expect(note.elsewhere).toBe(false);
 		expect(routePath(way, "vicinity", FULL, 1.4)).toBeNull();
+	});
+});
+
+// The party mark (phase 6): `reach` turns a count of ROUTE legs into a count of DRAWN legs, which
+// differ wherever a road bend is spliced in or a stop the map cannot place is bridged.
+describe("how far along the drawn line the party is", () => {
+	const legsOf = (...slugs) => ({ legs: slugs.slice(1).map((to, i) => ({ from: slugs[i], to })) });
+	const spot = (slug, tier) => spotPercent(travelPlace(slug).spots[tier], FULL);
+
+	it("counts one drawn leg per route leg on a plain route", () => {
+		const path = routePath(legsOf("stonetop", "the-crossroads", "the-maw"), "vicinity", FULL, 1.4);
+		expect(path.reach).toEqual([0, 1, 2]);
+	});
+
+	it("counts a road bend inside the leg it belongs to", () => {
+		const path = routePath(legsOf("stonetop", "the-foothills", "the-maw"), "vicinity", FULL, 1.4);
+		expect(path.legs).toHaveLength(3);
+		expect(path.reach).toEqual([0, 2, 3]);
+	});
+
+	it("gives a bridged middle stop the count before it", () => {
+		const path = routePath(legsOf("stonetop", "titan-bones", "the-maw"), "vicinity", FULL, 1.4);
+		expect(path.legs).toHaveLength(1);
+		expect(path.reach).toEqual([0, 0, 1]);
+	});
+
+	it("walks nothing at the start and stands the party on the first stop", () => {
+		const path = routePath(legsOf("stonetop", "the-foothills", "the-maw"), "vicinity", FULL, 1.4);
+		const walked = walkedPath(path, 0);
+		expect(walked.d).toBe("");
+		expect(walked.left).toBeCloseTo(spot("stonetop", "vicinity").left, 2);
+		expect(walked.top).toBeCloseTo(spot("stonetop", "vicinity").top, 2);
+	});
+
+	it("walks through the bend to the stop mid-route", () => {
+		const path = routePath(legsOf("stonetop", "the-foothills", "the-maw"), "vicinity", FULL, 1.4);
+		const walked = walkedPath(path, 1);
+		expect(walked.d.match(/Q /g)).toHaveLength(2);
+		expect(walked.left).toBeCloseTo(spot("the-foothills", "vicinity").left, 2);
+		expect(walked.top).toBeCloseTo(spot("the-foothills", "vicinity").top, 2);
+	});
+
+	it("walks the whole line at the end, and clamps a count past it", () => {
+		const path = routePath(legsOf("stonetop", "the-foothills", "the-maw"), "vicinity", FULL, 1.4);
+		expect(walkedPath(path, 2).d).toBe(path.d);
+		expect(walkedPath(path, 9)).toEqual(walkedPath(path, 2));
+		expect(walkedPath(path, 2).left).toBeCloseTo(spot("the-maw", "vicinity").left, 2);
+	});
+
+	it("draws no party for a count that is not a number", () => {
+		const path = routePath(legsOf("stonetop", "the-maw"), "vicinity", FULL, 1.4);
+		expect(walkedPath(path, undefined)).toBeNull();
+		expect(walkedPath(null, 1)).toBeNull();
 	});
 });

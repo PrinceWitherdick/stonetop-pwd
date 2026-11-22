@@ -7,6 +7,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // words is never announced. So the region sits on the window frame, outside `.window-content`.
 
 vi.mock("../../module/utils/open-or-focus.js", () => ({ openOrFocus: (_id, make) => make() }));
+const walks = [];
+vi.mock("../../module/dialogs/journey-walk.js", () => ({ walkPartyMarker: (root, walk) => { walks.push(walk); return true; } }));
 
 const { SharedRouteWindow } = await import("../../module/dialogs/SharedRouteWindow.js");
 const { sharedRoutePayload } = await import("../../module/utils/shared-route.js");
@@ -19,6 +21,7 @@ const share = (destination, id) => sharedRoutePayload({
 
 let store;
 beforeEach(() => {
+	walks.length = 0;
 	store = {};
 	global.game = {
 		i18n: global.game.i18n,
@@ -67,5 +70,36 @@ describe("the window's announcement channel", () => {
 		store.sharedRoute = {};
 		await app.follow();
 		expect(region.textContent).toContain("isn’t showing a route right now");
+	});
+});
+
+// Phase 6: the party mark walks only when the same share's count moves. A new share, a different
+// way or a full render puts it straight where it stands.
+describe("the party mark on a follow", () => {
+	it("walks when only the count changed, and says where the party is", async () => {
+		store.sharedRoute = { ...share("the-maw", "a"), progress: { reached: 0 } };
+		const { app } = mounted();
+		store.sharedRoute = { ...share("the-maw", "a"), progress: { reached: 1 } };
+		await app.follow();
+		expect(walks).toEqual([expect.objectContaining({ from: 0, to: 1 })]);
+		expect(app._liveRegion().textContent).toMatch(/(Leg 2 of|Arrived at)/);
+	});
+
+	it("does not walk for a fresh share or a different way", async () => {
+		store.sharedRoute = { ...share("the-maw", "a"), progress: { reached: 0 } };
+		const { app } = mounted();
+		store.sharedRoute = { ...share("the-maw", "b"), progress: { reached: 1 } };
+		await app.follow();
+		store.sharedRoute = { ...share("the-crossroads", "b"), progress: { reached: 0 } };
+		await app.follow();
+		expect(walks).toEqual([]);
+	});
+
+	it("does not walk when nothing moved", async () => {
+		store.sharedRoute = { ...share("the-maw", "a"), progress: { reached: 1 } };
+		const { app } = mounted();
+		store.sharedRoute = { ...share("the-maw", "a"), progress: { reached: 1 } };
+		await app.follow();
+		expect(walks).toEqual([]);
 	});
 });

@@ -111,7 +111,11 @@ export const BOLSTER_DURATIONS = Object.freeze([
  * stock one (boostButtonFace); falsy for the stock one.
  */
 const SOURCES = {
-	diligence: { move: CHRONICLER, cost: 1, on: "any", stacks: true },
+	// Diligence is "+1 to a roll that you or a fellow player just made" (p.118), and a steading's roll
+	// (Seasons Change, Muster, Trade & Barter...) is one a player makes, so it goes on those cards too.
+	// Sanction, Blessing and Many Hands name a character's own roll or another character's, so they do not.
+	// Pinned by roll-boosts.test.js "offers Diligence on a steading's roll".
+	diligence: { move: CHRONICLER, cost: 1, on: "any", stacks: true, onSteading: true },
 	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own", stacks: true },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
 	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessingNow },

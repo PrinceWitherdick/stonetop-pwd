@@ -190,6 +190,68 @@ describe("Travel and Back a leg", () => {
 	});
 });
 
+// Phase 6: the party mark on the maps. The share learns the count only while it shows this trip's
+// way, and every open map window redraws (which walks its mark: tests/dialogs/travel-map-window.test.js).
+describe("the party mark after a step", () => {
+	it("draws no party for a trip still being planned", () => {
+		const d = dialog(trip(0));
+		expect(d._partyReached(trip(0), journeyRoute(JOURNEY))).toBeNull();
+		expect(d._partyReached(trip(0, { setOut: { season: "summer", year: 1 } }), journeyRoute(JOURNEY))).toBe(0);
+		expect(d._partyReached(trip(1), journeyRoute(JOURNEY))).toBe(1);
+	});
+
+	it("tells the players' share the new count only while it shows this trip's way", async () => {
+		const shown = trip(0);
+		const d = dialog(shown);
+		store.sharedRoute = sharedRoutePayload({ trip: { ...shown, id: "other-trip" }, tier: "worlds-end", id: "share-0", now: 1 });
+		await d._travel(1);
+		expect(store.sharedRoute).not.toHaveProperty("progress");
+
+		store.sharedRoute = sharedRoutePayload({ trip: shown, tier: "worlds-end", id: "share-1", now: 1 });
+		await d._travel(1);
+		expect(store.sharedRoute.progress).toEqual({ reached: 2 });
+		expect(store.sharedRoute.id).toBe("share-1");
+		await d._travel(-1);
+		expect(store.sharedRoute.progress).toEqual({ reached: 1 });
+	});
+
+	it("redraws each open map window", async () => {
+		const d = dialog(trip(0, { setOut: { season: "summer", year: 1 } }));
+		const app = { rendered: true, sync: vi.fn(async () => {}) };
+		const shut = { rendered: false, sync: vi.fn() };
+		d.__mapWindows = new Map([["vicinity", app], ["worlds-end", shut]]);
+		await d._travel(1);
+		expect(app.sync).toHaveBeenCalled();
+		expect(shut.sync).not.toHaveBeenCalled();
+	});
+
+	// Phase 7: the canvas. Each scene in play that shows this trip's way learns the count; a scene
+	// showing another way, or none, is not written to.
+	it("tells each scene showing this trip's way how far the party has got", async () => {
+		const d = dialog(trip(0, { setOut: { season: "summer", year: 1 } }));
+		const scene = (id, journey) => ({
+			id,
+			flags: { "stonetop-pwd": journey ? { expeditionRoute: { ...journey, custom: null } } : {} },
+			update: vi.fn(async () => {}),
+		});
+		const mine = scene("gm-scene", JOURNEY);
+		const table = scene("table", { origin: "stonetop", destination: "lygos" });
+		const bare = scene("bare", null);
+		global.canvas = { scene: mine };
+		game.scenes = Object.assign([table, bare], { active: table });
+		try {
+			await d._travel(1);
+			expect(mine.update).toHaveBeenCalledWith(expect.objectContaining({
+				"flags.stonetop-pwd.expeditionRouteProgress": { reached: 1, key: journeyKey(JOURNEY) },
+			}));
+			expect(table.update).not.toHaveBeenCalled();
+			expect(bare.update).not.toHaveBeenCalled();
+		} finally {
+			delete global.canvas;
+		}
+	});
+});
+
 describe("the banner's status chip", () => {
 	const chip = t => dialog(t)._tripStatusChip();
 

@@ -18,6 +18,7 @@
 // of pixels from a step of 1% down, so a bow, an angle and a bead spacing all have to be measured
 // in the box's real proportions or they come out squashed along one axis.
 
+import { clampInt } from "./clamp-int.js";
 import {
 	TRAVEL_MAPS, exitsOnMap, roadBendsBetween, spotPercent, travelMap, travelPlace,
 } from "../data/travel-times.js";
@@ -45,6 +46,12 @@ const ratioOf = aspect => (Number(aspect) > 0 ? Number(aspect) : 1);
 // places — the head's anchor, its slope, and the bead walk — and a curve spelled out three
 // times is a curve that can be mistyped in one of them without anything disagreeing loudly.
 const quadAt = (a, b, c, t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t * t * c;
+
+/** The point `t` (0..1) along one drawn leg, in the leg's own units. The walks (dialogs/journey-walk.js) ride this. */
+export const legPoint = (leg, t) => ({
+	left: quadAt(leg.from.left, leg.control.left, leg.to.left, t),
+	top: quadAt(leg.from.top, leg.control.top, leg.to.top, t),
+});
 
 /**
  * Is `end` somewhere `tier` can draw — its own spot, or the edge arrow that points at it?
@@ -148,9 +155,11 @@ export function routePath(route, tier, frame, aspect) {
 		const at2 = spot ?? travelPlace(slug)?.spots?.[tier] ?? arrows.get(slug) ?? null;
 		return at2 ? spotPercent(at2, frame) : null;
 	};
+	// `index` is the route stop each entry stands for (0 = the start, k = where leg k ends); a bend
+	// has none. Carried through the splice and the drop below so `reach` can be counted.
 	const stops = bendStops([
-		{ slug: route.legs[0].from, spot: route.legs[0].fromSpot ?? null },
-		...route.legs.map(leg => ({ slug: leg.to, spot: leg.toSpot ?? null })),
+		{ slug: route.legs[0].from, spot: route.legs[0].fromSpot ?? null, index: 0 },
+		...route.legs.map((leg, i) => ({ slug: leg.to, spot: leg.toSpot ?? null, index: i + 1 })),
 	], tier, route);
 	const placed = stops.map(at);
 	// THE ENDS ARE NOT BRIDGEABLE. Dropping a missing stop from the MIDDLE is the honest
@@ -160,17 +169,63 @@ export function routePath(route, tier, frame, aspect) {
 	// planted the destination arrowhead on an unlabelled dot the party is only walking past.
 	// A journey with an end this map cannot show has no honest line, so it gets none.
 	if (!placed[0] || !placed.at(-1)) return null;
-	const points = placed.filter(Boolean);
+	const kept = stops.map((stop, i) => ({ index: stop.index, at: placed[i] })).filter(stop => stop.at);
+	const points = kept.map(stop => stop.at);
 	// One point is a dot, not a path, and drawing it would just double the pin already there.
 	if (points.length < 2) return null;
 	const legs = routeLegs(points, aspect);
 	return {
 		d: routeCurve(legs),
+		reach: routeReach(kept, route.legs.length),
 		arrows: routeArrows(legs, aspect),
 		// The head's own shape, published ONCE per path rather than per arrow: the partial draws
 		// the same triangle for every one of them and would otherwise have to spell it out itself.
 		headD: ROUTE_HEAD_PATH,
 		legs,
+	};
+}
+
+/**
+ * `reach[k]`: how many drawn legs end at or before route stop `k`, so a count of route legs
+ * travelled can be read off a line that has road bends spliced in and bridged stops dropped. A stop
+ * the map could not place inherits the count before it. `kept` is the placed entries, in order.
+ */
+function routeReach(kept, legCount) {
+	const reach = [0];
+	for (let k = 1; k <= legCount; k++) {
+		const at = kept.findIndex(stop => stop.index === k);
+		reach.push(at >= 0 ? at : reach[k - 1]);
+	}
+	return reach;
+}
+
+/**
+ * How many drawn legs the party has walked after `reached` route legs, read off a path's `reach`.
+ * Every surface that places or walks the party mark asks this, so the mark stops where the solid
+ * line ends on all of them.
+ */
+export function drawnLegs(reach, reached) {
+	return reach[clampInt(reached, 0, reach.length - 1)];
+}
+
+/**
+ * The part of a drawn line the party has walked, after `reached` route legs: `{ d, left, top,
+ * reached }`, where `d` is that run as an SVG path ("" before the first leg), `left`/`top` is where
+ * the party stands, in the same percentages, and `reached` is the count clamped to the route.
+ * Null when `path` has no legs or `reached` is not a number.
+ * Guarded by tests/utils/route-path.test.js.
+ */
+export function walkedPath(path, reached) {
+	const count = Math.trunc(Number(reached));
+	if (!path?.legs?.length || !Array.isArray(path.reach) || !Number.isFinite(count)) return null;
+	const reachedLegs = clampInt(count, 0, path.reach.length - 1);
+	const legs = path.legs.slice(0, drawnLegs(path.reach, reachedLegs));
+	const at = legs.length ? legs.at(-1).to : path.legs[0].from;
+	return {
+		d: legs.length ? routeCurve(legs) : "",
+		left: Number(at.left.toFixed(2)),
+		top: Number(at.top.toFixed(2)),
+		reached: reachedLegs,
 	};
 }
 
@@ -202,7 +257,7 @@ function bendStops(stops, tier, route) {
 		// Between two stops the map places for itself: a bare mark carries a spot and no slug, and
 		// there is no road row for a point somebody put down by hand.
 		const through = roadBendsBetween(tier, stops[i - 1].slug, stop.slug)
-			.map(slug => ({ slug, spot: null }));
+			.map(slug => ({ slug, spot: null, index: null }));
 		return [...through, stop];
 	});
 }

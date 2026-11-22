@@ -64,6 +64,14 @@ describe("the Lightbearer's move gates, as the sheet reads them", () => {
 
 // Level Up step 5 (Book I p.528): "If you are the Lightbearer (or have Invoke the Sun God) and your new
 // level is even, choose a new invocation." Known = 2 + floor(L/2), until all ten are known.
+// Guiding Light, Rise Like the Sun and Spring's First Thaw each roll +CHA (Book I pp.122-123); nothing else
+// pinned the stat (playbook audit LIG-L1, 2026-11-22).
+describe("the Lightbearer's +CHA rolls", () => {
+	it.each(["Guiding Light", "Rise Like the Sun", "Spring's First Thaw"])("%s rolls +CHA", name => {
+		expect(lb(name)?.system?.rollType).toBe("cha");
+	});
+});
+
 describe("the Invocation each even level owes", () => {
 	it("is asked at every even level and never at an odd one, so 2 + floor(L/2) are known at each level, capped at 10", async () => {
 		const { char, actor } = lbAt(1, { flags: { "invocations.selected": ["bath-of-healing-light", "blinding-light"] } });

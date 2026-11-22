@@ -27,6 +27,7 @@ import { ROLLED_FLAG, cardCountedTier, outcomeTier } from "../../utils/counted-t
 import { normalizeRollType } from "../../utils/roll-types.js";
 import { moveLearnedIn } from "./owns-move.js";
 import { duringLastMove } from "../../fight/in-battle.js";
+import { altStatGrantsFor } from "../../data/alt-stat-grants.js";
 
 // The state a character is in with respect to their current brush with death. Stored on the
 // actor (see DEATHS_DOOR_FLAG); absent/null is the ordinary living state.
@@ -580,6 +581,11 @@ export function raisedFromDead({ oldHp, newHp, state = null }) {
 export function deathsDoorRollOptions(moveNames = [], moveResources = {}, background = {}) {
 	const has = (name) => moveNames.some(n => n?.toLowerCase() === name.toLowerCase());
 	const hardToKill = has(HARD_TO_KILL);
+	// Hard to Kill's +CON is a +CON roll, so every blanket +CON grant reaches it: Laugh at Danger's +CHA
+	// (p.110), met through Dabbler or Seasoned Warrior. This dialog rolls its stat directly, past the
+	// sheet's alt-stat prompt, so the grants are listed here from the one table (alt-stat-grants.js;
+	// deaths-door.test.js "Laugh at Danger").
+	const conGrants = hardToKill ? altStatGrantsFor({ defaultStat: "con" }, { learnedMoveNames: moveNames }) : [];
 	const marks = has(UNSTOPPABLE) ? Math.max(0, Math.trunc(Number(moveResources?.[UNSTOPPABLE]) || 0)) : 0;
 	const neverGonna = has(NEVER_GONNA_KEEP_ME_DOWN);
 	const neverGonnaUsed = neverGonna && Number(moveResources?.[NEVER_GONNA_KEEP_ME_DOWN]) > 0;
@@ -597,7 +603,8 @@ export function deathsDoorRollOptions(moveNames = [], moveResources = {}, backgr
 		statChoiceMove: hardToKill ? HARD_TO_KILL : null,
 		// +nothing stays first: it's the move as written, and the choice is the Heavy's to make.
 		statChoices: hardToKill
-			? [{ stat: "", label: "+nothing" }, { stat: "con", label: "+CON" }]
+			? [{ stat: "", label: "+nothing" }, { stat: "con", label: "+CON" },
+				...conGrants.map(g => ({ stat: g.altStat, label: `+${g.altStat.toUpperCase()} (${g.ownsMove})` }))]
 			: [{ stat: "", label: "+nothing" }],
 		unstoppableMarks: marks,
 		// `-marks` alone yields -0 with no circles marked, which reads as "-0" wherever it's

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildCustomMoveData, clampInt } from "../../module/utils/custom-move-data.js";
+import { buildCustomMoveData } from "../../module/utils/custom-move-data.js";
+import { clampInt } from "../../module/utils/clamp-int.js";
 
 // The shared shaping behind both save targets: the actor-embedded Moves-tab flow and
 // the reusable world-item "Create Item → Move" flow. Both must author identical moves,

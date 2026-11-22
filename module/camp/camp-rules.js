@@ -835,6 +835,9 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBre
 		// so the card can say what was halved.
 		const healed   = extras.at(-1)?.to ?? picked;
 		const slow     = !!m.slowToHeal && healed > hpBefore;
+		// The mouths beside their own the meal fed, and the hearth's extra those followers recover.
+		const followersFed = ledger.short === 0 ? count(m.record.followers) : 0;
+		const hearth   = followersFed > 0 ? homeFiresHp(ledger) : 0;
 		return {
 			actorId:  m.actorId,
 			name:     m.name,
@@ -853,10 +856,13 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBre
 			hpAfter:  recoveredHpTo(hpBefore, healed, slow),
 			...(dying ? { dying: true } : {}),
 			// The mouths beside their own the meal fed, whose HP the night restores (camp-followers.js).
-			followersFed: ledger.short === 0 ? count(m.record.followers) : 0,
+			followersFed,
 			// Their Break Bread 1d8s, one per follower mouth, when the followers shared the proper meal.
 			...(followersBreakBread(m, ledger) && followerBreads[m.actorId]?.length
 				? { followerBreads: followerBreads[m.actorId].map(n => count(n)) } : {}),
+			// Keep the Home-Fires Burning's extra HP for those same fed followers: "anyone who Makes Camp
+			// with you" (p.123), so the followers too (camp-followers.js#campFollowerHeals `hearth`).
+			...(hearth > 0 ? { followerHearth: hearth } : {}),
 			// Not for one dying at the fire: a night spent at Death's Door is no peaceful rest, and the
 			// advantage would otherwise land on the roll at the Door.
 			peaceful: rests && m.record.peaceful && !dying,

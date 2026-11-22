@@ -28,7 +28,7 @@ import {innGatheringState, INN_SEASON_STEP} from "./inn-gathering.js";
 import {steadingHolds} from "./steading-holds.js";
 import {MILITIA_SEASON_STEP, militiaTactics} from "./season-effects.js";
 import { inTurn } from "../../utils/turn-queue.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 import { relayAssetWrite, relayEcho } from "./steading-asset-relay.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 import { improvementCategoryKey } from "../../data/improvement-categories.js";

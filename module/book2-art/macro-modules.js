@@ -25,4 +25,7 @@ export const MACRO_MODULES = Object.freeze({
 	// Its cleanup takes test NPCs off the GM's own sheets' Residents through the same per-settlement
 	// queue the system's own residents writes take turns in.
 	settlementResidents: () => import("../actors/settlement/settlement-residents.js"),
+	// Its trip on the road: the set-out stamp, the legs travelled and the players' share, written
+	// with the walkthrough's own keys and map choice.
+	expedition:          () => import("../dialogs/expedition-macro-api.js"),
 });

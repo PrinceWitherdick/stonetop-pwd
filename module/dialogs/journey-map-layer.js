@@ -11,7 +11,7 @@
 
 import { travelMap, placesOnMap, exitsOnMap, spotPercent } from "../data/travel-times.js";
 import { formatTravelTime } from "../utils/travel-route.js";
-import { offMapNote, routePath } from "../utils/route-path.js";
+import { offMapNote, routePath, walkedPath } from "../utils/route-path.js";
 import { offMapNames } from "../utils/scene-route.js";
 import { startMark, startTier } from "../utils/journey-start.js";
 import { format, localize } from "../utils/i18n.js";
@@ -124,10 +124,14 @@ export function offMapReadout(note) {
  * @param {string|null} opts.destination
  * @param {Array}  [opts.stops]      a drawn way's stops on THIS map (`customStops`)
  * @param {Array}  [opts.sites]      the GM's own site pins, already built; none for a player
+ * @param {number} [opts.reached]    route legs the party has travelled; absent draws no party mark
  */
-export function journeyMapLayer(tier, art, { routes, route, start, origin, destination, stops = [], sites = [] }) {
+export function journeyMapLayer(tier, art, { routes, route, start, origin, destination, stops = [], sites = [], reached }) {
 	if (!art) return null;
-	const path = routePath(route, tier, art.frame, art.aspect);
+	const line = routePath(route, tier, art.frame, art.aspect);
+	// The walked run and the party mark (expedition-journey-line.hbs), only once a count is given.
+	const walked = line && typeof reached === "number" ? walkedPath(line, reached) : null;
+	const path = walked ? { ...line, walked } : line;
 	// Which lettered places stand on the drawn way. The origin is skipped: it is already drawn as
 	// the origin, and calling it a stop as well would label it twice over.
 	const onWay = new Set(stops.slice(1).map(stop => stop.slug).filter(Boolean));

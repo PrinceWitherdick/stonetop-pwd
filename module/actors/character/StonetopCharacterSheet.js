@@ -452,7 +452,7 @@ export function _stockSpendOffered(actor, item) {
  * The moves that CHARGE before they roll — `cost` makes the dialog say the price, show what is
  * in the purse, and refuse the dice when it cannot be paid (see _stockCostView).
  *
- * Only a move whose ONE trigger both spends and rolls belongs here. Nine shipped moves cost
+ * Only a move whose ONE trigger both spends and rolls belongs here. Eleven shipped moves cost
  * Stock and five of those roll, but three of the five spend at one moment and roll at quite
  * another: Amulets & Talismans and Wards & Bindings pay when the charm is crafted or the
  * boundary marked, and roll later — when that harm actually comes, when those wards are tested —
@@ -460,8 +460,8 @@ export function _stockSpendOffered(actor, item) {
  * on Stock would refuse a Blessed the roll for a charm they already paid for, possibly sessions
  * ago. They get a `spend` instead, built for them off their own printed text — the same price,
  * the same purse, the same missing-button gate, on a button of their own that leaves the roll
- * alone (see _deferredStockGuide). The remaining four Stock moves (Call the Spirits, Healer's
- * Arts, Potent Workings, Trackless Step) never roll at all, so there is no dialog to open; they
+ * alone (see _deferredStockGuide). The remaining six Stock moves (Barkskin, Call the Spirits,
+ * Healer's Arts, Potent Workings, Shared Souls, Trackless Step) never roll at all, so there is no dialog to open; they
  * pay on the card their name-click posts (see _stockSpendButtonHtml).
  */
 export const GUIDED_CHARACTER_MOVES = {

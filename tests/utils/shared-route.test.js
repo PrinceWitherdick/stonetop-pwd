@@ -7,6 +7,7 @@ const {
 	isSharedRoute, readSharedRoute, sharedRoutePayload, sharedRouteState, sharedRouteView,
 	sharedRouteCardHtml, sharedRouteChip, sharedLegLine, shareRoute, stopSharingRoute,
 	sharedRequirementLines, sharedRequirementsHtml, publicRoute, sharedNextStop, sharedStopName,
+	shareRouteProgress,
 } = await import("../../module/utils/shared-route.js");
 const { frameFor } = await import("../../module/data/travel-times.js");
 const { journeyMapLayer } = await import("../../module/dialogs/journey-map-layer.js");
@@ -364,5 +365,56 @@ describe("a renamed trip", () => {
 		expect(sharedRouteState(shown, { expeditionId: "trip-1", journey, hasRoute: true, title: "Dusk run" })).toBe("stale");
 		// A caller that does not say leaves the title out of it.
 		expect(sharedRouteState(shown, { expeditionId: "trip-1", journey, hasRoute: true })).toBe("same");
+	});
+});
+
+// The party's place on the shown way (phase 6): written by the GM's travel, read by the players.
+describe("the party's progress on a share", () => {
+	it("goes with a share made mid-journey, and is left off when there is none", () => {
+		const base = { trip: trip({ origin: "stonetop", destination: "the-crossroads" }), tier: "vicinity", art: ART, id: "s", now: 1 };
+		expect(sharedRoutePayload({ ...base, progress: { reached: 1 } }).progress).toEqual({ reached: 1 });
+		expect(sharedRoutePayload(base)).not.toHaveProperty("progress");
+		expect(sharedRoutePayload({ ...base, progress: { reached: -1 } })).not.toHaveProperty("progress");
+	});
+
+	it("writes the new count onto the share and keeps the rest of it", async () => {
+		store.sharedRoute = crossroads();
+		expect(await shareRouteProgress({ reached: 1 })).toBe(true);
+		expect(store.sharedRoute).toEqual({ ...crossroads(), progress: { reached: 1 } });
+		expect(sharedRouteState(store.sharedRoute, {
+			expeditionId: "trip-1", journey: { origin: "stonetop", destination: "the-crossroads" }, hasRoute: true, title: "",
+		})).toBe("same");
+	});
+
+	it("writes nothing when the count is unchanged, nothing is shown, or the writer is a player", async () => {
+		store.sharedRoute = { ...crossroads(), progress: { reached: 1 } };
+		const before = store.sharedRoute;
+		expect(await shareRouteProgress({ reached: 1 })).toBe(false);
+		expect(store.sharedRoute).toBe(before);
+		global.game.user.isGM = false;
+		expect(await shareRouteProgress({ reached: 0 })).toBe(false);
+		global.game.user.isGM = true;
+		store.sharedRoute = {};
+		expect(await shareRouteProgress({ reached: 1 })).toBe(false);
+		expect(store.sharedRoute).toEqual({});
+	});
+
+	it("takes the count off again for no party on the road", async () => {
+		store.sharedRoute = { ...crossroads(), progress: { reached: 1 } };
+		expect(await shareRouteProgress(null)).toBe(true);
+		expect(store.sharedRoute).not.toHaveProperty("progress");
+	});
+
+	it("gives the players a walked line, a party mark and a sentence saying where they are", () => {
+		const plain = sharedRouteView(crossroads());
+		expect(plain.where).toBe("");
+		expect(plain.map.path.walked).toBeUndefined();
+		const view = sharedRouteView({ ...crossroads(), progress: { reached: 1 } });
+		const total = view.legs.length;
+		expect(view.map.path.walked).toEqual(expect.objectContaining({ left: expect.any(Number), top: expect.any(Number) }));
+		expect(view.where).toBe(total === 1
+			? `Arrived at ${sharedStopName(crossroads(), 1)}.`
+			: expect.stringContaining(`Leg 2 of ${total}`));
+		expect(sharedRouteView({ ...crossroads(), progress: { reached: 0 } }).where).toBe("At Stonetop, ready to leave.");
 	});
 });

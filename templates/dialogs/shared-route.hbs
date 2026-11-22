@@ -21,6 +21,9 @@
     {{#if this.view}}
     <h2 class="stonetop-shared-route-title">{{this.view.title}}</h2>
     <p class="stonetop-journey-total{{#if this.view.estimated}} is-estimate{{/if}}">{{this.view.total}}</p>
+    {{#if this.view.where}}
+    <p class="stonetop-shared-route-where">{{this.view.where}}</p>
+    {{/if}}
     {{#if this.older}}
     <p class="stonetop-shared-route-older">{{this.olderText}}</p>
     {{/if}}

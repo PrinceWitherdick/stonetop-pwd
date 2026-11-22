@@ -1,4 +1,4 @@
-import { GM_TICKED_HALF_MISSES, MOVE, ROLL_MODES, ROW_KIND, STAT_KEYS, STAT_LABELS } from "./struggle-rules.js";
+import { GM_TICKED_HALF_MISSES, GM_TICKED_HALF_MISS_MOVES, MOVE, ROLL_MODES, ROW_KIND, STAT_KEYS, STAT_LABELS } from "./struggle-rules.js";
 import { joinNames } from "../utils/strings.js";
 
 /**
@@ -15,12 +15,6 @@ import { joinNames } from "../utils/strings.js";
  */
 
 const MODE_LABELS = { normal: "Normal", adv: "Advantage", dis: "Disadvantage" };
-
-/** Why the GM would tick each of the fiction-gated moves, in the moves' own words. */
-export const HALF_MISS_WHEN = Object.freeze({
-	[MOVE.STONE_COLD]:    "they keep calm and carry on",
-	[MOVE.TOWER_ETERNAL]: "the danger is magic",
-});
 
 /** The moves a row carries into the struggle for later: its rules read these by name. */
 const CARRIED = [MOVE.BUNDLE_OF_STICKS, MOVE.TRAILBLAZER, MOVE.HOME_ON_THE_RANGE];
@@ -203,7 +197,7 @@ export function setupView(roster, draft, { askerName = "", live = false } = {}) 
 			aid: aidView(pc, roster, draft, people),
 			ticks: GM_TICKED_HALF_MISSES.filter(m => pc.owns.includes(m)).map(m => ({
 				name: m,
-				label: `${m}: ${HALF_MISS_WHEN[m]}, so a 6- counts as a 7-9`,
+				label: `${m}: ${GM_TICKED_HALF_MISS_MOVES[m].when}, so a 6- counts as a 7-9`,
 				checked: (choice.ticks ?? []).includes(m),
 			})),
 			notes: [

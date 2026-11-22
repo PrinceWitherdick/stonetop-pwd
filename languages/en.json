@@ -4651,12 +4651,22 @@
           "group": "{name} is a group monster, found 2 to 5 at a time.",
           "horde": "{name} is a horde monster, found 6 or more at a time."
         },
-        "usual": "Its stat block says {count}.",
+        "usual": "Its sheet's group size is {count}.",
+        "count": {
+          "legend": "How many",
+          "other": "or",
+          "otherLabel": "Another number"
+        },
+        "confirm": {
+          "tokens": "{count} tokens",
+          "group": "1 group token of {count}"
+        },
         "justOne": "Just one",
         "scale": {
           "legend": "On the map",
           "tokens": "A token for each one, each with its own HP",
-          "group": "One token for the whole group, fighting as one (Book I p.416, for a fight against another group)"
+          "group": "One token for the whole group, trading blows with your followers as one (Book I p.416)",
+          "only": "Each one gets a token of its own. Fighting them as one group token (Book I p.416) is offered when the heroes have a group of followers in the fight."
         }
       },
       "scale": {

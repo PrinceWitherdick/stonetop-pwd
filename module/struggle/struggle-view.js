@@ -1,7 +1,7 @@
 import { escHtml, joinNames } from "../utils/strings.js";
 import {
 	MOVE, ROW_KIND, SPOTS, STAT_LABELS, STRUGGLE_STATUS, TIER, allowedStats, bundleChoices, canPickBundleAlly, endWarnings,
-	halfMissesFor, rescueTargets, tierOf,
+	GM_TICKED_HALF_MISS_MOVES, halfMissesFor, rescueTargets, tierOf,
 } from "./struggle-rules.js";
 import { plural } from "../utils/plural.js";
 
@@ -131,7 +131,12 @@ export function struggleRowView(row, { struggle, board, reader, statValues = {},
 			? `Aided by ${row.aid.by}.`
 			: `Aided by ${row.aid.by}: can accomplish more than alone.`);
 	}
-	for (const name of halfMissesFor(row, struggle)) notes.push(`${name}: a 6- counts as a 7-9.`);
+	const halfMisses = halfMissesFor(row, struggle);
+	for (const name of halfMisses) notes.push(`${name}: a 6- counts as a 7-9.`);
+	for (const name of halfMisses) {
+		const note = GM_TICKED_HALF_MISS_MOVES[name]?.note;
+		if (note) notes.push(`${name}: ${note}`);
+	}
 	if (row.bump) notes.push(`+1 from ${row.bumpBy || "a Judge"} (${MOVE.MANY_HANDS}).`);
 
 	// State: the badge beside the name.

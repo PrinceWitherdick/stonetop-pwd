@@ -353,6 +353,7 @@ describe("redrawing without losing the reader's place", () => {
 		const app = windowFor("worlds-end");
 		const root = chromeRoot();
 		app.element = [root];
+		app._journey.pins = "<pins before>";
 		await app.sync();
 
 		expect(app.setOverlay).toHaveBeenCalledWith('<pins tier="worlds-end">');
@@ -377,6 +378,36 @@ describe("redrawing without losing the reader's place", () => {
 		await new Promise(r => setTimeout(r, 0));
 		// Both handlers ran, but showTier is idempotent past the first, so one render.
 		expect(app.render).toHaveBeenCalledTimes(1);
+	});
+
+	it("leaves pins that came back unchanged in place, so a walking mark is not swapped out", async () => {
+		const app = windowFor("worlds-end");
+		app.element = [chromeRoot()];
+		await app.sync();
+		expect(app.setOverlay).not.toHaveBeenCalled();
+	});
+
+	it("walks the party mark when only its place on the same line moved", async () => {
+		const app = windowFor("worlds-end");
+		const mark = { style: { left: "60%", top: "40%" }, isConnected: true };
+		const root = chromeRoot();
+		const find = root.querySelector;
+		root.querySelector = sel => (sel === ".stonetop-journey-party" ? mark : find(sel));
+		app.element = [root];
+		const leg = { from: { left: 10, top: 10 }, control: { left: 30, top: 5 }, to: { left: 60, top: 40 } };
+		const path = reached => ({ d: "M10 10 Q30 5 60 40", legs: [leg], reach: [0, 1], walked: { reached } });
+		app._journey.map.path = path(0);
+		source.build = vi.fn(tier => Promise.resolve({ ...journeyFor(tier), map: { ...journeyFor(tier).map, path: path(1) } }));
+		const frames = [];
+		globalThis.requestAnimationFrame = fn => frames.push(fn);
+		try {
+			await app.sync();
+			// Stood at the start of the walk, waiting for its first frame.
+			expect(mark.style.left).toBe("10.00%");
+			expect(frames).toHaveLength(1);
+		} finally {
+			delete globalThis.requestAnimationFrame;
+		}
 	});
 
 	it("does nothing at all when the window is closed", async () => {

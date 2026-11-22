@@ -6,6 +6,8 @@
 // Pure over its arguments. Guarded by tests/utils/trip-progress.test.js.
 
 import { journeyKey } from "./travel-route.js";
+import { format } from "./i18n.js";
+import { clampInt } from "./clamp-int.js";
 
 /** `{ reached, total, started, arrived }`, `reached` clamped to 0..total; a stale key or no route reads 0. */
 export function tripProgress(trip, route) {
@@ -39,6 +41,21 @@ export function roadLegs(route, reached) {
 		days:      leg.unit === "days" && Number(leg.min) > 0 ? Number(leg.min) : null,
 		state:     index < reached ? "walked" : index === reached ? "next" : "ahead",
 	}));
+}
+
+/**
+ * Where the party is, in one sentence: arrived, on a leg, at the start, or not yet set out. `legs`
+ * carry `fromName`/`toName` in whichever names the reader is given: the GM's road panel passes its
+ * own, the players' Shared Route window the share's (utils/shared-route.js `sharedRouteView`).
+ */
+export function roadWhere(legs, reached, { setOut = false } = {}) {
+	const key = "stonetop.expedition.road";
+	const total = legs?.length ?? 0;
+	if (!total) return "";
+	const at = clampInt(reached, 0, total);
+	if (at === total) return format(`${key}.arrived`, { place: legs.at(-1).toName });
+	if (at > 0) return format(`${key}.onLeg`, { n: at + 1, total, place: legs[at].toName });
+	return format(`${key}.${setOut ? "atStart" : "notSetOut"}`, { place: legs[0].fromName });
 }
 
 /**

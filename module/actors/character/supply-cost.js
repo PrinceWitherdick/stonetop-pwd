@@ -1,6 +1,6 @@
 import { PROVISIONS_SLUG } from "./provisions.js";
 import { asArray } from "../../utils/playbook-actors.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 
 /**
  * WHAT CAN PAY A USE OF SUPPLIES — and, just as importantly, what cannot, and why.

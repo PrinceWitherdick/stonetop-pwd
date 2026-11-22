@@ -186,6 +186,8 @@ describe("chips with an icon or a count trim their label element", () => {
 		// The person bar's words beside a control: Save, the four sides, Italicize, and the chip form's two.
 		".stonetop-relmap-personbar-save > span",
 		".stonetop-relmap-personbar-side > span",
+		// "Crinwin: how many?": the sizes on its strip.
+		".stonetop-fight-group-size-option > span",
 		".stonetop-relmap-personbar-italic > span",
 		".stonetop-relmap-chipform-btn > span",
 		".pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item .stonetop-tab-label",

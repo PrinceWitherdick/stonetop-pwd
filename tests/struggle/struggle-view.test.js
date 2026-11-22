@@ -165,6 +165,16 @@ describe("Many Hands Make Light Work, from outside the struggle", () => {
 		expect(view.rows[1].gm).toBeNull();
 	});
 
+	// Slippery (p.111): "treat a 6- as a 7-9. On a 12+, say how you turn the tables." The GM ticked it, so
+	// the row says both, and its 6- reads as a 7-9.
+	it("names Slippery's half-miss and its 12+ when the GM ticked it", () => {
+		const { struggle, board } = setUp([pc("wren", { halfMisses: [MOVE.SLIPPERY] })], { totals: { pc_wren: 5 }, helpers: ["Garet"] });
+		expect(bumpMatters(board.rows[0], struggle)).toBe(false);
+		const notes = struggleWindowView(struggle, board, gm).rows[0].notes;
+		expect(notes).toContain("Slippery: a 6- counts as a 7-9.");
+		expect(notes).toContain("Slippery: on a 12+, say how you turn the tables.");
+	});
+
 	it("is not offered on a 6 a move already counts as a 7-9", () => {
 		const { struggle, board } = setUp([pc("a", { halfMisses: [MOVE.STONE_COLD] })], { totals: { pc_a: 6 }, helpers: ["Garet"] });
 		expect(bumpMatters(board.rows[0], struggle)).toBe(false);

@@ -16,9 +16,10 @@
 // is listed under "Others", unticked; ticked, they join as a foe, and the tab moves them across.
 //
 // A MONSTER THAT COMES IN NUMBERS IS ASKED ABOUT. Once the GM has said who is fighting, each group or
-// horde monster among them is asked "how many?" and at which scale (group-size.js): that many tokens
-// join, new ones beside a token already on the map or all of them among the arrivals, or one token
-// fighting as a group of that many (group-scale.js).
+// horde monster among them is asked "how many?" (group-size.js): that many tokens join, new ones beside
+// a token already on the map or all of them among the arrivals. When the heroes bring a group of
+// followers it is also asked at which scale, and can be one token fighting as a group of that many
+// (group-scale.js).
 //
 // LINING UP moves every token in the fight in one write, straight to its place (core's "displace"
 // movement: through walls, no animation along the way).
@@ -36,7 +37,8 @@ import { displaceTokens } from "../utils/foundry-compat.js";
 import { worldActorsBySource, resolveDeployableActor } from "../utils/deployable-actor.js";
 import { compendiumRefTail } from "../migration/compat.js";
 import { HEROES, FOES } from "./engagements.js";
-import { classifySide } from "./fight-sides.js";
+import { classifySide, fightsAsGroup } from "./fight-sides.js";
+import { followerRoster } from "./fight-vitals.js";
 import { followerMasterIndex } from "../actors/character/follower-masters.js";
 import { combatantBodies, combatantSide, controlledTokenIds, fightOnScene, gridOf, isFight, sideInfoFor, sceneRectOf, tokenLevel, SIDE_FLAG } from "./fight-state.js";
 import { fightWindowComing, fightWindowWillShow } from "./fight-window.js";
@@ -313,8 +315,33 @@ export async function openStartFight({ combat = null, preselect = null, preselec
 	const picks = await withGroupSizes(answer.picks, pick => {
 		const group = groups.get(pick.id);
 		return group && !fighting.has(group.kind) ? group : null;
-	});
+	}, askGroupSize, { offerGroup: heroesBringAGroup(answer.picks, combat, scene) });
 	return startFight({ scene, combat, picks, lineUp: answer.lineUp });
+}
+
+/**
+ * Whether an actor's token stands for a group on the heroes' side: a group follower (the crew, a custom
+ * group) with two or more on its roster, or a monster ally already switched to fight as a group.
+ */
+function standsForAGroup(actor) {
+	if (!actor) return false;
+	if ((followerRoster({ actor })?.size ?? 0) > 1) return true;
+	return fightsAsGroup({ type: actor.type, fightAsGroup: actor.system?.fightAsGroup, organization: actor.system?.organization });
+}
+
+/**
+ * Whether the heroes bring a group of followers to this fight, so a monster group can be fought as one
+ * group token: "If the PCs have a group of followers" (Book I p.416) is where the abstraction starts.
+ * One ticked to join on the heroes' side, or one already fighting there (a GM's headcount included).
+ */
+export function heroesBringAGroup(picks = [], combat = null, scene = null, { resolve = globalThis.fromUuidSync } = {}) {
+	const actorOf = pick => {
+		if (pick.id.startsWith(TOKEN)) return scene?.tokens?.get?.(pick.id.slice(TOKEN.length))?.actor ?? null;
+		// Not strict: a pick from a compendium has no world document to read.
+		try { return resolve?.(pick.id.slice(ACTOR.length), { strict: false }) ?? null; } catch { return null; }
+	};
+	if (picks.some(pick => pick.side === HEROES && standsForAGroup(actorOf(pick)))) return true;
+	return [...(combat?.combatants ?? [])].some(c => c.sceneId === scene?.id && combatantSide(c) === HEROES && combatantBodies(c).group);
 }
 
 /**
@@ -325,11 +352,12 @@ export async function openStartFight({ combat = null, preselect = null, preselec
  * @param {Array<{id: string, name: string, side: string}>} picks
  * @param {(pick) => object|null} infoFor  see group-size.js#groupSizeQuestions
  * @param {(question) => Promise<{size: number, asGroup: boolean}|null>} [ask]
+ * @param {{offerGroup?: boolean}} [options]  whether each question offers the group scale (heroesBringAGroup)
  */
-export async function withGroupSizes(picks, infoFor, ask = askGroupSize) {
+export async function withGroupSizes(picks, infoFor, ask = askGroupSize, { offerGroup = false } = {}) {
 	const answers = new Map();
 	for (const question of groupSizeQuestions(picks, infoFor)) {
-		const answer = await ask(question);
+		const answer = await ask({ ...question, offerGroup });
 		if (answer?.size > 1) answers.set(question.pickId, { size: answer.size, asGroup: !!answer.asGroup });
 	}
 	return picks.map(pick => (answers.has(pick.id) ? { ...pick, ...answers.get(pick.id) } : pick));

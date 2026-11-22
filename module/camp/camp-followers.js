@@ -47,10 +47,13 @@ export function memberMax(follower) {
  *   #followersBreakBread), one per mouth, handed out a body at a time in roster order. "Each of you
  *   recovers 1d8 (extra) HP", on top of the night's half: one down at 0 HP still uses up their die and
  *   takes nothing, as they take nothing from the night. The NPC heals by the same die, capped at its max.
- * @returns {{update: object, healed: Array<{name: string, from: number, to: number, bread?: number}>,
+ *   `hearth`: Keep the Home-Fires Burning's extra HP (camp-rules.js#homeFiresHp), which "anyone who
+ *   Makes Camp with you" recovers (p.123), so every follower healed here, after the night and the bread,
+ *   capped the same way; one down at 0 HP takes none of it. Pinned by camp-followers.test.js "home fires".
+ * @returns {{update: object, healed: Array<{name: string, from: number, to: number, bread?: number, hearth?: number}>,
  *   down: string[], npcHeals: Array<{npc: Actor, ftype: string, slug: string, from: number, to: number}>}}
  */
-export function campFollowerHeals(flags, followers = [], { npcFor = null, breads = [] } = {}) {
+export function campFollowerHeals(flags, followers = [], { npcFor = null, breads = [], hearth = 0 } = {}) {
 	const update = {};
 	const healed = [];
 	const down = [];
@@ -77,12 +80,11 @@ export function campFollowerHeals(flags, followers = [], { npcFor = null, breads
 			// And it is the NPC that heals, the box following it (fight/roster-fate.js).
 			const linked = !!(npc && npcMax);
 			const [at, top] = linked ? [npcFrom, npcMax] : [from, max];
-			const half = healTo(at, Math.ceil(top / 2), top);
-			const to = healTo(half, bread, top);
+			const { to, shares } = nightHeal(at, top, { bread, hearth });
 			if (to > at) {
 				if (linked) npcHeals.push({ npc, ftype: fol.ftype, slug, from: at, to });
 				else Object.assign(update, followerHpWriteUpdate(flags, fol.ftype, slug, null, to));
-				healed.push({ name, from: at, to, ...(to > half ? { bread: to - half } : {}) });
+				healed.push({ name, from: at, to, ...shares });
 			}
 			continue;
 		}
@@ -95,16 +97,40 @@ export function campFollowerHeals(flags, followers = [], { npcFor = null, breads
 			const from = rosterMemberHp(flags, roster, member.key, max);
 			const bread = nextBread();
 			if (from <= 0) { down.push(who); continue; }
-			const half = healTo(from, Math.ceil(max / 2), max);
-			const to = healTo(half, bread, max);
+			const { to, shares } = nightHeal(from, max, { bread, hearth });
 			if (to > from) {
 				hpByKey[member.key] = to;
-				healed.push({ name: who, from, to, ...(to > half ? { bread: to - half } : {}) });
+				healed.push({ name: who, from, to, ...shares });
 			}
 		}
 		if (Object.keys(hpByKey).length) Object.assign(update, rosterHpUpdate(flags, roster, hpByKey));
 	}
 	return { update, healed, down, npcHeals };
+}
+
+/**
+ * What a fed follower recovers on top of the night's half, in the order it lands, each with the words
+ * the note uses for it. A new extra is a row here and its amount handed to `nightHeal`; the heal, the
+ * share it records and the note all follow from the row.
+ */
+const FOLLOWER_EXTRAS = Object.freeze([
+	{ key: "bread",  lead: "Break Bread's 1d8 extra", share: "Break Bread" },
+	{ key: "hearth", lead: "the home fires' extra",   share: "home fires" },
+]);
+
+/**
+ * One follower's night from `at` HP of `top`: the half, then each of FOLLOWER_EXTRAS by its amount in
+ * `amounts`, capped at `top`. `shares` is what each extra actually added, keyed as the row is.
+ */
+function nightHeal(at, top, amounts) {
+	let hp = healTo(at, Math.ceil(top / 2), top);
+	const shares = {};
+	for (const { key } of FOLLOWER_EXTRAS) {
+		const next = healTo(hp, amounts[key] ?? 0, top);
+		if (next > hp) shares[key] = next - hp;
+		hp = next;
+	}
+	return { to: hp, shares };
 }
 
 /** The note's rows for a camp's follower heals (campFollowerHeals' answer, or a shortfall's). */
@@ -117,9 +143,11 @@ export function campFollowerRows({ healed = [], down = [] } = {}, { fed = 0, par
 	}
 	const rows = [];
 	if (healed.length) {
-		// Break Bread's share named on the follower it landed on: "each of you recovers 1d8 (extra) HP".
-		const lead = healed.some(h => h.bread) ? "Half their max HP, rounded up, and Break Bread's 1d8 extra" : "Half their max HP, rounded up";
-		rows.push({ label: "Followers", value: `${lead}: ${healed.map(h => `${h.name} ${h.from} → ${h.to}${h.bread ? ` (Break Bread +${h.bread})` : ""}`).join("; ")}.` });
+		// Each extra's share named on the follower it landed on: "each of you recovers 1d8 (extra) HP".
+		const extras = FOLLOWER_EXTRAS.filter(x => healed.some(h => h[x.key])).map(x => x.lead);
+		const lead = `Half their max HP, rounded up${extras.length ? `, and ${extras.join(" and ")}` : ""}`;
+		const shares = h => FOLLOWER_EXTRAS.map(x => (h[x.key] ? ` (${x.share} +${h[x.key]})` : "")).join("");
+		rows.push({ label: "Followers", value: `${lead}: ${healed.map(h => `${h.name} ${h.from} → ${h.to}${shares(h)}`).join("; ")}.` });
 	}
 	if (down.length) {
 		rows.push({ label: "Still down", value: `${down.join(", ")} at 0 HP: the night does not raise them, and what happens to them is the GM's call.` });
@@ -145,6 +173,7 @@ export async function campFollowerShare(actor, entry, { partyMouths = 0, followe
 	const heals = campFollowerHeals(flags, followers, {
 		npcFor: fol => linkedFollowerNpc(flags, fol.ftype, fol.slug ?? "", followerActorFromLink),
 		breads: entry?.followerBreads ?? [],
+		hearth: count(entry?.followerHearth),
 	});
 	return { update: heals.update, rows: campFollowerRows(heals), npcHeals: heals.npcHeals };
 }

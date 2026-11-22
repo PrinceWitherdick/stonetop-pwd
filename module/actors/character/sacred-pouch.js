@@ -36,7 +36,7 @@ import { askWithButtons, confirmOutcome } from "../../utils/ask-with-buttons.js"
 import { contentElement } from "../../utils/dialogv2-content.js";
 import { cardTierNow } from "../../utils/counted-tier.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 
 export const SUCK_THE_POISON_OUT = "Suck the Poison Out";
 export const BORROW_POWER = "Borrow Power";

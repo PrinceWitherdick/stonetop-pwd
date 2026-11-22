@@ -57,6 +57,7 @@ const EXEMPT = {
 	".stonetop-journey-canvas .stonetop-journey-sitemark": "map mark",
 	".stonetop-journey-canvas .stonetop-journey-mark": "map mark",
 	".stonetop-journey-canvas .stonetop-journey-mark.is-end": "map mark",
+	".stonetop-journey-canvas .stonetop-journey-party": "map mark",
 	".stonetop-npc-following-pc i": "icon",
 	".stonetop-condemn-count, .stonetop-marks-count": "numeral in a fixed whole-pixel disc",
 	".stonetop-rel-heart-badge-value": "numeral in a fixed whole-pixel heart",

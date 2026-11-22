@@ -52,6 +52,7 @@ More in [Arcana for GMs](Arcana-for-GMs).
 | Setting | Default | What it changes |
 |---|---|---|
 | **Fight tab (replaces the Combat tracker)** | On | The Combat tab becomes a Fight tab showing who fights whom, with lines on the map and extra damage for several attackers filled into damage rolls. Off gives you Foundry's own Combat tracker back, for example to use an initiative module. **Needs a reload.** |
+| **Table moments** | On | A brief banner on everyone's screen when a fight begins, when an expedition sets out or comes home, and when the party reaches a stop on a route the players can see. A player's own **Reduce Motion** shows it without movement. See [Expeditions and Sites](Expeditions-and-Sites#table-moments). |
 | **Attack Effects on the Map** | On | A landed blow is drawn on the map and heard at the table. The pictures need the Sequencer and JB2A modules; the sounds need SoundFx Library. Anyone with reduced motion asked for, Sequencer's Enable Effects off, or Foundry's Photosensitive Mode on keeps the sounds without the pictures. |
 
 The **Fight tab** switch also sits on the **Preferences** tab of your GM Toolkit, in its own group at the bottom, so you can flip it without opening Configure Settings. It runs Foundry's reload prompt the same way. See [Running Fights](Running-Fights).

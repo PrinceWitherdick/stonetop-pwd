@@ -627,6 +627,9 @@
 	--stonetop-route-ink: #b3261e;
 	--stonetop-route-case: #f4ecd8;
 	--stonetop-route-case-alpha: 0.9;
+	/* The dark halo under every mark on the route maps (pins, heads, sites, the party), so a cream
+	   mark still reads over pale parchment. One value, so the marks cannot drift apart. */
+	--stonetop-route-mark-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
 	/* The fight's lines on the map (module/fight/fight-overlay.js reads these; its fallbacks are
 	   pinned to them by tests/fight/fight-overlay-ink.test.js). Hex only: the painter parses hex.
 	   Melee and ranged differ by PATTERN (a solid tie, a dashed arrow) as well as colour, so the
@@ -7483,11 +7486,49 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	color: var(--st-text-secondary);
 }
 
-/* "Crinwin: how many?" (fight/group-size.js): "Just one" and a button per size. A long row of sizes
-   wraps onto a second line rather than squeezing each number to nothing. */
-.stonetop-fight-group-size-app .form-footer { flex-wrap: wrap; }
-.stonetop-fight-group-size-app .form-footer button { flex: 1 0 auto; min-width: 3em; }
+/* "Crinwin: how many?" (fight/group-size.js): how many as a strip of sizes and a box for any other,
+   the scale where it applies, and two footer buttons, the count's own words and "Just one". */
 .stonetop-fight-group-size p { margin: 0 0 6px; }
+.stonetop-fight-group-size .stonetop-fight-group-size-hint {
+	color: var(--st-text-secondary);
+	font-size: var(--st-fs-sm);
+}
+.stonetop-fight-group-size-counts { margin: 0 0 6px; }
+/* The strip and the box side by side at one height, so neither reads as the other's label. Wraps
+   under a long strip (a sheet's own size added to the four) rather than squeezing it. */
+.stonetop-fight-group-size-count-row {
+	--group-size-control: 2em;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+}
+.stonetop-fight-group-size-option {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 2.5em;
+	height: var(--group-size-control);
+	padding: 0 8px;
+	box-sizing: border-box;
+	font-variant-numeric: tabular-nums;
+}
+/* The chosen ink, hover and focus ring are the shared skin's (`.stonetop-segmented-picker-option`). */
+.stonetop-fight-group-size-option > span {
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
+}
+.stonetop-fight-group-size-other {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.stonetop-fight-group-size-other .stonetop-cf-input {
+	width: 4em;
+	height: var(--group-size-control);
+	text-align: center;
+}
 /* The two scales (separate tokens, or one group token), one per line. */
 .stonetop-fight-group-size-scales {
 	display: flex;
@@ -10959,6 +11000,19 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 .stonetop-segmented-picker-option:has(input:checked) {
 	background: var(--st-btn-primary-bg, slategrey);
 	color: var(--st-btn-primary-text);
+}
+/* The same ink inside a themed window, which colours every `label` in the body ink at (0,4,1)
+   (`:is(.application, .window-app).stonetop-themed .window-content :is(label, …)`) and would leave a
+   dark figure on the slate fill. Restated here at (0,5,1) so no strip has to restate it for itself. */
+:is(.application, .window-app).stonetop-themed .window-content .stonetop-segmented-picker-option:has(input:checked) {
+	color: var(--st-btn-primary-text);
+}
+/* A radio strip's hover and keyboard focus. The radio is hidden, so the segment wears its ring. The
+   button strips (`.is-active`, below) state their own hover, so these ask for a radio. */
+.stonetop-segmented-picker-option:has(input[type="radio"]):not(:has(input:checked)):hover { background: var(--st-slate-hover-bg); }
+.stonetop-segmented-picker-option:has(input:focus-visible) {
+	outline: 2px solid var(--st-btn-primary-border);
+	outline-offset: -2px;
 }
 
 /* ── Roll modifier pill (Advantage / Normal / Disadvantage) ─────────────────────────────
@@ -41978,6 +42032,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	stroke-opacity: var(--stonetop-route-case-alpha);
 }
 .stonetop-journey-canvas .stonetop-journey-path-ink { stroke: var(--stonetop-route-ink); stroke-width: 3.5; }
+/* The legs the party has travelled: the same ink, solid, over the dots, so walked and ahead differ
+   by shape and not by colour alone. */
+.stonetop-journey-canvas .stonetop-journey-path-walked {
+	fill: none; stroke: var(--stonetop-route-ink); stroke-width: 3.5;
+	stroke-linecap: round; stroke-linejoin: round;
+}
 
 /* A head short of every stop the route arrives at, the last of them on the destination end.
    Fixed pixel size and its own viewBox, so it is untouched by the stretch the polyline above
@@ -42008,6 +42068,22 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    the eye. Later than the base rule it modifies, which is what lets equal specificity win. */
 .stonetop-journey-canvas .stonetop-journey-arrowhead--waypoint {
 	width: 11px; height: 11px;
+}
+
+/* Where the party stands (expedition-journey-line.hbs). A map mark, so literal-sized like the pins
+   (tests/styles/font-floor.test.js EXEMPT); route ink and cream like the line it rides. Above every
+   pin (they reach z-index 3) because it stands ON one, and it takes no clicks. dialogs/journey-walk.js
+   moves it by `left`/`top`, so the centring is `translate`, never `transform`. */
+.stonetop-journey-canvas .stonetop-journey-party {
+	position: absolute; z-index: 4; pointer-events: none;
+	translate: -50% -50%;
+	display: grid; place-items: center;
+	width: 22px; height: 22px; border-radius: 50%;
+	font-size: 12px; line-height: 1;
+	color: var(--stonetop-route-case);
+	background: var(--stonetop-route-ink);
+	border: 2px solid var(--stonetop-route-case);
+	box-shadow: var(--stonetop-route-mark-shadow);
 }
 
 /* One hotspot. `width: auto` because core sets `button { display: flex }`, which would
@@ -42041,7 +42117,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 2px solid var(--stonetop-route-case);
 	/* A halo so a dot stays legible over the maps' tree-line hatching. box-shadow, not a
 	   filter: a drop-shadow is erased by any mask, and these sit near masked glyphs. */
-	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+	box-shadow: var(--stonetop-route-mark-shadow);
 	transition: transform 0.12s ease;
 }
 .stonetop-journey-canvas .stonetop-journey-pick:hover .stonetop-journey-dot { transform: scale(1.35); }
@@ -42050,7 +42126,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: 18px; height: 18px; border-radius: 50%;
 	font-size: 9px; color: var(--stonetop-route-case);
 	background: #1b1009; border: 2px solid var(--stonetop-route-case);
-	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+	box-shadow: var(--stonetop-route-mark-shadow);
 }
 
 /* One of the GM's own sites, dropped on the map (module/sites/site-map-spots.js).
@@ -42072,7 +42148,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: 18px; height: 18px; border-radius: var(--st-radius-sm);
 	font-size: 9px; color: var(--stonetop-route-case);
 	background: var(--site-accent, #5a5f6b); border: 2px solid var(--stonetop-route-case);
-	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+	box-shadow: var(--stonetop-route-mark-shadow);
 	transition: transform 0.12s ease;
 }
 .stonetop-journey-canvas .stonetop-journey-site:hover .stonetop-journey-sitemark { transform: scale(1.2); }
@@ -42110,7 +42186,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--stonetop-route-case);
 	background: var(--stonetop-route-ink);
 	border: 2px solid var(--stonetop-route-case);
-	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+	box-shadow: var(--stonetop-route-mark-shadow);
 }
 /* The far end of the way, after the base rule. Bigger for the same reason the destination pin is:
    of a run of identical beads, the one saying where this ends has to be the one you find first. */
@@ -50122,6 +50198,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text);
 }
 .stonetop-shared-route .stonetop-journey-total { margin: 0; }
+/* Where the party is on the way, once the GM has them travelling (shared-route.js `where`). */
+.stonetop-shared-route .stonetop-shared-route-where { margin: 0; font-weight: 600; color: var(--st-text); }
 .stonetop-shared-route .stonetop-shared-route-older,
 .stonetop-shared-route .stonetop-shared-route-none {
 	margin: 0; font-size: var(--st-fs-xs); font-style: italic; color: var(--st-text-muted);
@@ -52353,11 +52431,6 @@ textarea.stonetop-relmap-personbar-field {
 	color: var(--st-text-body);
 	font-size: var(--relmap-bar-font);
 	line-height: 1;
-}
-.stonetop-relmap-personbar-side:not(:has(input:checked)):hover { background: var(--st-slate-hover-bg); }
-.stonetop-relmap-personbar-side:has(input:focus-visible) {
-	outline: 2px solid var(--st-btn-primary-border);
-	outline-offset: -2px;
 }
 .stonetop-relmap-personbar-side > span {
 	text-box: trim-both cap alphabetic;

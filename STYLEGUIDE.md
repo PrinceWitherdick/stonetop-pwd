@@ -132,7 +132,10 @@ their note in the stylesheet says the contrast was measured for text.
 - **Playbook colours** `--color-the-*`.
 - **Relationship-map inks** `--st-relmap-ink-*`: colour a line, never a word.
 - **Timeline kinds** `--st-timeline-kind-*`: mark a card's edge and chip, never its text.
-- **Route and fight inks** `--stonetop-route-*`, `--stonetop-fight-*`: drawn on maps; read by JS.
+- **Route and fight inks** `--stonetop-route-*`, `--stonetop-fight-*`: drawn on maps; the inks are
+  read by JS. `--stonetop-route-mark-shadow` is the one halo under every mark on the route maps.
+- **Table moment colours** `--stonetop-moment-*`: the band every screen shows when a fight begins
+  or an expedition moves (section 5, Motion). Declared on `#stonetop-moment` itself.
 
 ### When no token fits
 
@@ -264,6 +267,25 @@ for a hover pop-over opened from inside a window (a tooltip, a preview, an autoc
   durations inside `.stonetop` and hides the hover-zoom popups, and nothing else uses it. JS checks
   `prefersReducedMotion()` from `module/utils/reduced-motion.js`. Guarded by
   `tests/styles/reduced-motion-exits.test.js`.
+- **Movement is a `@keyframes` animation, never a transition.** A transition on `transform`,
+  `left` or `top` replays whenever a re-render moves the element, and has no stopped state to
+  name. A straight move reads its ends from custom properties the script sets (the road panel's
+  marker: `--stonetop-trail-from` / `--stonetop-trail-to`, walked while it wears `is-walking`). A
+  mark that follows a curve (the party mark on the route maps and on the scene) is moved frame by
+  frame from `requestAnimationFrame` or the canvas ticker, only after `prefersReducedMotion()` says
+  no. Either way the redraw has already put the mark at its destination, so less motion means
+  skipping the walk, not shortening it.
+- **An element on `<body>` is outside the blanket.** The setting's blanket only reaches inside
+  `.stonetop`, so `#stonetop-letter-notice` and `#stonetop-moment` gate their own animations:
+  `:root:not(.stonetop-less-motion) #stonetop-moment.is-playing { animation: … }`. Its base rule
+  must then be the finished look (opaque, in place), because that is all a reader with motion off
+  ever sees.
+- **Table moments are self-coloured.** The band (`module/moments/`, the TABLE MOMENTS block) sits
+  over the canvas and any window, on every client at once, each in its own palette. One fixed look,
+  bone on near-black umber with a gold rule, reads the same over all of them and clears 15:1, so it
+  does not read the palette tokens and is not repainted for dark or high contrast. Its words are a
+  `role="status"` region put in 100ms after the band (a live region inserted with its text already
+  in is not read by every screen reader). Guarded by `tests/styles/moments.test.js`.
 
 ---
 
@@ -412,7 +434,9 @@ vanish on focus. Read-only state is `.stonetop-readonly` on an ancestor.
   friends so the dark pages can swap the art. In prose use `.stonetop-glyph` (never italic).
 - **Toggle switch**: `.stonetop-toggle-track` (36×20). **Segmented choice**:
   `.stonetop-segmented-picker`; the chosen segment takes `--st-btn-primary-bg` with
-  `--st-btn-primary-text`.
+  `--st-btn-primary-text` (restated for themed windows, whose label ink would otherwise win), and a
+  radio strip's segments carry the slate hover and the keyboard focus ring. A strip adds only its
+  own padding, font and size.
 
 ### Chips, pills, tags, badges
 
@@ -512,11 +536,12 @@ New steps in those flows reuse those classes.
 - **Journal pages** (bestiary, threats, sites, the timeline) carry their own page classes. Printed
   book art gets the warm `--st-art-frame`, which deliberately stays paper-coloured on the dark
   pages.
-- **HUD** (the season banner under the top edge, the fight ring round a token, the letter notice):
-  drawn over the map rather than on paper, so they keep fixed colours through every palette and
-  have their own tokens (`--stonetop-banner-*`, `--stonetop-fight-ring-*`). Name such tokens
-  `-lettering` / `-paper`, not `-ink`: the palette tests measure every `-ink` against the sheet's
-  page.
+- **HUD** (the season banner under the top edge, the fight ring round a token, the letter notice,
+  the table moment band): drawn over the map rather than on paper, so they keep fixed colours
+  through every palette and have their own tokens (`--stonetop-banner-*`, `--stonetop-fight-ring-*`).
+  Name such tokens on `:root` `-lettering` / `-paper`, not `-ink`: the palette tests measure every
+  `:root` `-ink` against the sheet's page. The letter notice and the moment declare theirs on the
+  element itself, out of those tests' reach, and measure their own contrast in their own tests.
 - **Pop-overs and tooltips** on the paper use `var(--st-on-dark-raised, #fffdf7)` with a
   `--st-radius-lg` corner.
 - **Hover help is Foundry's tooltip, never a native `title`.** A `title` is drawn by the operating

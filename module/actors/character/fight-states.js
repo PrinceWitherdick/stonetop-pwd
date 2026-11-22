@@ -15,14 +15,16 @@
  *    (`revealOnAttack`), and the other two are theirs to click.
  *
  * Each passes the bar a header glyph has to clear: it outlives the roll that made it, only its owner
- * ends it, and nothing else on the sheet holds it. Shown to a character who has the move (or card),
- * and to anyone the state is still ON for, so a state stranded by a playbook swap can be put out.
+ * ends it, and nothing else on the sheet holds it. Shown to a character who has the move LEARNED (a move
+ * switched off on the sheet shows no glyph, as Battle Joy's does not) or the card, and to anyone the
+ * state is still ON for, so a state stranded by a playbook swap can be put out
+ * (fight-states.test.js "switched off").
  *
  * Kept free of Foundry globals apart from the one chat note, so the predicates test with plain objects.
  */
 
 import { SYSTEM_ID } from "../../system-id.js";
-import { ownsMoveNamed, ownsLearnedMoveNamed } from "./owns-move.js";
+import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { StonetopFlags } from "./StonetopFlags.js";
 import { postMoveNote } from "../../utils/chat.js";
 import { format } from "../../utils/i18n.js";
@@ -55,7 +57,7 @@ function hasStormMarkings(actor) {
 export const FIGHT_STATES = {
 	nerves: {
 		flag: "shakenNerves", stem: "stonetop-nerves", onClass: "is-shaken",
-		owns:    actor => ownsMoveNamed(actor, WE_HAPPY_FEW),
+		owns:    actor => ownsLearnedMoveNamed(actor, WE_HAPPY_FEW),
 		applies: () => true,
 	},
 	roiling: {
@@ -65,7 +67,7 @@ export const FIGHT_STATES = {
 	},
 	unseen: {
 		flag: "unseen", stem: "stonetop-unseen", onClass: "is-unseen",
-		owns:    actor => UNSEEN_MOVES.some(name => ownsMoveNamed(actor, name)),
+		owns:    actor => UNSEEN_MOVES.some(name => ownsLearnedMoveNamed(actor, name)),
 		applies: () => true,
 	},
 };

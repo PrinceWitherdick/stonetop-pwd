@@ -497,6 +497,16 @@ describe("Keep the Home-Fires Burning at the fire", () => {
 		expect(homeFiresHp(supper({}, { hearthCha: 2 }, { hearthAsh: false }))).toBe(0);
 	});
 
+	// "Anyone who Makes Camp with you": the followers fed at this fire too, frozen on their character's
+	// entry for camp-followers.js#campFollowerHeals. Not with the ash unticked, and not with nobody fed.
+	it("freezes the hearth's HP for a member's fed followers", () => {
+		const withHounds = campLedger([paying({ followers: 2, offer: { supplies: 4 } }), bram({ hearthCha: 2 })]);
+		expect(freezeCampPlan(withHounds)[0].followerHearth).toBe(2);
+		const unticked = campLedger([paying({ followers: 2, offer: { supplies: 4 }, hearthAsh: false }), bram({ hearthCha: 2 })]);
+		expect(freezeCampPlan(unticked)[0].followerHearth).toBeUndefined();
+		expect(freezeCampPlan(supper({}, { hearthCha: 2 }))[0].followerHearth).toBeUndefined();
+	});
+
 	it("gives everyone making camp the holder's CHA, the holder too, eating or not", () => {
 		const ledger = supper({}, { hearthCha: 2, choices: { eats: false } });
 		const [aeliana, bramEntry] = freezeCampPlan(ledger);

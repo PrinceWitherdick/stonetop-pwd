@@ -22,28 +22,37 @@
 // lifetime this wants.
 
 import {
-	ROUTE_CASE_WIDTH, ROUTE_DOT_SIZE,
-	routeFlagTouched, routeInk, sceneRoutePlan,
+	ROUTE_CASE_WIDTH, ROUTE_DOT_SIZE, ROUTE_HEAD_SIZE,
+	routeFlagTouched, routeInk, routeJourneyTouched, sceneRoutePlan,
 } from "../utils/scene-route.js";
-import { ROUTE_HEAD_EDGE as HEAD_EDGE, ROUTE_HEAD_POINTS as HEAD_POINTS } from "../utils/route-path.js";
+import { ROUTE_HEAD_EDGE as HEAD_EDGE, ROUTE_HEAD_POINTS as HEAD_POINTS, drawnLegs } from "../utils/route-path.js";
+import { walkPoints, walkSeconds, walkTrack } from "../dialogs/journey-walk.js";
+import { prefersReducedMotion } from "../utils/reduced-motion.js";
 import { warn } from "../utils/logger.js";
 
 /** The Graphics we painted, so a redraw can take the old one down first. */
 let _painted = null;
+/** The party mark, its own Graphics drawn about (0,0) so a walk only moves its position. */
+let _party = null;
+/** Legs travelled as the party mark was last drawn, so a progress update knows where to walk from. */
+let _partyReached = null;
+/** The running walk: `{ ticker, step }`, removed before any repaint and on teardown. */
+let _walk = null;
 
 /**
  * Paint the active Scene's route, or take down whatever is there when it has none.
  *
  * Safe to call at any time and from anywhere: a canvas that is not ready, a Scene with no flag and
- * a Scene whose flag cannot be drawn all end the same way, with nothing on the map.
+ * a Scene whose flag cannot be drawn all end the same way, with nothing on the map. `known` is the
+ * scene's plan when the caller has just built it, so it is not built twice.
  */
-export function refreshExpeditionRoute() {
+export function refreshExpeditionRoute(known) {
 	_erase();
 	const layer = globalThis.canvas?.ready ? globalThis.canvas.drawings : null;
 	if (!layer) return;
 
 	try {
-		const plan = sceneRoutePlan(globalThis.canvas.scene);
+		const plan = known === undefined ? sceneRoutePlan(globalThis.canvas.scene) : known;
 		if (!plan) return;
 		const g = new PIXI.Graphics();
 		g.eventMode = "none";
@@ -56,10 +65,16 @@ export function refreshExpeditionRoute() {
 		_drawCase(g, plan.legs, ink);
 		_drawDots(g, plan.dots, ink);
 		for (const head of plan.heads) _drawHead(g, head, ink);
+		const party = plan.party ? _drawParty(ink) : null;
 		// Added LAST, so a throw anywhere above leaves the map bare rather than leaving half a
 		// line on it. A map with no route is the ordinary state of nearly every scene; a map with
 		// the first two legs of one is a lie about where the party is going.
 		_painted = layer.addChild(g);
+		if (party) {
+			party.position.set(plan.party.x, plan.party.y);
+			_party = layer.addChild(party);
+		}
+		_partyReached = plan.reached;
 	} catch (err) {
 		// A route that cannot be drawn is a map with no line on it, which is the same thing the
 		// reader sees for every scene that never had one. Not worth taking the canvas down for.
@@ -68,10 +83,102 @@ export function refreshExpeditionRoute() {
 	}
 }
 
+/**
+ * The party's progress changed and the route did not: walk the mark from where it was drawn to
+ * where the Scene now says, along the route's own curve. Anything this cannot walk (no mark yet,
+ * no mark wanted, less motion asked for) repaints, which puts the mark straight at its stop.
+ */
+export function moveExpeditionParty() {
+	_stopWalk();
+	const scene = globalThis.canvas?.ready ? globalThis.canvas.scene : null;
+	const plan = scene ? sceneRoutePlan(scene) : null;
+	const from = _partyReached;
+	const ticker = globalThis.canvas?.app?.ticker;
+	if (!plan?.party || !_party || _party.destroyed || from === null || from === plan.reached
+		|| !ticker || prefersReducedMotion()) {
+		refreshExpeditionRoute(plan);
+		return false;
+	}
+	const points = partyWalkPoints(plan, from, plan.reached);
+	if (points.length < 2) {
+		refreshExpeditionRoute(plan);
+		return false;
+	}
+	const mark = _party;
+	const end = plan.party;
+	const track = walkTrack(points);
+	const ms = walkSeconds(from, plan.reached) * 1000;
+	const clock = () => globalThis.performance?.now?.() ?? Date.now();
+	const started = clock();
+	_partyReached = plan.reached;
+	const step = () => {
+		const t = (clock() - started) / ms;
+		if (t >= 1 || mark.destroyed) {
+			_stopWalk();
+			if (!mark.destroyed) mark.position.set(end.x, end.y);
+			return;
+		}
+		const at = track(t);
+		mark.position.set(at.left, at.top);
+	};
+	mark.position.set(points[0].left, points[0].top);
+	_walk = { ticker, step };
+	ticker.add(step);
+	return true;
+}
+
+/**
+ * The plan's legs from `from` to `to` route legs travelled, sampled through `walkPoints`, the same
+ * sampling the off-canvas maps walk. The points are scene pixels in `{ left, top }`, the shape
+ * `walkTrack` reads. [] when there is nothing to walk.
+ * Guarded by tests/hooks/expedition-route-overlay.test.js.
+ */
+export function partyWalkPoints(plan, from, to) {
+	const reach = plan?.reach;
+	if (!Array.isArray(reach) || !plan?.legs?.length) return [];
+	const asLeftTop = p => ({ left: p.x, top: p.y });
+	const legs = plan.legs.map(leg => ({ from: asLeftTop(leg.from), control: asLeftTop(leg.control), to: asLeftTop(leg.to) }));
+	return walkPoints(legs, drawnLegs(reach, from), drawnLegs(reach, to));
+}
+
+/** Stop a running walk, leaving the mark where it stands. */
+function _stopWalk() {
+	if (_walk) _walk.ticker?.remove?.(_walk.step);
+	_walk = null;
+}
+
 /** Take the painted line down, if there is one and it has not already been destroyed with a layer. */
 function _erase() {
 	if (_painted && !_painted.destroyed) _painted.destroy({ children: true });
+	if (_party && !_party.destroyed) _party.destroy({ children: true });
+	_forget();
+}
+
+/** Let go of every handle, without destroying anything (the canvas teardown destroys the layer). */
+function _forget() {
+	_stopWalk();
 	_painted = null;
+	_party = null;
+	_partyReached = null;
+}
+
+/**
+ * The party: a cream disc ringed in the route's ink with a bead at its centre, the size of the
+ * destination's head so it reads at table zoom. No glyph: PIXI has no icon font to draw it from.
+ */
+function _drawParty(ink) {
+	const g = new PIXI.Graphics();
+	g.eventMode = "none";
+	g.interactiveChildren = false;
+	g.lineStyle({ width: ROUTE_DOT_SIZE, color: ink.ink, alpha: 1 });
+	g.beginFill(ink.case, 1);
+	g.drawCircle(0, 0, ROUTE_HEAD_SIZE / 2);
+	g.endFill();
+	g.lineStyle(0);
+	g.beginFill(ink.ink, 1);
+	g.drawCircle(0, 0, ROUTE_DOT_SIZE / 2);
+	g.endFill();
+	return g;
 }
 
 /**
@@ -148,10 +255,12 @@ export function registerExpeditionRouteHooks() {
 	Hooks.on("canvasReady", () => refreshExpeditionRoute());
 	// The canvas is coming down; the layer takes our Graphics with it, so let go of the handle
 	// rather than reaching into a destroyed object on the next paint.
-	Hooks.on("canvasTearDown", () => { _painted = null; });
+	Hooks.on("canvasTearDown", _forget);
 	Hooks.on("updateScene", (scene, changes) => {
 		if (scene?.id !== globalThis.canvas?.scene?.id) return;
 		if (!routeFlagTouched(changes)) return;
-		refreshExpeditionRoute();
+		// Only the party's place changed: walk it there rather than repainting the whole line.
+		if (!routeJourneyTouched(changes) && _painted && !_painted.destroyed) moveExpeditionParty();
+		else refreshExpeditionRoute();
 	});
 }

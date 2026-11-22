@@ -88,8 +88,9 @@ const UNBOUNDED = new RegExp(
  * and are the most tickable list in the book; Dark Succor and Danu's Grasp are vetoed by "all 3
  * apply" and "both apply" while their lists are still choices. Only these four shapes stop being
  * a single choice, so only they are named here — and note how close the near misses run: "ask 1
- * of the following" (Under Your Skin, Read the Land, Warden of the Wild) IS one choice and keeps
- * its boxes, which is why the verb is part of each pattern rather than "the following" alone.
+ * of the following" (Under Your Skin, Read the Land) and "ask the GM 2 of the following" (Warden of
+ * the Wild) are each one choice and keep their boxes, which is why the verb is part of each pattern
+ * rather than "the following" alone.
  *
  * THE CAPITAL LETTER IS THE SIGNAL in the second pattern, and it is why that one is the only
  * case-sensitive test here. Stonetop capitalises the resources it lets you hold and spend —

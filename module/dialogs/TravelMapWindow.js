@@ -31,6 +31,7 @@ import { percentSpot, travelMap } from "../data/travel-times.js";
 // Not the bare global: v13 moved it under foundry.applications.handlebars and deprecated that,
 // and the shim picks whichever this core has.
 import { renderTemplate } from "../utils/foundry-compat.js";
+import { walkOnRedraw } from "./journey-walk.js";
 
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/travel-map.hbs";
 // The two halves of the chrome, re-rendered in place by `sync`. The same partials the route step
@@ -316,13 +317,21 @@ export class TravelMapWindow extends ImageZoomWindow {
 	 * would re-run `_fitToWindow` and throw away the corner the reader had zoomed into — which is
 	 * precisely the view they were using when they clicked. Called after a pick made in here, and
 	 * by the walkthrough after a pick made over there.
+	 *
+	 * Pins that came back unchanged are left in place: a second redraw of the same state (the
+	 * share's echo after a travel step) would otherwise swap out a party mark mid-walk. When only
+	 * the party's place moved, the mark walks there (journey-walk.js `walkOnRedraw`), whoever moved it.
 	 */
 	async sync() {
 		if (!this.rendered) return;
-		this._journey = await this._source?.build?.(this._tier) ?? null;
-		this.setOverlay(this._journey?.pins ?? "");
+		const journey = await this._source?.build?.(this._tier) ?? null;
+		const was = this._journey;
+		this._journey = journey;
+		const pins = journey?.pins ?? "";
+		if (pins !== (was?.pins ?? "")) this.setOverlay(pins);
 		const root = this.element?.[0];
-		if (!root || !this._journey) return;
+		if (!root || !journey) return;
+		walkOnRedraw(root, was?.map?.path, journey.map?.path);
 
 		// The chrome is re-rendered from the same partials the panel uses, so "what the controls
 		// say" cannot drift from "what the panel says" — then re-bound, since it is new markup.

@@ -133,6 +133,27 @@ describe("the followers a camp fed", () => {
 		expect(campFollowerRows(heals)[0].value).toBe("Half their max HP, rounded up, and Break Bread's 1d8 extra: Hound 2 → 11 (Break Bread +3); Porter 4 → 6.");
 	});
 
+	// Keep the Home-Fires Burning (p.123): "anyone who Makes Camp with you ... recovers (extra) HP equal to
+	// your CHA", so a follower healed at the fire too, after the night and the bread, capped; not the down.
+	it("adds the home fires' HP to every follower healed, after the bread, past the down", () => {
+		const cards = [
+			card({ ftype: "custom", slug: "down", name: "Down", hpMax: 6, hpCurrent: 0 }),
+			card({ ftype: "custom", slug: "porter", name: "Porter", hpMax: 10, hpCurrent: 1 }),
+			card({ ftype: "custom", slug: "scout", name: "Scout", hpMax: 6, hpCurrent: 2 }),
+		];
+		const heals = campFollowerHeals({ customFollowers: { down: {}, porter: {}, scout: {} } }, cards, { breads: [4, 2, 2], hearth: 2 });
+		// Porter 1 + 5 + 2 bread + 2 hearth = 10; Scout 2 + 3 caps at 6 after 1 of its bread, none left for the hearth.
+		expect(heals.healed).toEqual([{ name: "Porter", from: 1, to: 10, bread: 2, hearth: 2 }, { name: "Scout", from: 2, to: 6, bread: 1 }]);
+		expect(heals.down).toEqual(["Down"]);
+		expect(campFollowerRows(heals)[0].value).toBe("Half their max HP, rounded up, and Break Bread's 1d8 extra and the home fires' extra: Porter 1 → 10 (Break Bread +2) (home fires +2); Scout 2 → 6 (Break Bread +1).");
+	});
+
+	it("reads the hearth off the frozen plan entry", async () => {
+		const fol = card({ ftype: "custom", slug: "porter", name: "Porter", hpMax: 10, hpCurrent: 1 });
+		const share = await campFollowerShare({ flags: { [SYSTEM_ID]: { customFollowers: { porter: {} } } } }, { followersFed: 1, followerHearth: 3 }, { partyMouths: 1, followers: [fol] });
+		expect(share.rows[0].value).toContain("Porter 1 → 9 (home fires +3)");
+	});
+
 	it("deals Break Bread's dice to a group member by member", () => {
 		const flags = { customFollowers: { band: { isGroup: true, size: 2, memberHp: [1, 1] } } };
 		const { healed } = campFollowerHeals(flags, [card({ ftype: "custom", slug: "band", name: "The Band", groupMemberHp: 9, hpMax: 9 })], { breads: [2, 4] });

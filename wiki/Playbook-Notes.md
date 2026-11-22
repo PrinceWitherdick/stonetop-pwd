@@ -16,15 +16,15 @@ Each playbook has moves the system tracks for you, usually as a small glyph besi
 
 ## The Heavy
 
-- **Battle Joy.** Click the glyph when you spill blood and lose yourself in battle: you ignore fear, pain, mind control and debilities (the sheet notes that your debilities are being ignored). When the action stops, click it again: **That was a rush: regain 1d4 HP**, or mark a debility.
+- **Battle Joy.** Click the glyph when you spill blood and lose yourself in battle: you ignore fear, pain, mind control and debilities (the sheet notes that your debilities are being ignored). When the action stops, click it again (the end of a fight offers it too) and roll +CON: on a 10+ regain 1d4 HP, on a 7-9 you're winded, and on a 6- mark a debility (no XP for that miss). Dropping to 0 HP ends it with no roll, unless you have Unstoppable.
 - **Roiling with anger** (Storm Markings): +1 damage until you calm down. Click when you do.
-- **Hard to Kill**: at Death's Door you can choose **Roll +nothing**, and trade a debility for 1 HP. **Unstoppable** circles change the roll and clear when you survive. See [Death and Beyond](Death-and-Beyond).
+- **Hard to Kill**: at Death's Door you can roll **+CON** instead of +nothing (or **+CHA** if you also have Laugh at Danger), and on a 7-9 you can mark a debility to regain 1 HP. **Unstoppable** circles change the roll and clear when you survive. See [Death and Beyond](Death-and-Beyond).
 
 ## The Judge
 
 - **The Condemned and the Sworn.** A scales glyph counts those bearing your brand and those held to an oath; click it for the roster. A branded character's sheet carries the tag. Mark an oath broken for advantage on rolls against them (Binding Arbitration offers it on the pre-roll window). **Dismiss the brand** and **Release from their oath** end them.
 - **Castigate** asks who you Censured.
-- **Diligence** (Chronicler of Stonetop), **Sanction** (Commune with Aratis) and **Many Hands** add +1 to other players' rolls from a button on their roll card. See [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards#help-from-your-friends).
+- **+1 to a roll just made**, from a button on the roll card: **Diligence** (Chronicler of Stonetop) on your own roll, another player's, or a steading's roll; **Many Hands** on another player's roll, free; **Sanction** (Commune with Aratis) on your own roll only. See [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards#help-from-your-friends).
 - **A Bundle of Sticks Unbroken** shows up in Struggle as One.
 
 ## The Lightbearer
@@ -39,7 +39,7 @@ Each playbook has moves the system tracks for you, usually as a small glyph besi
 - **Crew** follower card with members, shared HP and Loyalty. See [Followers](Followers#crews-and-groups).
 - **Personal symbol**: **Display it: crew +1 Loyalty** (max 3).
 - **We Happy Few.** **Inspire who heard the speech** hands out Inspiration; each ally's **Inspiration** chip spends it to act fearlessly, for **+1d6** damage, or to **Keep 1 HP** instead of going down. **Shaken nerves** gives disadvantage until you share your doubts; click to steady them.
-- **Prepare a Welcome**: when going into battle, **Lie in wait** holds Surprise.
+- **Prepare a Welcome**: when you fortify a position and lie in wait, **Lie in wait** holds 1 Surprise if you're rushed or 2 if you can take your time. Spend one to reveal a ploy and roll the move.
 
 ## The Ranger
 
@@ -60,7 +60,7 @@ Each playbook has moves the system tracks for you, usually as a small glyph besi
 - **Potential for Greatness** choices (+1 stat, +4 max HP, d8 damage die) are recorded with the level you took them.
 - **Up With People**: **Converse** with someone to hold Rapport; their **Rapport** chip spends it to ask a question.
 - **Voice of Experience**: **Ask it** ("What is about to happen?").
-- **Destined** background: a start-of-session **Roll +Omens** card, and Death's Door's 6- counts as a 7-9 until your destiny is fulfilled. **Driven**: you can always Burn Brightly.
+- **Destined** background: a start-of-session **Roll +Omens** card, and on Death's Door a 6- counts as a 7-9 and a 7-9 as a 10+ until your destiny is fulfilled. **Driven**: you can always Burn Brightly.
 
 ## After death
 

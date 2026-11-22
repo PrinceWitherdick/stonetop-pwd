@@ -41,11 +41,28 @@ The poster-map scenes come from [Import Book Art](Import-Book-Art). If you made 
 
 The **Running the journey** step has the tools for each leg:
 
+- **The road** panel, under the set-out line at the top, lists the stops, with a marker for the party. **Travel on to (the next stop)** moves the party one leg on, and the marker walks to it; **Back a leg** undoes a click too many. After a leg it offers **Spend (days) of supplies...**, which opens **Days pass on the road** with that leg's days filled in. The panel never stops you: with no route plotted it says so and offers **Plot the route**, and with the trip not marked as set out it says that too.
+- The window's banner shows where the trip stands: **Planning**, **On the road, leg 2 of 3**, **Arrived** or **Home**.
+- **Start a fight...** opens Start a fight with every character on the map already ticked. It is only there while the **Fight** tab is on.
 - **Roll the Die of Fate**, with advantage or disadvantage, and its table for perilous legs.
 - **Call for Struggle as One** when the whole party faces the same danger. The window says it's **Part of a journey**. See [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves).
 - **Days pass on the road...** for days you gloss over: it spends the supplies each traveller eats (1 use a head a day; a mess kit feeds four). You can adjust each person before it's spent. A Ghost or Revenant needs no food, so their **Eats** box starts unticked with a line saying why; their followers still eat. So does someone holding a length of prayer beads whose back is realised, while they hold at least 1 Preparation. Tick the box to count them anyway.
 
 Players run Make Camp themselves in its shared window.
+
+### What the players see
+
+Each **Travel on** moves the party on every map that shows the route:
+
+- On the GM's map windows, and in the players' route window once you've used **Show players**, the part of the way already travelled is drawn solid and a walking figure marks the party. The players' window also says where they are in words ("Leg 2 of 3: next stop..."), so a screen reader hears it.
+- On a scene where you used **Draw it on the scene**, a round marker walks the ribbon.
+- A route shared in the middle of a trip shows the party where it already is.
+
+### Table moments
+
+A short banner crosses every screen at the big beats of a trip: **The expedition sets out** and **Home again** when you mark either end, and **The party arrives** with **Reached (stop)** at each stop of a route the players can see. A trip you haven't shown the players moves only in your own window, and its stop names stay yours. **A fight breaks out** plays for everyone who can see a fighter when a fight starts, with **On the road to (stop)** under it during a shared journey.
+
+The banner lasts a couple of seconds, lets clicks through to whatever is under it, and is read out by screen readers. Players with **Reduce Motion** on (or their computer set to reduce motion) see it without movement. The world setting **Table moments** turns it off for everyone.
 
 ## Setting out and coming home
 

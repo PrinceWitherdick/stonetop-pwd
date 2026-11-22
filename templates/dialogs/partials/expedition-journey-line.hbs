@@ -15,6 +15,9 @@
 <svg class="stonetop-journey-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
   <path class="stonetop-journey-path-case" d="{{path.d}}" vector-effect="non-scaling-stroke"></path>
   <path class="stonetop-journey-path-ink" d="{{path.d}}" vector-effect="non-scaling-stroke"></path>
+  {{#if path.walked.d}}
+  <path class="stonetop-journey-path-walked" d="{{path.walked.d}}" vector-effect="non-scaling-stroke"></path>
+  {{/if}}
 </svg>
 {{/if}}
 
@@ -36,3 +39,11 @@
   <path d="{{../path.headD}}"></path>
 </svg>
 {{/each}}
+
+{{!-- Where the party is, once the GM has them travelling (journey-map-layer.js `reached`): a solid
+  run over the legs behind them and a mark where they stand. Hidden from a screen reader, since the
+  words beside the map say the same (the road panel, the players' "where" line).
+  dialogs/journey-walk.js `walkPartyMarker` moves the mark along the line after a step. --}}
+{{#if path.walked}}
+<span class="stonetop-journey-party" style="left:{{path.walked.left}}%;top:{{path.walked.top}}%" aria-hidden="true"><i class="fas fa-person-hiking" aria-hidden="true"></i></span>
+{{/if}}
