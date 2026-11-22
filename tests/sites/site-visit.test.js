@@ -78,7 +78,7 @@ describe("the button", () => {
 		expect(await draw("threat")).toContain('class="threat-resolve"');
 
 		// ...and no call site switches it on by hand any more.
-		expect(readRepo("templates/actor/partials/gm-toolkit-sites-section.hbs")).not.toContain("visit=");
+		expect(readRepo("templates/actor/partials/gm-toolkit-tab-sites.hbs")).not.toContain("visit=");
 		expect(readRepo("templates/actor/partials/gm-prep-card-tools.hbs")).not.toContain("{{#if visit}}");
 	});
 

@@ -62,7 +62,6 @@ const EXEMPT = {
 	".stonetop-rel-heart-badge-value": "numeral in a fixed whole-pixel heart",
 	".stonetop-follower-portrait-pip, .stonetop-header-pip": "icon pip",
 	".stonetop-header-pip": "icon pip",
-	".stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight > i": "icon",
 	".stonetop-catalog-filter > i": "icon (whole-pixel, chip-centring)",
 	".stonetop-catalog-badge > i": "icon (whole-pixel, chip-centring)",
 	".stonetop-relmap-heft-mark": "glyph picture of a dial",

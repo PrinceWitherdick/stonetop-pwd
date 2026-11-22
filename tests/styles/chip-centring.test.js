@@ -87,6 +87,9 @@ describe("text-only chips trim themselves", () => {
 		// three faces at UI roots 16 and 20).
 		".stonetop-expedition-dialog .stonetop-exp-home-reset-btn",
 		".stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn",
+		// The GM Toolkit's Prep tab: the switcher's count pills and the Completed fold's count.
+		".stonetop-gm-prep-view-count",
+		".stonetop-gm-fold-eyebrow > .stonetop-section-note",
 	];
 
 	it.each(SELF)("%s trims and pads with both tokens", sel => {
@@ -186,6 +189,9 @@ describe("chips with an icon or a count trim their label element", () => {
 		".stonetop-relmap-personbar-italic > span",
 		".stonetop-relmap-chipform-btn > span",
 		".pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item .stonetop-tab-label",
+		// The Prep switcher's view names beside their glyphs, and Deploy / Deploy & fight beside theirs.
+		".stonetop-gm-prep-view-label",
+		".stonetop-gm-encounter-deploy-label",
 	];
 
 	it.each(LABELS)("%s trims and pads with both tokens", sel => {
@@ -247,6 +253,17 @@ describe("chips with an icon or a count trim their label element", () => {
 		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-frame-save", "button", 1],
 		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-frame-suggest", "button", 1],
 		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-pb-emblem-clear", "label", 1],
+		// The GM Toolkit's Prep cards: the head's tally pills and On the road, and the foot's Mark
+		// complete and Run; and each view's New button, on its pane bar and in its empty state.
+		["templates/actor/partials/gm-encounter-card.hbs", "stonetop-gm-encounter-tally", "span", 1],
+		["templates/actor/partials/gm-encounter-card.hbs", "stonetop-gm-encounter-used", "button", 1],
+		["templates/actor/partials/gm-expedition-card.hbs", "stonetop-gm-encounter-tally", "span", 1],
+		["templates/actor/partials/gm-expedition-card.hbs", "stonetop-gm-expedition-road", "span", 1],
+		["templates/actor/partials/gm-expedition-card.hbs", "stonetop-gm-encounter-used", "button", 1],
+		["templates/actor/partials/gm-expedition-card.hbs", "stonetop-gm-expedition-run", "button", 1],
+		["templates/actor/partials/gm-prep-pane-bar.hbs", "stonetop-gm-pane-add", "button", 1],
+		["templates/actor/partials/gm-prep-empty.hbs", "stonetop-gm-pane-add", "button", 1],
+		["templates/actor/partials/gm-toolkit-tab-expeditions.hbs", "stonetop-gm-struggle-call", "button", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);

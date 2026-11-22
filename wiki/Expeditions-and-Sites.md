@@ -4,7 +4,7 @@ Leaving town is where Stonetop's adventures happen. The **Run an Expedition** wa
 
 ## Run an Expedition
 
-Open it from the **Run an Expedition** macro (hotbar slot 2), or with **Run it** on an expedition prepared on the GM Toolkit's **Expeditions** tab. It's a stepped window with the steps listed on the left and the **Exploration moves** (the GM's moves for the road) always on the right:
+Open it from the **Run an Expedition** macro (hotbar slot 2), or with **Run the expedition** on an expedition prepared in the GM Toolkit (**Prep** tab, **Expeditions**). It's a stepped window with the steps listed on the left and the **Exploration moves** (the GM's moves for the road) always on the right:
 
 | Step | What it does |
 |---|---|
@@ -70,9 +70,9 @@ The last step asks the questions for the homecoming, runs Return Triumphant inli
 
 ## Sites
 
-Sites are the places the party explores: a barrow, a ruined tower, a cave. They live at the foot of the GM Toolkit's **Expeditions** tab.
+Sites are the places the party explores: a barrow, a ruined tower, a cave. They live in the GM Toolkit: open the **Prep** tab and choose **Sites** at the top.
 
-- **Create a site** walks through Book I's process for creating sites in nine steps, with a list on the left to jump between them.
+- **New site** walks through Book I's process for creating sites in nine steps, with a list on the left to jump between them.
 - You don't have to finish it in one go. **Save for now**, beside **Next** on every step, saves the site as it stands; its card's pencil reopens the walkthrough with your answers in place. Closing the window with unsaved answers asks first: **Save my changes** or **Discard what I wrote**; close the question to keep writing.
 - Each site card has its tables (click a d20 table to roll it), a **Running it** reference (light sources, tags and marching order), and edit and delete buttons.
 - **Mark visited** asks **Who went to (site)?** and writes the visit onto their timelines and Stonetop's, where the players can read it.
@@ -87,7 +87,7 @@ Sites are the places the party explores: a barrow, a ruined tower, a cave. They 
 
 ## Preparing expeditions ahead of time
 
-The GM Toolkit's **Expeditions** tab holds prepared expeditions: bundles of the actors, journals, scenes and notes you'll want on the road, like the Encounters tab. **Run it** starts the walkthrough named after the bundle. See [The GM Toolkit](The-GM-Toolkit).
+The GM Toolkit's **Prep** tab holds prepared expeditions under **Expeditions**: bundles of the actors, journals, scenes and notes you'll want on the road, like its encounters. **Run the expedition** at the foot of a card starts the walkthrough named after the bundle, and the card says **On the road** until the trip is over. See [The GM Toolkit](The-GM-Toolkit#expeditions).
 
 ## See also
 - [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves)

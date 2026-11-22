@@ -39,6 +39,10 @@ import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
+import {
+	PREP_TAB_GROUP, PREP_INITIAL_VIEW, PREP_SWITCHER_SELECTOR, PREP_PANES_SELECTOR, PREP_RAIL_TAB, PREP_VIEWS,
+	prepViewsContext, syncPrepSwitcher, wirePrepSwitcherKeys, wirePrepIntros,
+} from "./gm-prep-views.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { localizedRunningReference } from "../../gm-toolkit/gm-agenda-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
@@ -101,7 +105,8 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// the only control it ended up locking was the trash while everything around it needed
 	// exempting by name — see the note at the head of gm-prep-tabs.js.
 	//
-	// withGmPrepTabs: the Threats & Dangers and Sites tabs, moved here from the steading sheet.
+	// withGmPrepTabs: the Threats & Dangers tab and the Prep tab's Sites view, both moved here
+	// from the steading sheet.
 	// Its file header explains the one thing that must not drift: the STORAGE stayed on the
 	// steading, so those tabs resolve it rather than using `this.actor`.
 	//
@@ -109,10 +114,14 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// IS the toolkit's own (`actor.system.wonders`), which is the opposite of the line above and
 	// stated here so the two are never confused for one another.
 	//
-	// withGmEncountersTab / withGmExpeditionsTab: the two gathered-bundle tabs. Both are thin
-	// configs over one engine (gm-bundle-tab.js) which the sheet HOLDS rather than is mixed with,
-	// because a mixin can only be applied to a class once. Each mixin adds only its own field and
-	// the three entry points below; neither can shadow the other's.
+	// withGmEncountersTab / withGmExpeditionsTab: the two gathered-bundle tabs, which are two of
+	// the Prep tab's three views now rather than rail tabs of their own (gm-prep-views.js says
+	// why). Each still owns its own pane, `.tab.encounters` / `.tab.expeditions`, and that pane is
+	// still the scope of every listener and drop zone it binds — which is why folding the two
+	// under one rail button cost the engine nothing. Both are thin configs over one engine
+	// (gm-bundle-tab.js) which the sheet HOLDS rather than is mixed with, because a mixin can only
+	// be applied to a class once. Each mixin adds only its own field and the three entry points
+	// below; neither can shadow the other's.
 	//
 	// withPreferencesTab: the Preferences tab at the foot of the rail, the same one the
 	// character sheet carries — same partial, same descriptor module, same client settings. A
@@ -187,7 +196,22 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				// delete what just landed. Empty array, not a no-op override, so `DragDrop#bind`
 				// never binds at all.
 				dragDrop:  [],
-				tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "moves" }],
+				// TWO GROUPS. The rail's, first and on index 0 because everything that asks "which
+				// tab" reads `_tabs[0]`; and the Prep tab's view switcher (Encounters / Expeditions /
+				// Sites), whose panes sit INSIDE the rail's Prep panel. Core's controller skips a
+				// panel whose `data-group` is not its own, so the two never toggle each other's
+				// panes. Declared here rather than handled by hand because AppV1 builds each
+				// controller once and re-binds it on every render, and a controller keeps its
+				// `active` across re-binds — so the chosen view survives every repaint for the life
+				// of the sheet with no state of ours. gm-prep-views.js says why the order is fixed.
+				//
+				// The switcher's nav must NOT carry `sheet-tabs`: the rail's group finds its nav by
+				// that class with `querySelector`, and only the rail being first in the form keeps
+				// a second match from mattering — a fragile thing to lean on twice.
+				tabs: [
+					{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "moves" },
+					{ navSelector: PREP_SWITCHER_SELECTOR, contentSelector: PREP_PANES_SELECTOR, initial: PREP_INITIAL_VIEW },
+				],
 				// THE WHOLE SHEET is one scrollport on this frame, and the container is the element
 				// that scrolls (stonetop.css) — header banner, tab body and all, so the banner
 				// scrolls off the top the way the window title above it never can. Every other
@@ -205,8 +229,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				// and then silently restores nothing. The container is the outermost element that
 				// is still inside it.
 				//
-				// One scrollport means one offset shared by all six tabs; see the CSS for why
-				// that trade is the right one here and the wrong one on the character sheet.
+				// One scrollport means one offset shared by every tab, and by the Prep tab's three
+				// views as well; see the CSS for why that trade is the right one here and the wrong
+				// one on the character sheet.
 				scrollY:   [".stonetop-gm-toolkit-container"],
 			});
 		}
@@ -378,7 +403,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Core Loop tab's Import Book Art button asks, because the macro browses and
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
-			// The Expeditions tab's button onto Struggle as One: "Call for" with nothing under way,
+			// The Expeditions view's button onto Struggle as One: "Call for" with nothing under way,
 			// "Open" while one is. The struggle is kept on THIS actor (module/struggle/), so every
 			// change to it repaints this sheet and the button's words never go stale.
 			context.stonetop.struggle = context.stonetop.isGM ? gmStruggleCall() : null;
@@ -437,6 +462,20 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// out of the gather above.
 			this._addGmWonderContext(context);
 
+			// The Prep tab's view switcher, AFTER the gather because its counts are read off what
+			// the three builders just put on the context — live encounters, live expeditions,
+			// sites — so a pill can never disagree with the pane under it. Every structural write
+			// on those panes re-renders, which is what keeps the numbers current.
+			//
+			// The view comes from core's controller for the switcher's group, which outlives every
+			// render; this only stamps the markup to match it, so the first paint already shows
+			// the right pane and `aria-selected` is right before core binds anything.
+			//
+			// `_prepIntroOpen` is which views' pane-bar "?" the GM has opened, kept on the sheet so a
+			// repaint draws the full intro the way it was left (gm-prep-views.js#wirePrepIntros).
+			this._prepIntroOpen ??= new Set();
+			context.stonetop.prep = prepViewsContext(context.stonetop, this._tabs?.[PREP_TAB_GROUP]?.active, this.id, this._prepIntroOpen);
+
 			return context;
 		}
 
@@ -476,10 +515,49 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Expeditions tab, delegated on the same root. Both bind to it and both print the
 			// same class names, so each gates every handler on its own panel (`owns`).
 			this._activateGmExpeditionsListeners(html[0]);
+			// The Prep tab's view switcher: the arrow keys its tablist owes a keyboard user. The
+			// click is core's (the switcher is a tab group of its own; see `tabs` above), and so
+			// is the class flip; this only moves focus and asks core's controller to follow it.
+			wirePrepSwitcherKeys(html[0], (view) => this._tabs?.[PREP_TAB_GROUP]?.activate(view, { triggerCallback: true }));
+			// Each view's pane-bar "?", which shows its full intro in place (no render).
+			this._prepIntroOpen ??= new Set();
+			wirePrepIntros(html[0], this._prepIntroOpen);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).
 			this._wireToolkitButtons(html[0]);
+		}
+
+		/**
+		 * A tab changed without a render — the rail's, or the Prep tab's view switcher.
+		 *
+		 * Core's controller has already flipped the `active` classes by the time this runs; what it
+		 * never touches is ARIA, so the switcher's `aria-selected` and roving `tabindex` are put
+		 * back here (gm-prep-views.js). Matched by IDENTITY against the switcher's controller,
+		 * never by the name it switched to: "encounters" was a rail tab once, and the rail's own
+		 * controller can still be handed that name. The window restore runs this too
+		 * (window-restore.js#_applyTabs passes `triggerCallback`), so a reopened sheet's switcher
+		 * says which view it is on.
+		 *
+		 * Nothing to do for the Sites pane's masonry. A grid in a hidden pane measures zero and
+		 * leaves its packer unset, and the pane being shown is a 0-to-real-width resize, which is
+		 * exactly what the packer's ResizeObserver waits for (gm-prep-masonry.js).
+		 */
+		_onChangeTab(event, tabs, active) {
+			super._onChangeTab?.(event, tabs, active);
+			if (tabs && tabs === this._tabs?.[PREP_TAB_GROUP]) {
+				syncPrepSwitcher(this.element?.[0]?.querySelector(PREP_SWITCHER_SELECTOR), active);
+			}
+		}
+
+		/**
+		 * A window saved while Encounters and Expeditions were rail tabs of their own: reopen it on
+		 * the Prep tab, on that view, rather than on Moves with the GM left to find the new button.
+		 * Read by the window restore (window-restore.js#_applyTabs) before it activates anything.
+		 */
+		_mapSavedTabs(tabs) {
+			const [rail] = tabs;
+			return PREP_VIEWS.some(view => view.key === rail) ? [PREP_RAIL_TAB, rail] : tabs;
 		}
 
 		/**

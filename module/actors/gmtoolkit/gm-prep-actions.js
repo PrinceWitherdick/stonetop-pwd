@@ -42,5 +42,5 @@ export async function createSiteFlow(steading, wizardOptions = {}) {
  * @param {JournalEntryPage} page
  */
 export function announceSiteAdded(page) {
-	ui.notifications?.info?.(`Added site: ${page.name}. It's at the foot of the GM Toolkit's Expeditions tab.`);
+	ui.notifications?.info?.(`Added site: ${page.name}. It's under Sites, on the GM Toolkit's Prep tab.`);
 }

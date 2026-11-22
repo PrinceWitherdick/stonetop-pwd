@@ -22,9 +22,17 @@ const ICON_DIR = path.join(ROOT, "assets/icons/tabs");
 const CSS = fs.readFileSync(path.join(ROOT, "styles/stonetop.css"), "utf8");
 const ATTRIBUTION = fs.readFileSync(path.join(ICON_DIR, "ATTRIBUTION.md"), "utf8");
 
-/** Every `data-tab` -> icon filename the rail declares. */
-const DECLARED = [...CSS.matchAll(
-	/\.stonetop-tab-rail \.item\[data-tab="([\w-]+)"\]\s*\{\s*--st-tab-icon:\s*url\('([^']+)'\)/g)
+/**
+ * Every `data-tab` -> icon filename the rail declares, and the GM Toolkit Prep tab's view switcher
+ * beside it. The switcher's three segments wear files from this same folder in the same mask form
+ * (`--st-prep-icon` on `.stonetop-gm-prep-view[data-tab]`), so every way a rail glyph breaks
+ * silently breaks a segment's glyph the same way, and the checks below have to see both tables.
+ */
+const DECLARED = [
+	...CSS.matchAll(
+		/\.stonetop-tab-rail \.item\[data-tab="([\w-]+)"\]\s*\{\s*--st-tab-icon:\s*url\('([^']+)'\)/g),
+	...CSS.matchAll(
+		/\.stonetop-gm-prep-view\[data-tab="([\w-]+)"\]\s*\{\s*--st-prep-icon:\s*url\('([^']+)'\)/g),
 ].map(m => ({ tab: m[1], url: m[2], file: path.basename(m[2]) }));
 
 const ON_DISK = fs.readdirSync(ICON_DIR).filter(f => f.endsWith(".svg"));
@@ -45,6 +53,10 @@ const SOURCE = (function walk(dir, out = []) {
 describe("tab rail icons", () => {
 	it("finds the declarations at all (guards the scan itself)", () => {
 		expect(DECLARED.length).toBeGreaterThan(10);
+		// And the switcher's half of it, all three views: a regex that stopped matching that
+		// table would leave the checks below silently asking about the rail alone.
+		expect(DECLARED.filter(d => ["encounters", "expeditions", "sites"].includes(d.tab)).map(d => d.file))
+			.toEqual(["prep-stack.svg", "direction-signs.svg", "site-mound.svg"]);
 	});
 
 	// A url() that resolves to nothing is an empty mask, which hides the glyph completely and
@@ -91,10 +103,12 @@ describe("tab rail icons", () => {
 	// outlives the reason it was added.
 	//
 	// THE RAIL IS NOT THE ONLY READER, which is why this scans the source rather than only the
-	// icon table. `site-mound.svg` is the case that proved it: Sites stopped being a tab when it
-	// was folded into the Expeditions panel, so its row left the table — but the same file is
-	// still the map-pin icon a placed site wears (module/journal/gm-prep-page.js). Asking only
-	// the rail would have called it dead and deleted the pin's glyph.
+	// icon table. `site-mound.svg` is the case that proved it: when Sites stopped being a tab its
+	// row left the table — but the same file is still the map-pin icon a placed site wears
+	// (module/journal/gm-prep-page.js), and asking only the rail would have called it dead and
+	// deleted the pin's glyph. `direction-signs.svg` is the same lesson the other way: it left the
+	// rail when Expeditions became a view of the Prep tab, and is kept alive by the switcher's
+	// table, which DECLARED reads too.
 	it("ships no icon nothing points at", () => {
 		const used = new Set(DECLARED.map(d => d.file));
 		const orphans = ON_DISK.filter(f => !used.has(f) && !SOURCE.includes(`tabs/${f}`));

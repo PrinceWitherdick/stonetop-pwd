@@ -24,7 +24,7 @@ vi.mock("../../../module/book2-art/travel-map-art.js", () => ({
 	resolveTravelMap:   () => Promise.resolve(null),
 }));
 
-const { withGmExpeditionsTab, normalizeExpedition, EXPEDITIONS_TAB } =
+const { withGmExpeditionsTab, normalizeExpedition, markTripsOnTheRoad, EXPEDITIONS_TAB } =
 	await import("../../../module/actors/gmtoolkit/gm-expeditions-tab.js");
 const { ENCOUNTERS_TAB, withGmEncountersTab } =
 	await import("../../../module/actors/gmtoolkit/gm-encounters-tab.js");
@@ -33,6 +33,7 @@ const { ExpeditionDialog } = await import("../../../module/dialogs/ExpeditionDia
 const CSS         = readCss();
 const STONETOP_JS = read("stonetop.js");
 const SHEET_HBS   = read("templates/actor/gm-toolkit.hbs");
+const PREP_HBS    = read("templates/actor/partials/gm-toolkit-tab-prep.hbs");
 const SHEET_JS    = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
 const MODEL_JS    = read("module/data-models/GmToolkitModel.js");
 const FIELDS_JS   = read("module/data-models/fields.js");
@@ -70,30 +71,38 @@ beforeEach(() => {
 /* ══ wiring ═══════════════════════════════════════════════════════════════════ */
 
 describe("the Expeditions tab: wiring", () => {
-	it("is a panel of the toolkit's tab group, registered as a partial", () => {
-		expect(TAB_HBS).toMatch(/<div class="tab expeditions\b[^"]*"[^>]*data-group="primary"/);
+	// A pane of the PREP tab's group, which its switcher shows and hides. `tab expeditions` stays
+	// its class because `.tab.expeditions` is the engine's `panel`: the scope of every listener
+	// and the drop zone, and what keeps a drop here from being claimed by the Encounters engine.
+	it("is a pane of the Prep tab's view group, registered as a partial", () => {
+		expect(TAB_HBS).toMatch(/<div class="tab expeditions\b[^"]*"[^>]*data-group="prep"/);
 		expect(TAB_HBS).toContain('data-tab="expeditions"');
+		expect(TAB_HBS).not.toMatch(/data-group="primary"/);
+		expect(TAB_HBS).toMatch(/role="tabpanel"/);
+		expect(EXPEDITIONS_TAB.panel).toBe(".tab.expeditions");
 		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-tab-expeditions"');
 		expect(STONETOP_JS).toContain('"stonetop.gm-expedition-card"');
 		expect(repoFileExists("templates/actor/partials/gm-toolkit-tab-expeditions.hbs")).toBe(true);
 		expect(repoFileExists("templates/actor/partials/gm-expedition-card.hbs")).toBe(true);
 	});
 
-	// The rail's order is the source order of these partial calls, and the body's is a second list
-	// that has to agree: a mismatch is invisible, because the panels are shown one at a time.
-	it("sits directly after Encounters, in the rail and in the body", () => {
-		// The PANEL order. The rail carries one more entry after these eight — the shared
-		// Preferences tab, whose panel comes from "stonetop.tab-preferences" rather than from a
-		// gm-toolkit-tab partial, so it is absent from the body list this regex builds.
-		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
+	// The Prep tab's switcher order is the source order of its pane partials and the order of
+	// PREP_VIEWS; the rail carries Prep, and no button of this tab's own. Each mismatch is
+	// invisible on its own, because the panes are shown one at a time.
+	it("sits directly after Encounters inside the Prep tab, with no rail button of its own", () => {
+		const order = ["homefront", "moves", "threats", "prep", "wonder", "loop"];
 		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual([...order, "preferences"]);
 		expect([...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1])).toEqual(order);
+		expect([...strip(PREP_HBS).matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1]))
+			.toEqual(["encounters", "expeditions", "sites"]);
 	});
 
 	// A data-tab with no row in the icon table gets a mask with no image, which resolves to FULL
-	// coverage: a solid block where the glyph belongs, and nothing logged.
-	it("earns a rail glyph from the icon table, and the file it names exists", () => {
-		expect(CSS).toMatch(/\.stonetop-tab-rail \.item\[data-tab="expeditions"\]\s*\{\s*--st-tab-icon:/);
+	// coverage: a solid block where the glyph belongs, and nothing logged. The signpost moved from
+	// the rail's table to the switcher's with the tab, and the rail row went with it.
+	it("earns its signpost glyph on the switcher segment, and the file it names exists", () => {
+		expect(CSS).toMatch(/\.stonetop-gm-prep-view\[data-tab="expeditions"\]\s*\{\s*--st-prep-icon:\s*url\('[^']*direction-signs\.svg'\)/);
+		expect(CSS).not.toMatch(/\.stonetop-tab-rail \.item\[data-tab="expeditions"\]/);
 		expect(repoFileExists("assets/icons/tabs/direction-signs.svg")).toBe(true);
 	});
 
@@ -120,18 +129,17 @@ describe("the Expeditions tab: wiring", () => {
 		expect(game.i18n.localize("stonetop.gmToolkit.tabs.expeditions")).toBe("Expeditions");
 	});
 
-	// SITES LIVE HERE NOW, folded in from a tab of their own: a site is what a trip is for, and a
-	// rail-click between the two meant the sites for tonight's journey could never be read beside
-	// the journey. The storage did NOT move with it — a site is still a JournalEntryPage on the
+	// SITES ARE A VIEW OF THEIR OWN NOW, the third segment of the switcher, having sat at the foot
+	// of this pane under a full card list — the one place a GM had to scroll past every trip to
+	// reach. The storage did NOT move with them — a site is still a JournalEntryPage on the
 	// steading (gm-prep-tabs.js says at length what happens when that is forgotten) — and every
-	// listener it needs is scoped to `.steading-sites`, not to a panel, which is why the move cost
-	// that mixin nothing.
-	it("carries the Sites section at its foot, outside the card list", () => {
-		expect(TAB_MARKUP).toContain('{{> "stonetop.gm-toolkit-sites-section"}}');
-		// AFTER the section holding the expedition cards, not inside it: that section is what the
-		// tab's pencil locks and what spaces the cards, and sites are gated by neither.
-		expect(TAB_MARKUP.indexOf("gm-toolkit-sites-section"))
-			.toBeGreaterThan(TAB_MARKUP.lastIndexOf("</section>"));
+	// listener they need is scoped to `.steading-sites`, not to a panel, which is why the move
+	// cost that mixin nothing.
+	it("no longer carries the Sites section; Sites is the Prep tab's third view", () => {
+		expect(TAB_MARKUP).not.toMatch(/gm-toolkit-(sites-section|tab-sites)/);
+		expect(TAB_MARKUP).not.toContain("steading-sites");
+		expect(strip(PREP_HBS).indexOf('"stonetop.gm-toolkit-tab-sites"'))
+			.toBeGreaterThan(strip(PREP_HBS).indexOf('"stonetop.gm-toolkit-tab-expeditions"'));
 		expect(read("module/actors/gmtoolkit/gm-prep-tabs.js")).toContain('scope: ".steading-sites"');
 	});
 
@@ -139,8 +147,8 @@ describe("the Expeditions tab: wiring", () => {
 	// section's containing block by joining the shared `:is()`. Left out, the pencil floats against
 	// whatever positioned ancestor is next up the frame, with nothing logged.
 	it("is the positioning context its corner pencil floats in", () => {
-		expect(CSS).toMatch(/\.sheet-body > :is\([^)]*\.tab\.expeditions\)\s*\{\s*position: relative/);
-		expect(TAB_HBS).toContain('class="tab expeditions steading-edit-section"');
+		expect(CSS).toMatch(/\.stonetop-gm-prep-panes > :is\([^)]*\.tab\.expeditions\)\s*\{\s*position: relative/);
+		expect(TAB_HBS).toMatch(/class="tab expeditions steading-edit-section[{"]/);
 	});
 
 	// The JOIN the pencil stands on: the template reads `stonetop.edit.expeditions` and the tab's
@@ -176,11 +184,46 @@ describe("the Expeditions tab: wiring", () => {
 		expect(PANEL_MARKUP).not.toMatch(/<(?:input|textarea|prose-mirror)[^>]*\sname=/);
 	});
 
-	// There is no <img> on this tab, so the `draggable="false"` opt-out every portrait in the
-	// system carries has nothing to apply to. Pinned so that adding one without it is a failure
-	// rather than a Gecko drag that hands over the image instead of the document.
-	it("has no portrait, which is why nothing here carries the image drag opt-out", () => {
-		expect(PANEL_MARKUP).not.toMatch(/<img/);
+	// A row's thumbnail is an <img> inside the draggable name button, so it carries the
+	// `draggable="false"` opt-out every portrait in the system wears, or Gecko hands over the
+	// picture instead of the document.
+	it("puts the drag opt-out on every picture it draws", () => {
+		const imgs = PANEL_MARKUP.match(/<img\b[^>]*>/g) ?? [];
+		expect(imgs.length, "the row thumbnail went missing").toBeGreaterThan(0);
+		for (const img of imgs) {
+			expect(img).toContain('draggable="false"');
+			expect(img).toContain('alt=""');
+		}
+	});
+
+	// ON THE ROAD: a card bound to a trip says so on its shut row, before the pills, off the same
+	// `tripId` that turns Run into "Open the walkthrough" -- and not once the card is filed.
+	it("says a bound, live card is on the road", () => {
+		expect(PANEL_MARKUP).toMatch(/\{\{#if this\.onTheRoad\}\}\{\{#unless used\}\}\s*<span class="stonetop-gm-expedition-road"/);
+		const head = PANEL_MARKUP.slice(PANEL_MARKUP.indexOf("stonetop-gm-encounter-head"), PANEL_MARKUP.indexOf("stonetop-gm-encounter-body"));
+		expect(head.indexOf("stonetop-gm-expedition-road")).toBeGreaterThan(-1);
+		expect(head.indexOf("stonetop-gm-expedition-road")).toBeLessThan(head.indexOf("stonetop-gm-encounter-count"));
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit.expeditions;
+		expect(en.onTheRoad).toBe("On the road");
+		expect(en.onTheRoadTip).toBeTruthy();
+		// The road's teal, as a mark: washed under the words, worn by the glyph.
+		expect(declarations(CSS, ".stonetop-gm-expedition-road")).toMatch(/var\(--st-timeline-kind-expedition\)/);
+	});
+
+	// Quiet "Mark complete" first, then the primary Run at the right-hand end of the foot.
+	it("ends the foot on Run, after the quiet toggle", () => {
+		const foot = PANEL_MARKUP.slice(PANEL_MARKUP.indexOf('<div class="stonetop-gm-card-foot">'));
+		expect(foot.indexOf("stonetop-gm-encounter-used")).toBeGreaterThan(-1);
+		expect(foot.indexOf("stonetop-gm-encounter-used")).toBeLessThan(foot.indexOf("stonetop-gm-expedition-run"));
+		expect(JSON.parse(read("languages/en.json")).stonetop.gmToolkit.expeditions.run).toBe("Run the expedition");
+	});
+
+	// The views' accent: the road's teal on this pane, the quiet slate on Encounters.
+	it("edges its cards in the road's teal", () => {
+		expect(declarations(CSS, ".stonetop-gm-prep-panes > .tab.expeditions"))
+			.toMatch(/--st-bundle-accent:\s*var\(--st-timeline-kind-expedition\)/);
+		expect(declarations(CSS, ".stonetop-gm-prep-panes > .tab.encounters"))
+			.toMatch(/--st-bundle-accent:\s*var\(--st-quiet-ink\)/);
 	});
 
 	// The fold's open/shut state is stored per user against the id in `collapse=`. Shared with the
@@ -395,7 +438,8 @@ describe("the Expeditions tab: running one", () => {
 	// lying about it.
 	it("turns from starting a trip into reopening one", () => {
 		expect(CARD_MARKUP).toMatch(/stonetop-gm-expedition-run/);
-		expect(CARD_MARKUP).toMatch(/\{\{#if tripId\}\}[\s\S]*?expeditions\.reopen"[\s\S]*?\{\{else\}\}[\s\S]*?expeditions\.run"/);
+		expect(CARD_MARKUP).toMatch(/\{\{#if this\.onTheRoad\}\}[\s\S]*?expeditions\.reopen"[\s\S]*?\{\{else\}\}[\s\S]*?expeditions\.run"/);
+		expect(CARD_MARKUP).not.toMatch(/\{\{#if tripId\}\}/);
 		// It shares the foot with the complete toggle, and the body is a flex COLUMN — so the row
 		// is what keeps them side by side rather than stacked.
 		expect(CARD_MARKUP).toContain("stonetop-gm-card-foot");
@@ -408,6 +452,22 @@ describe("the Expeditions tab: running one", () => {
 	// The walkthrough's own log stays where it is. What it records is what happened at the table,
 	// which is a different thing from what was gathered beforehand — and a second store for it
 	// here would be two records of one trip.
+	// A STALE `tripId` is normal (the GM deleted the trip from the walkthrough's log), and Run then
+	// mints a fresh trip at step 0. So "On the road" and "Open" follow the LOG, not the field.
+	it("says a card is on the road only while the log still holds its trip", () => {
+		const published = {
+			active:    [{ id: "a", tripId: "t1" }, { id: "b", tripId: "gone" }, { id: "c", tripId: "" }],
+			completed: [{ id: "d", tripId: "t1" }],
+		};
+		markTripsOnTheRoad(published, new Set(["t1"]));
+		expect(published.active.map(c => c.onTheRoad)).toEqual([true, false, false]);
+		expect(published.completed[0].onTheRoad).toBe(true);
+		// A log that cannot be read (no game yet) is an empty one: every card says Run.
+		const unread = { active: [{ id: "a", tripId: "t1" }], completed: [] };
+		markTripsOnTheRoad(unread);
+		expect(unread.active[0].onTheRoad).toBe(false);
+	});
+
 	it("leaves the walkthrough's own log in the world setting", () => {
 		const DIALOG_JS = read("module/dialogs/ExpeditionDialog.js");
 		expect(read("module/utils/expedition-log-core.js")).toContain('export const EXPEDITION_LOG_SETTING = "expeditionAnswers";');
@@ -418,8 +478,8 @@ describe("the Expeditions tab: running one", () => {
 		// GM had just typed, whose write was still on its way when Run was pressed.
 		expect(DIALOG_JS).toMatch(/open\._switchExpedition\(tripId\)/);
 		expect(DIALOG_JS).not.toMatch(/open\._logDraft = null/);
-		// And the tab reaches that log ONLY through `openOnTrip`: no settings read of its own, and
-		// no second opinion about the shape a trip is stored in.
+		// And the tab reaches that log ONLY through the dialog (`openOnTrip`, `loggedTripIds`): no
+		// settings read of its own, and no second opinion about the shape a trip is stored in.
 		const TAB_JS = read("module/actors/gmtoolkit/gm-expeditions-tab.js");
 		expect([...TAB_JS.matchAll(/^import .*?from "([^"]+)";$/gm)].map(m => m[1]))
 			.toEqual(["./gm-bundle-tab.js", "../../dialogs/ExpeditionDialog.js"]);

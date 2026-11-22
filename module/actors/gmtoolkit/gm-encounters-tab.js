@@ -54,6 +54,9 @@ export {
  *
  * `panel` is the scope of every listener this tab binds, which is what keeps a click on an
  * expedition card out of this engine's handlers — both tabs print the same class names on purpose.
+ * Both are panes of the toolkit's Prep tab now rather than rail tabs (gm-prep-views.js), and the
+ * pane kept its `tab encounters` class for exactly this reason: nothing here checks which rail tab
+ * or which view is showing, so the move under one rail button changed no selector in this file.
  *
  * `fight` puts "Deploy and fight" beside Deploy (when the Fight tab is on), and `actions` wires it.
  */

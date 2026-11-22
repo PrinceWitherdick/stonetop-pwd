@@ -772,8 +772,10 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
-		// Not a tab any more: a folded section at the foot of the Expeditions panel.
-		"stonetop.gm-toolkit-sites-section": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-sites-section.hbs",
+		// The Prep tab: one rail button over three views, chosen by a switcher at its top
+		// (actors/gmtoolkit/gm-prep-views.js). The three after it are its panes, not rail tabs.
+		"stonetop.gm-toolkit-tab-prep":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-prep.hbs",
+		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
@@ -786,6 +788,10 @@ Hooks.once("init", () => {
 		"stonetop.gm-expedition-card":        "systems/stonetop-pwd/templates/actor/partials/gm-expedition-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
+		// The Prep tab's three views open on the same one-line bar and, with nothing in them, the
+		// same centred empty state; the Threats tab keeps its own foot-of-section add bars above.
+		"stonetop.gm-prep-pane-bar":          "systems/stonetop-pwd/templates/actor/partials/gm-prep-pane-bar.hbs",
+		"stonetop.gm-prep-empty":             "systems/stonetop-pwd/templates/actor/partials/gm-prep-empty.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
 		"stonetop.gm-prep-guide-items":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-guide-items.hbs",
 		"stonetop.monster-sheet":             "systems/stonetop-pwd/templates/actor/monster.hbs",

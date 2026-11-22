@@ -20,7 +20,9 @@
 // A STALE `tripId` IS NOT AN ERROR. A GM who deletes a trip from the walkthrough's own log leaves
 // a card pointing at nothing; the next Run mints a fresh trip and writes the new id back. That is
 // why nothing here watches the log for deletions, and why there is no reconciliation pass: the
-// pointer is repaired by being used.
+// pointer is repaired by being used. What it must NOT do is TALK as if the trip were there: the card's
+// "On the road" pill and its Run button's "Open" read `onTheRoad` (below), which asks the log, never
+// a bare non-empty `tripId`.
 import { GmBundleTab, STONETOP_EXPEDITION_DRAG_TYPE, normalizeBundle } from "./gm-bundle-tab.js";
 import { ExpeditionDialog } from "../../dialogs/ExpeditionDialog.js";
 
@@ -65,6 +67,21 @@ async function runExpedition(tab, id) {
 }
 
 /**
+ * Stamp `onTheRoad` on every card of a published Expeditions context: bound to a trip the log
+ * STILL holds. A stale `tripId` is normal (see the head of this file), and a card that said "On the
+ * road" or offered to "Open" a deleted trip would be promising a resume that Run is not going to
+ * give: it mints a fresh trip at step 0.
+ *
+ * Read once per render, through `ExpeditionDialog.loggedTripIds`, off the same log `openOnTrip`
+ * reads, so the words and the press agree.
+ */
+export function markTripsOnTheRoad(published, ids = ExpeditionDialog.loggedTripIds()) {
+	for (const card of [...(published?.active ?? []), ...(published?.completed ?? [])]) {
+		card.onTheRoad = !!card.tripId && ids.has(card.tripId);
+	}
+}
+
+/**
  * Which tab this is, in the terms gm-bundle-tab.js reads.
  *
  * `section` is the JOIN the pencil stands on: the template reads `stonetop.edit.expeditions` and
@@ -103,8 +120,15 @@ export function withGmExpeditionsTab(Base) {
 		 */
 		_expeditions = new GmBundleTab(this, EXPEDITIONS_TAB);
 
-		/** Publish the tab's context. Call from the host's getData. ASYNC — see `resolveBundleEntry`. */
-		_addGmExpeditionsContext(context) { return this._expeditions.addContext(context); }
+		/**
+		 * Publish the tab's context. Call from the host's getData. ASYNC: see `resolveBundleEntry`.
+		 * Then the one fact this card has that the shared engine does not: whether its trip is
+		 * still in the walkthrough's log (`markTripsOnTheRoad`).
+		 */
+		async _addGmExpeditionsContext(context) {
+			await this._expeditions.addContext(context);
+			markTripsOnTheRoad(context.stonetop?.[EXPEDITIONS_TAB.contextKey]);
+		}
 
 		/** The tab's interactions, delegated on the sheet root. Call from activateListeners. */
 		_activateGmExpeditionsListeners(root) { return this._expeditions.activateListeners(root); }
