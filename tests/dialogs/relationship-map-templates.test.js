@@ -1170,7 +1170,7 @@ describe("the page strip", () => {
 			const button = html.match(
 				new RegExp(`<button[^>]*data-relmap-action="${action}"[^>]*>([\\s\\S]*?)</button>`),
 			)[1];
-			expect(button).toMatch(/^\s*<i class="fas [^"]+"><\/i>\s*$/);
+			expect(button).toMatch(/^\s*<i class="fas [^"]+" aria-hidden="true"><\/i>\s*$/);
 		}
 	});
 

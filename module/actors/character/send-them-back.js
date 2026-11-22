@@ -29,7 +29,7 @@ const TIER_LABEL = { success: "10+", partial: "7-9", failure: "6-" };
 
 const button = (slug, tier, act, icon, label) =>
 	`<button type="button" class="stonetop-send-back-act" data-tier="${tier}" data-act="${act}" data-slug="${escHtml(slug)}">`
-	+ `<i class="fas ${icon}"></i> ${escHtml(label)}</button>`;
+	+ `<i class="fas ${icon}" aria-hidden="true"></i> ${escHtml(label)}</button>`;
 
 /** Each tier's buttons, for rollStat's `tierActions` (only the card's current tier's row shows). */
 export function sendBackTierActions(slug) {

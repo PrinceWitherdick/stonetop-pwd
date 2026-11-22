@@ -162,8 +162,13 @@ export function sharedRouteDestination(route) {
 export function sharedLegLine(leg) {
 	const where = `${leg.fromName} to ${leg.toName}`;
 	if (!leg.time) return where;
-	const time = leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time;
-	return `${where}, ${time}${leg.via ? ` (via ${leg.via})` : ""}`;
+	return `${where}, ${legTimeLabel(leg)}${leg.via ? ` (via ${leg.via})` : ""}`;
+}
+
+/** A leg's time in words: "about 2 days" when estimated (never a tilde, see above), "" with none. */
+export function legTimeLabel(leg) {
+	if (!leg?.time) return "";
+	return leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time;
 }
 
 /**
@@ -231,6 +236,26 @@ function sharedPublicRoute(payload) {
 /** Where a share's way ends, as the players read it, or null: without building the whole view. */
 export function sharedRoutePlace(payload) {
 	return sharedRouteDestination(sharedPublicRoute(payload));
+}
+
+/**
+ * The stop the party is on the way to, as the players read it, or null: with no `progress` on the
+ * share, or with every leg travelled. Never from the trip log, which players are not shown.
+ */
+export function sharedNextStop(payload) {
+	const reached = payload?.progress?.reached;
+	if (!Number.isInteger(reached) || reached < 0) return null;
+	return sharedStopName(payload, reached + 1);
+}
+
+/**
+ * Stop `index` of a share's way as the players read it (0 is where they set out, `k` where leg `k`
+ * ends), or null past either end. The road panel's arrival band names the stop through this.
+ */
+export function sharedStopName(payload, index) {
+	const legs = sharedPublicRoute(payload)?.legs;
+	if (!legs?.length || !Number.isInteger(index) || index < 0 || index > legs.length) return null;
+	return (index === 0 ? legs[0].fromName : legs[index - 1].toName) || null;
 }
 
 export function sharedRouteView(payload) {

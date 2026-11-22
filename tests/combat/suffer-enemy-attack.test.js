@@ -505,7 +505,7 @@ describe("a counter-attack the 10+ avoided", () => {
 
 	function applyButton(damage, clashCard) {
 		const listeners = [];
-		const button = { disabled: false, title: "", innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
+		const button = { disabled: false, dataset: {}, innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
 		globalThis.game.messages = { get: id => (id === clashCard?.id ? clashCard : null) };
 		globalThis.fromUuidSync = uuid => (uuid === pc.uuid ? pc : null);
 		const message = makeMessage({ damage });

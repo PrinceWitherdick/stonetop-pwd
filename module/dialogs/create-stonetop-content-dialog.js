@@ -52,7 +52,7 @@ const GEAR_OPTIONS = [
 	{
 		id: "arcanumInspire",
 		label: "Inspire me…",
-		icon: "fa-dice-d20",
+		icon: "fa-dice-d6",
 		arcanum: true,
 		hint: "Roll the Book II Artifact Creation tables (origin, nature, form) for a themed starting point, then build the arcanum from the results.",
 		create: () => _openArcanaInspire(),

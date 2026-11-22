@@ -217,13 +217,18 @@ export function injectHeaderToggle(sheet, noun, { editLabel, lockLabel, onChange
 
 	const label = document.createElement("label");
 	label.className = "stonetop-edit-toggle stonetop-header-toggle";
-	label.title = locked
+	// Foundry's tooltip, not a native `title`, which ignores the reader's palette and Sheet Text
+	// Size. `-text`: core draws a plain data-tooltip as HTML, and a caller's label is not ours to vouch for.
+	const says = locked
 		? "Read-only: import to your world to edit"
 		: (sheet._editMode ? (lockLabel ?? `Lock ${noun}`) : (editLabel ?? `Edit ${noun}`));
+	label.setAttribute("data-tooltip-text", says);
 
 	const checkbox = document.createElement("input");
 	checkbox.type = "checkbox";
 	checkbox.checked = sheet._editMode;
+	// The switch holds a picture and no words, so the box inside it is what carries its name.
+	checkbox.setAttribute("aria-label", says);
 	checkbox.addEventListener("change", () => toggleEdit(sheet, checkbox, { onChange }));
 
 	const track = document.createElement("span");
@@ -232,6 +237,7 @@ export function injectHeaderToggle(sheet, noun, { editLabel, lockLabel, onChange
 	thumb.className = "stonetop-toggle-thumb";
 	const icon = document.createElement("i");
 	icon.className = locked ? "fas fa-lock" : "fas fa-wrench";
+	icon.setAttribute("aria-hidden", "true");
 	thumb.appendChild(icon);
 	track.appendChild(thumb);
 	label.appendChild(checkbox);

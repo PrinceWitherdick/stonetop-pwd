@@ -21,15 +21,16 @@ import {
 	stepPcDone, nextActiveIndex, firstActiveIndex, prevActiveIndex, lastActiveIndex, turnsUntilActive,
 	cursorReaction, cursorPositionKey, withRecordedAnswer, withAnswerEdited, withoutAnswer,
 } from "./introductions-flow.js";
-import { isPrimaryGM, anyActiveGM, primaryGM } from "../utils/primary-gm.js";
+import { isPrimaryGM, isActingPrimaryGM, anyActiveGM, primaryGM } from "../utils/primary-gm.js";
 
 import { escHtml } from "../utils/strings.js";
 import { findOpenApp } from "../utils/open-windows.js";
 import { merge3, diffHunks, mapIndex } from "../utils/text-rebase.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { touchesFlag, touchesKey } from "../utils/touches-flag.js";
 
 /** Whether this client runs the Introductions: the GM at the table (primary), the only one who writes it. */
-const runsIntroductions = () => !!game.user?.isGM && isPrimaryGM();
+const runsIntroductions = () => isActingPrimaryGM();
 
 // The player-authored answer/ask step data lives on the PC actor flag
 // flags.stonetop-pwd.intro. Scope MUST be the system id "stonetop-pwd" (not "stonetop",
@@ -1448,7 +1449,7 @@ export class IntroductionsDialog extends StonetopDialog {
 			if (runsIntroductions()) this._addToSession(actor);
 		};
 		const onUpdate = (actor, changes) => {
-			if (actor?.type !== "character" || !Object.keys(changes?.system ?? {}).some(k => k.replace(/^-=/, "") === "playbook")) return;
+			if (actor?.type !== "character" || !touchesKey(changes?.system, "playbook")) return;
 			onJoin(actor);
 		};
 		this._rosterHooks = [
@@ -1523,9 +1524,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		}, 150);
 		this._introHook = Hooks.on("updateActor", (actor, changes, _options, userId) => {
 			if (actor?.type !== "character") return;
-			const stFlags = changes?.flags?.[_FLAG_SCOPE];
-			if (!stFlags) return;
-			if (!Object.keys(stFlags).some(k => k.replace(/^-=/, "") === _INTRO_FLAG)) return;
+			if (!touchesFlag(changes, _INTRO_FLAG)) return;
 			// The whole intro flag removed (a reset): what was harvested from it goes too.
 			if (!actor.getFlag(_FLAG_SCOPE, _INTRO_FLAG)) {
 				if (game.user?.isGM) this._clearHarvested(actor);
@@ -1540,7 +1539,7 @@ export class IntroductionsDialog extends StonetopDialog {
 			// Only a step4/step6 change (a recorded answer or a pass) is worth mirroring
 			// into the world setting — not a live-typing keystroke, so per-keystroke draft
 			// writes don't churn the world setting. Harvest immediately (primary GM only).
-			const introDelta   = stFlags[_INTRO_FLAG];
+			const introDelta   = changes.flags[_FLAG_SCOPE][_INTRO_FLAG];
 			const stepChanged  = !!introDelta && ("step4" in introDelta || "step6" in introDelta);
 			if (game.user?.isGM && stepChanged) this._harvestActor(actor);
 			// Fill the shared Chronicle in as answers are recorded and narration is typed. Fires on

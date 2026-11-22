@@ -148,7 +148,7 @@ export function chronicleBodyHash(html) {
 
 // Is `stored` the hash of `html`? Accepts the normalised hash written now AND the raw hash pages
 // were stamped with before, so a page seeded by an older version keeps syncing.
-function bodyHashMatches(stored, html) {
+export function bodyHashMatches(stored, html) {
 	return stored === chronicleBodyHash(html) || stored === hashString(String(html ?? ""));
 }
 

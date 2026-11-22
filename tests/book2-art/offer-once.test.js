@@ -11,6 +11,7 @@ let elected = "gm-1";
 
 vi.mock("../../module/utils/primary-gm.js", () => ({
 	isPrimaryGM: () => globalThis.game?.user?.id === elected,
+	isActingPrimaryGM: () => !!globalThis.game?.user?.isGM && globalThis.game?.user?.id === elected,
 }));
 
 const settings = new Map();

@@ -45,7 +45,7 @@ vi.mock("../../module/relmap/relmap-make.js", () => ({ seedRelationshipMapOnce: 
 vi.mock("../../module/timeline/timeline-store.js", () => ({ syncTrackPages: async () => {} }));
 vi.mock("../../module/timeline/timeline-backfill.js", () => ({ backfillLevelUpsOnce: async () => {} }));
 vi.mock("../../module/migration/expedition-title-prefix.js", () => ({ stripExpeditionTitlePrefixesOnce: async () => {} }));
-vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => true }));
+vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => true, isActingPrimaryGM: () => !!globalThis.game?.user?.isGM }));
 
 const { runWorldSetup, updateWindowCopy, setupLead } = await import("../../module/hooks/WorldSetup.js");
 

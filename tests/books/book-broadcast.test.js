@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 vi.mock("../../module/books/BookReaderWindow.js", () => ({ openBookReader: vi.fn() }));
 
 import {
-	BOOK_SOCKET, SHOW_BOOK, showBookToPlayers, registerBookBroadcast,
+	SHOW_BOOK, showBookToPlayers, registerBookBroadcast,
 } from "../../module/books/book-broadcast.js";
+import { SYSTEM_SOCKET } from "../../module/utils/system-socket.js";
 import { RULEBOOKS_SETTING } from "../../module/books/rulebooks.js";
 import { openBookReader } from "../../module/books/BookReaderWindow.js";
 
@@ -31,7 +32,7 @@ describe("showing players a page", () => {
 	it("sends the book, the page and who sent it, on the system's own channel", () => {
 		game.user = { isGM: true, id: "gm" };
 		expect(showBookToPlayers(1, 91)).toBe(true);
-		expect(game.socket.emit).toHaveBeenCalledWith(BOOK_SOCKET, {
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, {
 			action: SHOW_BOOK, book: 1, page: 91, userId: "gm",
 		});
 	});

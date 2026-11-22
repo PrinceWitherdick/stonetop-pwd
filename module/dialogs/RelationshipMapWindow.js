@@ -26,6 +26,7 @@ import { openLinkedActorSheet } from "../utils/actor-link.js";
 import { documentPortraitFrame, portraitOrNone } from "../utils/portrait-frame.js";
 import { format, localize } from "../utils/i18n.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { touchesFlag } from "../utils/touches-flag.js";
 import { ZoomPanSurface } from "../utils/zoom-pan-surface.js";
 import { groupPressed, pressStartsBox, pressStartsDraw, wireRelmapDrag } from "../utils/relmap-drag.js";
 import {
@@ -115,8 +116,7 @@ function changedFace(changed) {
 	if (!flags || typeof flags !== "object") return false;
 	// The system's whole flag scope rubbed out takes the crop with it, in either core's spelling.
 	if (Object.entries(flags).some(([key, value]) => deletionTarget(key, value) === SYSTEM_ID)) return true;
-	const ours = flags[SYSTEM_ID];
-	return !!ours && typeof ours === "object" && ("portraitFrame" in ours || "-=portraitFrame" in ours);
+	return touchesFlag(changed, "portraitFrame");
 }
 
 /**
@@ -1826,11 +1826,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// repaint replaces the board's markup and nothing else. So this one takes the full
 			// render the rest of this handler goes out of its way to avoid.
 			if (changed?.ownership || changed?.permission) { this.render(); return; }
-			const bag = changed?.flags?.[SYSTEM_ID];
-			if (!bag) return;
-			// A deletion arrives as `-=key`, so the prefix is stripped before the comparison.
-			const touched = Object.keys(bag).some(key => key.replace(/^-=/, "") === RELMAP_FLAG);
-			if (touched) repaint();
+			if (touchesFlag(changed, RELMAP_FLAG)) repaint();
 		});
 
 		// ⚠ AND THE MAP CAN BE DELETED OUT FROM UNDER THIS WINDOW. Nothing else would notice: this
@@ -1917,9 +1913,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// that is the whole reason a board is its own document rather than another object
 			// inside one shared flag.
 			if (page.id !== this.mapPage?.id) return;
-			const bag = changed?.flags?.[SYSTEM_ID];
-			if (!bag) return;
-			if (Object.keys(bag).some(key => key.replace(/^-=/, "") === RELMAP_FLAG)) repaint();
+			if (touchesFlag(changed, RELMAP_FLAG)) repaint();
 		});
 
 		// A BOARD ARRIVING OR LEAVING IS A STRIP THAT HAS CHANGED, and one of the two is more than

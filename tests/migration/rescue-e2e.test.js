@@ -6,7 +6,7 @@ import { SYSTEM_ID, ITEM_FLAG_SCOPE, CUTOVER_KEY } from "../../module/system-id.
 // End-to-end against the PRODUCTION defaults: no ids passed anywhere, so this exercises
 // exactly what Ready.js calls, with the real constants rather than fixtures. Writes are
 // actually applied, so the idempotency claim is real rather than asserted.
-vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => true }));
+vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => true, isActingPrimaryGM: () => !!globalThis.game?.user?.isGM }));
 const setSetting = vi.fn().mockResolvedValue(undefined);
 vi.mock("../../module/settings.js", () => ({ setSetting: (...a) => setSetting(...a) }));
 

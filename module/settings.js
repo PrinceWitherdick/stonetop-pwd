@@ -127,7 +127,8 @@ export function registerSettings() {
 	});
 
 	// Whether the lettered Place-of-Interest pins already on this world's scenes have been
-	// opened up to players (see hooks/Ready.js _revealLandmarkNotesOnce). They were written
+	// opened up to players (see hooks/PlaceOfInterestDrop.js revealLandmarkNotesOnce, run by the
+	// primary GM's sweeps in hooks/Ready.js onReady). They were written
 	// without global visibility and owned by the GM who placed them, which Foundry 14 reads
 	// as "GM's private note"; new pins are written public at creation. Once per world rather
 	// than every load, so a GM who later hides a pin on purpose keeps that decision.
@@ -481,6 +482,30 @@ export function registerSettings() {
 	game.settings.register(SYSTEM_ID, "arcanaSeekerDrawsHomebrew", {
 		name: "stonetop.settings.arcanaSeekerDrawsHomebrew.name",
 		hint: "stonetop.settings.arcanaSeekerDrawsHomebrew.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
+	// A Seeker's starting major from outside the background's 3, for a table bringing a character
+	// over. Off (the default) is the book's rule. Read through seekerOfferedMajors, by onboarding's
+	// Major Arcanum step and the Details tab's ask. On the Preferences tab as a GM row.
+	game.settings.register(SYSTEM_ID, "seekerAnyMajorArcanum", {
+		name: "stonetop.settings.seekerAnyMajorArcanum.name",
+		hint: "stonetop.settings.seekerAnyMajorArcanum.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
+	// Whether the players' picker under the switch above lists the world's homebrew majors
+	// (seeker-major-grant.js#playersSeeHomebrewMajors). The GM's picker and a GM's grant never
+	// depend on it.
+	game.settings.register(SYSTEM_ID, "seekerAnyMajorHomebrew", {
+		name: "stonetop.settings.seekerAnyMajorHomebrew.name",
+		hint: "stonetop.settings.seekerAnyMajorHomebrew.hint",
 		scope: "world",
 		config: true,
 		type: Boolean,
@@ -1248,6 +1273,17 @@ export function registerSettings() {
 		default: true,
 	});
 
+	// Table moments (moments/moment-broadcast.js): a world switch, as attackFx is, because a moment
+	// plays on every screen. A reader who wants it still has Reduce Motion, which stills it.
+	game.settings.register(SYSTEM_ID, "tableMoments", {
+		name: "stonetop.settings.tableMoments.name",
+		hint: "stonetop.settings.tableMoments.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: true,
+	});
+
 	// The season last picked in the Weather roll dialog (see dialogs/WeatherDialog.js),
 	// so it reopens to where the GM left off. Client-scoped — it's a GM convenience,
 	// not shared world state.
@@ -1343,11 +1379,13 @@ export function registerSettings() {
 		default: {}
 	});
 
-	// NB: the GM-steading auto-assignment once-gate is NOT a setting — it's a per-user
-	// WORLD flag on the GM's own User document (see hooks/Ready.js
-	// _assignSteadingToUnassignedGm). It used to be a client-scoped setting here, but those
-	// live in browser localStorage keyed only by namespace.key, so the flag leaked across
-	// worlds and a fresh world read it already-set — silently skipping the assignment.
+	// NB: the GM's default-character auto-assignment once-gate is NOT a setting — it's a
+	// per-user WORLD flag on the GM's own User document, `gmToolkitAssigned` (see hooks/Ready.js
+	// _assignGmToolkitToGm). The assignment used to hand the GM the steading, under the flag
+	// `gmSteadingAssigned`, which that function still reads to move such a GM onto the toolkit.
+	// The gate was a client-scoped setting here once, but those live in browser localStorage
+	// keyed only by namespace.key, so it leaked across worlds and a fresh world read it
+	// already-set — silently skipping the assignment.
 
 	game.settings.register(SYSTEM_ID, "sheetFont", {
 		name: "stonetop.settings.sheetFont.name",
@@ -2175,7 +2213,7 @@ export function registerSettings() {
 		name: "stonetop.settings.hoverDescriptionSettings.name",
 		label: "stonetop.settings.hoverDescriptionSettings.label",
 		hint: "stonetop.settings.hoverDescriptionSettings.hint",
-		icon: "fas fa-info-circle",
+		icon: "fas fa-circle-info",
 		type: _createHoverDescriptionSettingsApp(),
 		restricted: false,
 	});
@@ -2446,8 +2484,7 @@ function _safeFontScale(value) {
 
 /** This reader's sheet font scale (1 = as drawn), what `--stonetop-font-scale` is set from. */
 export function getSheetFontScale() {
-	try { return _safeFontScale(globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetFontScale")); }
-	catch (_) { return 1; }
+	return _safeFontScale(_readSetting("sheetFontScale"));
 }
 
 export function applySheetFontScale(value) {
@@ -2460,8 +2497,26 @@ export function applyEditPencilRevealDelay(value) {
 	document.documentElement.style.setProperty("--st-edit-reveal-delay", `${safe}s`);
 }
 
+let _reduceMotionSetting = false;
+let _osReducedMotion = null;
+
+/**
+ * Two root classes, because they promise different things.
+ * - `stonetop-reduce-motion` is the setting alone. Its blanket zeroes every duration inside
+ *   `.stonetop` and hides the hover-zoom popups, which only the setting's hint promises.
+ * - `stonetop-less-motion` is the setting OR the OS asking. Every motion rule keys on this one class,
+ *   so no rule can honour one exit and forget the other (tests/styles/reduced-motion-exits.test.js).
+ * The OS query is watched once, so turning reduced motion on in the OS reaches an open table.
+ */
 export function applyReduceMotion(value) {
-	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
+	_reduceMotionSetting = !!value;
+	if (!_osReducedMotion && typeof globalThis.matchMedia === "function") {
+		_osReducedMotion = globalThis.matchMedia("(prefers-reduced-motion: reduce)") ?? null;
+		_osReducedMotion?.addEventListener?.("change", () => applyReduceMotion(_reduceMotionSetting));
+	}
+	const root = document.documentElement;
+	root.classList.toggle("stonetop-reduce-motion", _reduceMotionSetting);
+	root.classList.toggle("stonetop-less-motion", _reduceMotionSetting || _osReducedMotion?.matches === true);
 }
 
 /**
@@ -2620,13 +2675,13 @@ export function applyNoItalics(value) {
 // Disadvantage) instead of the sticky selector on the character and steading sheets.
 // The two are exclusive by design: whichever one is answering, the other is not drawn.
 export function getAskRollModeEachRollSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "askRollModeEachRoll") ?? false;
+	return getBooleanSetting("askRollModeEachRoll", false);
 }
 
 // Whether to prompt for a one-off situational modifier before a move/stat roll. Ignored
 // while the mode is being asked per roll, since that window carries the stepper anyway.
 export function getPromptRollModifierSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
+	return getBooleanSetting("promptRollModifier", false);
 }
 
 // Whether the damage window opens before a damage roll (how to roll it, plus a one-off
@@ -2634,12 +2689,12 @@ export function getPromptRollModifierSetting() {
 // asks before the setting is registered — a macro firing early, a test — gets the shipped
 // behaviour rather than silently losing the window.
 export function getPromptDamageModifierSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptDamageModifier") ?? true;
+	return getBooleanSetting("promptDamageModifier", true);
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.
 export function getOpenSheetsInEditMode() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "openSheetsInEditMode") ?? false;
+	return getBooleanSetting("openSheetsInEditMode", false);
 }
 
 /**
@@ -2689,11 +2744,7 @@ export function timelineReachOf(value) {
 
 /** Where the GM has the timeline in this world. Defaults to "all", unregistered included. */
 export function getTimelineReach() {
-	try {
-		return timelineReachOf(globalThis.game?.settings?.get?.(SYSTEM_ID, "showTimeline"));
-	} catch (_) {
-		return "all";
-	}
+	return timelineReachOf(_readSetting("showTimeline"));
 }
 
 /** Is the timeline on in this world, anywhere? Defaults to yes, unregistered included. */
@@ -2765,9 +2816,14 @@ export function isAttackFxOn() {
 	return getBooleanSetting("attackFx", true);
 }
 
+/** Does this world show its table moments (moments/moment-broadcast.js)? Defaults to yes. */
+export function isTableMomentsOn() {
+	return getBooleanSetting("tableMoments", true);
+}
+
 /** This reader's timeline layout: "horizontal" (the default) or "vertical". */
 export function getTimelineOrientation() {
-	const value = globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineOrientation");
+	const value = _readSetting("timelineOrientation");
 	return value === "vertical" ? "vertical" : "horizontal";
 }
 
@@ -2800,7 +2856,7 @@ export function setTimelineHiddenTracks(trackIds) {
 
 /** Has this reader picked their own threads, or is the aggregate still on its default? */
 export function getTimelineThreadsChosen() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineThreadsChosen") === true;
+	return _readSetting("timelineThreadsChosen") === true;
 }
 
 /** Remember that this reader has picked their threads; the default never applies again. */
@@ -2810,7 +2866,7 @@ export function setTimelineThreadsChosen(chosen) {
 
 /** The kinds the GM has repainted for this world, cleaned: `{kind: "#rrggbb"}`. */
 export function getTimelineKindColours() {
-	return normalizeKindColours(globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineKindColours"));
+	return normalizeKindColours(_readSetting("timelineKindColours"));
 }
 
 /** Repaint the world's kinds. World-scoped: only a GM's write is accepted. */
@@ -2833,7 +2889,7 @@ export function setTimelineAges(ages) {
 
 /** Where the Ages' colour walk stands: the next step to try. */
 export function getTimelineAgeColourSeq() {
-	const seq = Math.trunc(Number(globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineAgeColourSeq")));
+	const seq = Math.trunc(Number(_readSetting("timelineAgeColourSeq")));
 	return Number.isFinite(seq) && seq > 0 ? seq : 0;
 }
 
@@ -2980,12 +3036,7 @@ export function stampLayoutClass(app, sheet) {
 const _settingCache = new Map();
 function _cachedSetting(key, isValid, fallback) {
 	if (_settingCache.has(key)) return _settingCache.get(key);
-	let value;
-	try {
-		value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-	} catch (_) {
-		return fallback;
-	}
+	const value = _readSetting(key);
 	if (!isValid(value)) return fallback;
 	_settingCache.set(key, value);
 	return value;
@@ -3157,6 +3208,20 @@ export function getSetting(key) {
 }
 
 /**
+ * Any setting's stored value, or `undefined` when there is nothing to read: no `game` yet, or a
+ * key this world never registered (core's `ClientSettings#get` THROWS on one rather than
+ * returning undefined, so `?.` and `??` alone do not cover it). The raw read under the getters
+ * here that shape their own value, each of which then answers with its own default.
+ */
+function _readSetting(key) {
+	try {
+		return globalThis.game?.settings?.get?.(SYSTEM_ID, key);
+	} catch (_) {
+		return undefined;
+	}
+}
+
+/**
  * A plain-object setting, read tolerantly: `{}` rather than a throw when the key is not
  * registered in this world (an older build, or a unit test that never called registerSettings),
  * and `{}` rather than a surprise when the stored value is a scalar or an array.
@@ -3166,22 +3231,14 @@ export function getSetting(key) {
  * of which had grown its own copy of this try/catch and its own shape guard.
  */
 export function getObjectSetting(key) {
-	try {
-		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-		return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-	} catch (_) {
-		return {};
-	}
+	const value = _readSetting(key);
+	return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 /** A list setting, read with the same tolerance getObjectSetting reads an object one with. */
 export function getArraySetting(key) {
-	try {
-		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-		return Array.isArray(value) ? value : [];
-	} catch (_) {
-		return [];
-	}
+	const value = _readSetting(key);
+	return Array.isArray(value) ? value : [];
 }
 
 /**
@@ -3195,12 +3252,8 @@ export function getArraySetting(key) {
  * one that added the key, and neither should lose the card to a thrown setting lookup.
  */
 export function getBooleanSetting(key, fallback = false) {
-	try {
-		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-		return typeof value === "boolean" ? value : fallback;
-	} catch (_) {
-		return fallback;
-	}
+	const value = _readSetting(key);
+	return typeof value === "boolean" ? value : fallback;
 }
 
 /**
@@ -3221,7 +3274,7 @@ export function worldKey() {
 // next (see the registration above).
 
 function _settingOverviewStore() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "settingOverviewShown");
+	return _readSetting("settingOverviewShown");
 }
 
 /** The stored world map, or null when the value is absent or still the legacy shape. */
@@ -3360,8 +3413,8 @@ function _px(v) {
  */
 export function getSheetSize(actorId) {
 	if (!actorId) return { width: null, height: null };
-	const size = globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetSizes")?.[actorId];
-	const legacy = globalThis.game?.settings?.get?.(SYSTEM_ID, "characterSheetWidths")?.[actorId];
+	const size = getObjectSetting("sheetSizes")[actorId];
+	const legacy = getObjectSetting("characterSheetWidths")[actorId];
 	return {
 		width: _px(size?.width) ?? _px(legacy),
 		height: _px(size?.height),
@@ -3393,7 +3446,7 @@ export function setSheetSize(actorId, { width, height } = {}) {
 // move groups, which differ only in the setting key they persist under.
 function getSectionList(key, actorId) {
 	if (!actorId) return [];
-	const arr = globalThis.game?.settings?.get?.(SYSTEM_ID, key)?.[actorId];
+	const arr = getObjectSetting(key)[actorId];
 	return Array.isArray(arr) ? arr : [];
 }
 
@@ -3493,8 +3546,7 @@ export function setSheetSectionsCollapsed(actorId, sections) {
 // expanded). Per-actor, per-user.
 export function getSidebarCollapsed(actorId) {
 	if (!actorId) return false;
-	const map = globalThis.game?.settings?.get?.(SYSTEM_ID, "characterSidebarCollapsed");
-	return !!map?.[actorId];
+	return !!getObjectSetting("characterSidebarCollapsed")[actorId];
 }
 
 export function setSidebarCollapsed(actorId, collapsed) {
@@ -3505,15 +3557,15 @@ export function setSidebarCollapsed(actorId, collapsed) {
 	return game.settings.set(SYSTEM_ID, "characterSidebarCollapsed", { ...map, [actorId]: next });
 }
 
+// Both default ON, unregistered included: a tooltip built before registration (or in a test)
+// shows, which is what ships.
 export function getHoverDescriptionSetting(key, { ignoreMaster = false } = {}) {
-	const settings = globalThis.game?.settings;
-	const masterEnabled = ignoreMaster ? true : settings?.get?.(SYSTEM_ID, "hoverDescriptionsEnabled") ?? true;
-	const settingEnabled = settings?.get?.(SYSTEM_ID, key) ?? true;
-	return masterEnabled && settingEnabled;
+	const masterEnabled = ignoreMaster || getBooleanSetting("hoverDescriptionsEnabled", true);
+	return masterEnabled && getBooleanSetting(key, true);
 }
 
 export function getRollStatChipsSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "showRollStatChips") ?? true;
+	return getBooleanSetting("showRollStatChips", true);
 }
 
 export function applyMoveDescriptionBodyClass(show) {

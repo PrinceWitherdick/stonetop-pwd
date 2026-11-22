@@ -56,7 +56,7 @@ export function seasonThreatsStepHtml(seasonId, portents = [], { threatCount = p
 				<span class="stonetop-season-threat-name">${escHtml(p.name)}</span>
 				<span class="stonetop-season-threat-portent">${escHtml(p.text || `Grim portent ${p.index + 1}`)}</span>
 				<button type="button" class="stonetop-season-btn" data-action="advance-portent" data-page-id="${escHtml(p.pageId)}" data-index="${p.index}">
-					<i class="fas fa-skull"></i> It comes to pass
+					<i class="fas fa-skull" aria-hidden="true"></i> It comes to pass
 				</button>
 			</li>`).join("")}
 		</ul>`
@@ -67,7 +67,7 @@ export function seasonThreatsStepHtml(seasonId, portents = [], { threatCount = p
 		<ul>${rows.map(([tier, text]) => `<li><strong>${tier}:</strong> ${escHtml(text)}</li>`).join("")}</ul>
 		<div class="stonetop-season-actions">
 			<button type="button" class="stonetop-season-btn" data-action="open-threat-board">
-				<i class="fas fa-book-skull"></i> Open the threats (write one up)
+				<i class="fas fa-book-skull" aria-hidden="true"></i> Open the threats (write one up)
 			</button>
 		</div>
 		<p class="stonetop-season-gains-label">Advance a threat <span class="stonetop-season-gains-hint">(its next grim portent)</span></p>

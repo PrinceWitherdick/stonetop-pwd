@@ -16,12 +16,12 @@
 	{{#if isActive}}
 	<section class="stonetop-pdc-step{{#if done}} is-done{{/if}}" data-step="{{this.key}}">
 		<h3 class="stonetop-pdc-step-title">
-			<span class="stonetop-pdc-step-mark">{{#if done}}<i class="fas fa-check"></i>{{else}}<i class="fas fa-circle-dot"></i>{{/if}}</span>
+			<span class="stonetop-pdc-step-mark">{{#if done}}<i class="fas fa-check" aria-hidden="true"></i>{{else}}<i class="fas fa-circle-dot" aria-hidden="true"></i>{{/if}}</span>
 			<span>{{this.title}}</span>
 		</h3>
 		{{#if hint}}<p class="stonetop-pdc-step-hint">{{this.hint}}</p>{{/if}}
 		{{#if gm}}
-		<p class="stonetop-pdc-gm"><i class="fas fa-user-pen"></i> {{this.gmNote}}</p>
+		<p class="stonetop-pdc-gm"><i class="fas fa-user-pen" aria-hidden="true"></i> {{this.gmNote}}</p>
 		{{/if}}
 
 		{{!-- Radio `name`s are document-global, so every group below is suffixed with the window's

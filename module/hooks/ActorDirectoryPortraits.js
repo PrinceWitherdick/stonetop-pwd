@@ -1,5 +1,5 @@
 import { documentPortraitFrame, resolvePortrait } from "../utils/portrait-frame.js";
-import { SYSTEM_ID } from "../system-id.js";
+import { touchesFlag } from "../utils/touches-flag.js";
 import { repaintActorRow } from "./actor-directory-rows.js";
 
 /**
@@ -102,7 +102,6 @@ export function decoratePortraitRow(li, actor) {
  * @param {object} changed  the update that was applied
  */
 export function onUpdateActorPortraitFrame(actor, changed) {
-	const bag = changed?.flags?.[SYSTEM_ID];
-	if (!bag || !("portraitFrame" in bag || "-=portraitFrame" in bag)) return;
+	if (!touchesFlag(changed, "portraitFrame")) return;
 	repaintActorRow(actor, decoratePortraitRow);
 }

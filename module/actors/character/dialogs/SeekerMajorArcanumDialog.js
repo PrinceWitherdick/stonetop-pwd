@@ -12,7 +12,8 @@ import { seekerMajorTrack } from "../seeker-collection.js";
 // Spear) asks which task, since the player picks which one was done.
 //
 // Resolves (StonetopDialog's promise protocol) to `{ major, marks: ["context:index"] }` on "Take
-// this one", and to null on "Choose later", Escape or the X.
+// this one", to `{ other: true }` on "Choose a different arcanum" (offered only with `other`, the
+// world's "any major" switch), and to null on "Choose later", Escape or the X.
 
 /**
  * The majors the dialog draws: `cards` are resolved arcana ({ slug, front }). Each carries its
@@ -45,19 +46,21 @@ export function seekerMajorAnswer(choices, major, task = "") {
 }
 
 export class SeekerMajorArcanumDialog extends StonetopDialog {
-	constructor(background, cards, options = {}) {
+	constructor(background, cards, { other = false, ...options } = {}) {
 		super(options);
 		this._background = background;
 		this._choices    = seekerMajorChoices(cards);
+		this._other      = !!other;
 	}
 
 	/**
 	 * Ask for 1 of `cards` (the background's majors) and its mark. Opens only when there is a card.
-	 * @returns {Promise<{major: string, marks: string[]}|null>}
+	 * With `other`, a third button asks for a major off the list instead.
+	 * @returns {Promise<{major: string, marks: string[]}|{other: true}|null>}
 	 */
-	static ask(background, cards) {
+	static ask(background, cards, { other = false } = {}) {
 		if (!cards?.length) return Promise.resolve(null);
-		return new SeekerMajorArcanumDialog(background, cards).promise();
+		return new SeekerMajorArcanumDialog(background, cards, { other }).promise();
 	}
 
 	static get defaultOptions() {
@@ -87,6 +90,7 @@ export class SeekerMajorArcanumDialog extends StonetopDialog {
 			tasksNote:   localize("stonetop.seekerMajor.tasks"),
 			chooseLabel: localize("stonetop.seekerMajor.choose"),
 			laterLabel:  localize("stonetop.seekerMajor.later"),
+			otherLabel:  this._other ? localize("stonetop.seekerMajor.other") : "",
 		};
 	}
 
@@ -101,5 +105,6 @@ export class SeekerMajorArcanumDialog extends StonetopDialog {
 			else ui.notifications?.warn?.(localize("stonetop.seekerMajor.pickTask"));
 		});
 		html.find('[data-action="later"]').on("click", () => this._resolveWith(null));
+		if (this._other) html.find('[data-action="other"]').on("click", () => this._resolveWith({ other: true }));
 	}
 }

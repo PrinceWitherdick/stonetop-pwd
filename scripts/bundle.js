@@ -39,6 +39,30 @@ export const BUNDLE_OUTFILE = "dist/stonetop.js";
 /** The checkout's empty stand-in, whose contents the bundle replaces with every template precompiled. */
 export const PRECOMPILED_TEMPLATES_MODULE = "module/utils/precompiled-templates.js";
 
+/** The stylesheet a checkout loads, as system.json names it. */
+export const STYLES_ENTRY = "styles/stonetop.css";
+
+/**
+ * The comment-free copy release.yml points the shipped manifest at. It must stay one folder below the
+ * root, like its source, or the stylesheet's `../assets` URLs stop resolving.
+ */
+export const STYLES_OUTFILE = "dist/stonetop.css";
+
+/**
+ * How the release stylesheet is printed. esbuild's own parser drops the comments, so a `/*` inside a
+ * string or url() survives. No target: the default is esnext, so nesting, `:has()` and `text-box`
+ * ship as written rather than lowered. Not minified, so a player's devtools still show readable rules,
+ * as the unminified bundle does. utf8 keeps non-ASCII content as written instead of escaping it.
+ */
+export const STYLES_OPTIONS = Object.freeze({
+	loader: "css",
+	legalComments: "none",
+	minify: false,
+	charset: "utf8",
+	sourcefile: STYLES_ENTRY,
+	logLevel: "silent",
+});
+
 /**
  * Every templates/**\/*.hbs as a precompiled Handlebars spec, keyed by the path Foundry asks for
  * it by (`systems/<id>/templates/...`). Compiled with the one option core v14's `getTemplate`
@@ -116,4 +140,23 @@ export async function buildBundle({ write = true } = {}) {
 		throw new Error(`The bundle has ${result.warnings.length} warning(s), and a release treats each one as an error:\n${text.join("\n")}`);
 	}
 	return result;
+}
+
+/**
+ * Build the release stylesheet. Over half the source is comments, and every player downloads it.
+ * @param {{write?: boolean}} [options]
+ * @returns {{css: string, bytes: number}}
+ */
+export function buildStyles({ write = true } = {}) {
+	const { code: css, warnings } = esbuild.transformSync(fs.readFileSync(path.join(ROOT, STYLES_ENTRY), "utf8"), STYLES_OPTIONS);
+	if (warnings.length) {
+		const text = esbuild.formatMessagesSync(warnings, { kind: "warning" });
+		throw new Error(`The stylesheet has ${warnings.length} warning(s), and a release treats each one as an error:\n${text.join("\n")}`);
+	}
+	if (write) {
+		const out = path.join(ROOT, STYLES_OUTFILE);
+		fs.mkdirSync(path.dirname(out), { recursive: true });
+		fs.writeFileSync(out, css);
+	}
+	return { css, bytes: Buffer.byteLength(css) };
 }

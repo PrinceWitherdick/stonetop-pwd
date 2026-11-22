@@ -899,7 +899,7 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			title:   "Roll the lot?",
 			content: `<p>You already have ${n === 1 ? "an answer" : `${n} answers`} on the <strong>${escHtml(manner.label)}</strong> tables.</p>
 				<p>Rolling the lot throws ${n === 1 ? "it" : "all of them"} away and rolls every table afresh. To change just one, use the dice beside it instead.</p>`,
-			yes: { label: "Roll the lot anyway", icon: "fa-dice-d20", className: "stonetop-dialog-btn--danger" },
+			yes: { label: "Roll the lot anyway", icon: "fa-dice-d6", className: "stonetop-dialog-btn--danger" },
 			no:  { label: "Keep my answers" },
 		}));
 	}

@@ -25,7 +25,7 @@
 				       {{#if checked}}checked{{/if}}>
 				{{/if}}
 				<span class="stonetop-pc-option-label">{{{this.label}}}</span>
-				{{#if locked}}<i class="fas fa-lock stonetop-pc-locked-icon" title="Already chosen"></i>{{/if}}
+				{{#if locked}}<i class="fas fa-lock stonetop-pc-locked-icon" role="img" aria-label="Already chosen" data-tooltip="Already chosen"></i>{{/if}}
 			</label>
 			{{/each}}
 		</div>

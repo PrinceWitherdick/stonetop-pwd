@@ -30,7 +30,7 @@
 // (DeathsDoorPrompt.js#promptRaiseFromDead), and why this side leaves it alone.
 
 import { each } from "./fight-state.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { writtenHp } from "../utils/written-hp.js";
 
 // The hit points a committed diff wrote, or null (utils/written-hp.js). Re-exported for the fight's other readers.
@@ -103,7 +103,7 @@ export async function markOutOfTheFight(actor, { combats = globalThis.game?.comb
  */
 export function installOutOfTheFight({ hooks = globalThis.Hooks } = {}) {
 	const id = hooks.on("updateActor", (actor, changes) => {
-		if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return;
+		if (!isActingPrimaryGM()) return;
 		if (!droppedOutOfTheFight(actor, changes)) return;
 		Promise.resolve(markOutOfTheFight(actor))
 			.catch(err => console.error("Stonetop | marking a foe out of the fight failed", err));

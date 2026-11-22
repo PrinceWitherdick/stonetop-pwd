@@ -11,8 +11,8 @@
 	<li class="stonetop-monster-line stonetop-field-btns" data-line-index="{{@index}}">
 		{{#if ../editMode}}
 		<input type="text" class="stonetop-entry-line-input" value="{{this.text}}">
-		<button type="button" class="stonetop-entry-remove-line" title="{{localize "stonetop.bestiary.removeLine"}}">
-			<i class="fas fa-times"></i>
+		<button type="button" class="stonetop-entry-remove-line" data-tooltip="{{localize "stonetop.bestiary.removeLine"}}" aria-label="{{localize "stonetop.bestiary.removeLine"}}">
+			<i class="fas fa-xmark" aria-hidden="true"></i>
 		</button>
 		{{else}}
 		<span>{{{this.html}}}</span>
@@ -24,6 +24,6 @@
 </ul>
 {{#if editMode}}
 <button type="button" class="stonetop-entry-add-line" data-field="{{this.key}}">
-	<i class="fas fa-plus"></i> {{localize "stonetop.bestiary.addLine"}}
+	<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.bestiary.addLine"}}
 </button>
 {{/if}}

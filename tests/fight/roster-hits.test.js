@@ -358,7 +358,7 @@ describe("applying a lone blow on the crew's token", () => {
 		message.isOwner = false;
 		const made = [];
 		const el = tag => {
-			const node = { tagName: tag, children: [], listeners: {}, append: (...kids) => node.children.push(...kids), addEventListener: (type, fn) => { node.listeners[type] = fn; } };
+			const node = { tagName: tag, children: [], listeners: {}, dataset: {}, append: (...kids) => node.children.push(...kids), addEventListener: (type, fn) => { node.listeners[type] = fn; } };
 			made.push(node);
 			return node;
 		};

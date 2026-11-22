@@ -1,9 +1,11 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
+import { LiveDocumentWindow } from "../utils/live-document-window.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { partyCharacters } from "../utils/playbook-actors.js";
 import { orphanedPartyFollowers } from "../actors/character/follower-roster.js";
 import { isOutOfPlaySafe } from "../actors/character/deaths-door-actor.js";
 import { escHtml } from "../utils/strings.js";
+import { setTooltip } from "../utils/set-tooltip.js";
 import { personOptionLabel } from "../utils/people-groups.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import {
@@ -24,13 +26,6 @@ const SCROLLER  = ".stonetop-guide-main";
 const RESTORE_KIND = "camp";
 /** The GM's roster list: who is not at the fire and who is, one list under Bring them and Send them away. */
 const ROSTER = 'select[name="campRosterActor"]';
-
-/**
- * How long a burst of document updates is collapsed before the window redraws. A settle lands one
- * update per character within a second, and several players pressing steppers at once is the
- * whole point of the window; either would otherwise redraw it once per write.
- */
-const RENDER_DEBOUNCE_MS = 80;
 
 /** The window id for a camp: one window per camp, on each client. */
 export function campWindowId(campId) {
@@ -70,14 +65,11 @@ function campWindowWanted({ campId, hostId }) {
  * and a player who reloads mid-camp gets the same camp back, in the same place on the screen
  * (registerCampWindowRestore, below).
  */
-export class CampWindow extends StonetopDialog {
+export class CampWindow extends LiveDocumentWindow {
 	constructor({ campId, hostId } = {}, options = {}) {
 		// Per camp: two camps open at once (a split party) must not share one frame.
 		super(StonetopDialog.perDocumentOptions(ID_PREFIX, campId, options));
 		this._camp        = { campId, hostId };
-		this._hooks       = null;
-		this._renderTimer = null;
-		this._writes      = Promise.resolve();
 		// Who sat at the fire at the last draw, and the names of any of them somebody else's client has
 		// since taken away, for the notice if that closes the window.
 		this._seated      = new Set();
@@ -165,36 +157,10 @@ export class CampWindow extends StonetopDialog {
 		if (picked !== null) this._keepRosterPick(this.element?.[0]?.querySelector?.(ROSTER), picked);
 	}
 
-	activateListeners(html) {
-		super.activateListeners(html);
-		this._watch();
-		const root = html?.[0] ?? html;
-		root?.addEventListener?.("click", ev => this._onClick(ev));
-		root?.addEventListener?.("change", ev => this._onChange(ev));
-	}
-
-	async close(options = {}) {
-		this._unwatch();
-		return super.close(options);
-	}
-
 	/** Everyone at the fire, read fresh, plus the one row a control belongs to. */
 	_seat(actorId) {
 		const members = campMembers(this._camp.campId, this._camp.hostId);
 		return { members, member: members.find(m => m.actorId === actorId) ?? null };
-	}
-
-	/**
-	 * Run one write after the last, so each one reads the camp as the one before it left it.
-	 *
-	 * A stepper gets pressed three times in a second. Each press reads the current offer and
-	 * writes one more; three presses racing each other would all read the same offer and all write
-	 * the same "one more". Chained, the second press reads what the first wrote.
-	 */
-	_queue(noun, task) {
-		const run = this._writes.then(task);
-		this._writes = run.catch(err => this.reportWriteFailure(noun, err));
-		return this._writes;
 	}
 
 	_onClick(ev) {
@@ -316,8 +282,7 @@ export class CampWindow extends StonetopDialog {
 		for (const button of select.parentElement?.querySelectorAll?.("[data-camp-action]") ?? []) {
 			const off = button.dataset.campAction !== fits;
 			button.disabled = off;
-			if (off) button.dataset.tooltip = button.dataset.campBlocked;
-			else delete button.dataset.tooltip;
+			setTooltip(button, off ? button.dataset.campBlocked : "");
 		}
 		return undefined;
 	}
@@ -373,8 +338,7 @@ export class CampWindow extends StonetopDialog {
 	 * character already seated: their pack, their HP and their debilities all show in their row.
 	 * Who is online matters too, because it moves who pays for whom.
 	 */
-	_watch() {
-		if (this._hooks) return;
+	_watchedHooks() {
 		const onActor = (actor, changes, options, userId) => {
 			if (actor?.type !== "character") return;
 			const moved = touchesCamp(changes);
@@ -386,44 +350,35 @@ export class CampWindow extends StonetopDialog {
 		const onDelete = actor => {
 			if (actor?.type === "character" && (actor.id === this._camp.hostId || this._seated.has(actor.id))) this._scheduleRender();
 		};
-		this._hooks = [
-			["updateActor",   Hooks.on("updateActor", onActor)],
-			["deleteActor",   Hooks.on("deleteActor", onDelete)],
-			["userConnected", Hooks.on("userConnected", () => this._scheduleRender())],
+		return [
+			["updateActor",   onActor],
+			["deleteActor",   onDelete],
+			["userConnected", () => this._scheduleRender()],
 		];
 	}
 
-	_unwatch() {
-		for (const [hook, id] of this._hooks ?? []) Hooks.off(hook, id);
-		this._hooks = null;
-		clearTimeout(this._renderTimer);
-		this._renderTimer = null;
+	_onUnwatch() {
 		this._taken.clear();
 	}
 
-	/** Redraw soon, or close: the camp is over, or nobody this client plays is still at it. */
-	_scheduleRender() {
-		clearTimeout(this._renderTimer);
-		this._renderTimer = setTimeout(() => {
-			this._renderTimer = null;
-			if (!this.rendered) return;
-			const state    = stateOfCamp(this._camp);
-			const hostName = game.actors?.get(this._camp.hostId)?.name;
-			if (state !== CAMP_STATE.OPEN) {
-				const notice = closedCampNotice(state, hostName);
-				if (notice) ui.notifications?.info?.(notice);
-				this.close();
-				return;
-			}
-			if (!keepsCampWindow(this._camp.campId)) {
-				// The one way this window closes on a player without them pressing anything, so it says why.
-				if (this._taken.size) ui.notifications?.info?.(departedCampNotice([...this._taken], hostName));
-				this.close();
-				return;
-			}
-			this._taken.clear();
-			this.render(false);
-		}, RENDER_DEBOUNCE_MS);
+	/** After the debounce (LiveDocumentWindow#_scheduleRender): close if the camp is over, or nobody this client plays is still at it; else redraw. */
+	_redrawOrClose() {
+		const state    = stateOfCamp(this._camp);
+		const hostName = game.actors?.get(this._camp.hostId)?.name;
+		if (state !== CAMP_STATE.OPEN) {
+			const notice = closedCampNotice(state, hostName);
+			if (notice) ui.notifications?.info?.(notice);
+			this.close();
+			return;
+		}
+		if (!keepsCampWindow(this._camp.campId)) {
+			// The one way this window closes on a player without them pressing anything, so it says why.
+			if (this._taken.size) ui.notifications?.info?.(departedCampNotice([...this._taken], hostName));
+			this.close();
+			return;
+		}
+		this._taken.clear();
+		this.render(false);
 	}
 }
 

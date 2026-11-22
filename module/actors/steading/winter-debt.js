@@ -8,7 +8,7 @@ import { charactersInPlay } from "../../utils/characters-in-play.js";
 import { canRetire, openRetireDialog } from "../../campaign/retire-pc.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 import { askGMClient, queryAsker } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { getStonetopSteadingActor } from "../../utils/world.js";
 
 // ── Winter's second bite (Book I, "Seasons Change": winter) ──────────────────────
@@ -168,7 +168,7 @@ export async function markNpcDeadForWinter({
 export async function handleWinterNpcDeadQuery(data, context = {}, {
 	users = globalThis.game?.users, actors = globalThis.game?.actors, steading = getStonetopSteadingActor(),
 } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const asker = queryAsker(data, context, users);
 	const npc = actors?.get?.(data?.npcId) ?? null;
 	if (!asker || npc?.type !== "npc" || npcStatusMeta(npc.system?.status).inactive) return null;
@@ -434,7 +434,7 @@ export function winterDebtDialogHtml(state, { due = false } = {}) {
 		${state.canPay
 			? `<div class="stonetop-season-actions">
 				<button type="button" class="stonetop-season-btn" data-action="pay-winter-debt">
-					<i class="fas fa-wheat-awn"></i> Consume ${state.owed} Surplus, and winter is done
+					<i class="fas fa-wheat-awn" aria-hidden="true"></i> Consume ${state.owed} Surplus, and winter is done
 				</button>
 			</div>
 			<p class="stonetop-season-note"><em>Or refuse, and take the consequences instead. That costs more, not less: Surplus still drops to <strong>0</strong>, ${disaster}, and one of these happens on top. Pick the one the steading suffers.</em></p>`

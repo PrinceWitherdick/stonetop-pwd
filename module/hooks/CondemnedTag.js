@@ -17,6 +17,7 @@
  */
 
 import { SYSTEM_ID } from "../system-id.js";
+import { touchesFlag } from "../utils/touches-flag.js";
 import { CONDEMNED_FLAG, readCondemned, actorMatchKeys, trailingActorId } from "../actors/character/condemn.js";
 import { openApplications } from "../utils/open-windows.js";
 
@@ -64,13 +65,7 @@ function answersTo(target, ids) {
  */
 export function onUpdateCondemned(actor, changed) {
 	if (actor?.type !== "character") return;
-	// ⚠ BRACKETS off SYSTEM_ID, never a dotted path: the package id is hyphenated, so a dotted
-	// `changed.flags.stonetop-pwd` parses as a subtraction and throws at runtime. Same trap
-	// ActorDirectoryNames.js documents.
-	const bag = changed?.flags?.[SYSTEM_ID];
-	if (!bag) return;
-	// Both shapes: a normal write, and the unset that a future "clear them all" would produce.
-	if (!(CONDEMNED_FLAG in bag) && !(`-=${CONDEMNED_FLAG}` in bag)) return;
+	if (!touchesFlag(changed, CONDEMNED_FLAG)) return;
 
 	// `actor` already carries the applied update, so this is the list AFTER the change.
 	const listed = listedIds(actor);

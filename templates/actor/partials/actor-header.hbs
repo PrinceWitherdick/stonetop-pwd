@@ -14,11 +14,11 @@
 		      size, the border and the click that opens the window. Only this branch is new; an
 		      unframed portrait stays the bare <img> it has always been, which is what lets that
 		      class's own top-anchored crop go on serving everyone nobody has framed. --}}
-		<span class="stonetop-portrait stonetop-portrait-clip" title="{{actor.name}}">
+		<span class="stonetop-portrait stonetop-portrait-clip" data-tooltip-text="{{actor.name}}">
 			<img class="stonetop-portrait-img" src="{{stonetop.portraitImg}}" style="{{stonetop.portraitImgStyle}}" alt="{{actor.name}}">
 		</span>
 		{{else}}
-		<img class="stonetop-portrait" src="{{actor.img}}" title="{{actor.name}}" alt="{{actor.name}}">
+		<img class="stonetop-portrait" src="{{actor.img}}" data-tooltip-text="{{actor.name}}" alt="{{actor.name}}">
 		{{/if}}
 		{{> "stonetop.portrait-frame-pip" canFrame=stonetop.canFramePortrait canTokenize=stonetop.canTokenizePortrait}}
 	</span>
@@ -327,7 +327,7 @@
 		{{#if (or stonetop.playbook.appearance.summary stonetop.isDead stonetop.condemned.condemned stonetop.reminderChips.length editable)}}
 		<div class="stonetop-appearance-row">
 		{{#if (or stonetop.playbook.appearance.summary stonetop.isDead stonetop.condemned.condemned)}}
-		<p class="stonetop-appearance-summary">{{stonetop.playbook.appearance.summary}}{{#if stonetop.isDead}}{{#if editable}}<button type="button" class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltipAction"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></button>{{else}}<span class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></span>{{/if}}{{/if}}{{#if stonetop.condemned.condemned}}{{> "stonetop.condemned-tag" byLabel=stonetop.condemned.byLabel}}{{/if}}</p>
+		<p class="stonetop-appearance-summary">{{stonetop.playbook.appearance.summary}}{{#if stonetop.isDead}}{{#if editable}}<button type="button" class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltipAction"}}" data-tooltip-direction="UP"><i class="fas fa-skull" aria-hidden="true"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></button>{{else}}<span class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-skull" aria-hidden="true"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></span>{{/if}}{{/if}}{{#if stonetop.condemned.condemned}}{{> "stonetop.condemned-tag" byLabel=stonetop.condemned.byLabel}}{{/if}}</p>
 		{{/if}}
 		{{! What the table should keep in mind about them: the wearer tags on the gear they carry and
 		    the reminders typed here, on the row's own "+" chip (gear-reminders.js). Under the appearance line, which

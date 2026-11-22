@@ -171,7 +171,7 @@ export function settlementSourceOptions(made = () => false) {
 		...(book.length ? [{ heading: "From the books", icon: "fa-book" }, ...book] : []),
 		{ heading: "Typical stat blocks", icon: "fa-table-list" },
 		...typical,
-		{ heading: "Your own", icon: "fa-pen" },
+		{ heading: "Your own", icon: "fa-pencil" },
 		{ id: "blank", label: "Blank settlement", icon: "fa-file-lines", hint: "Name it and fill in its stats yourself." },
 	];
 }

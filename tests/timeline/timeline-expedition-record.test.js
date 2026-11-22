@@ -24,7 +24,7 @@ vi.mock("../../module/timeline/timeline-record.js", () => ({
 	timelineNow:      fakes.timelineNow,
 }));
 vi.mock("../../module/timeline/timeline-store.js", () => ({ allTracks: () => fakes.tracks }));
-vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => fakes.primary }));
+vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => fakes.primary, isActingPrimaryGM: () => !!globalThis.game?.user?.isGM && fakes.primary }));
 vi.mock("../../module/utils/playbook-actors.js", () => ({ getPlayerCharacters: () => fakes.characters }));
 vi.mock("../../module/utils/world.js", () => ({ getStonetopSteadingActor: () => fakes.steading }));
 vi.mock("../../module/actors/character/deaths-door-actor.js", () => ({ isOutOfPlay: pc => !!pc.dead }));

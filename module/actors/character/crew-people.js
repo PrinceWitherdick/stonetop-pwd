@@ -30,6 +30,7 @@ import { deletionEntry } from "../../utils/foundry-compat.js";
 import { rectEq, sameSrc } from "../../utils/portrait-frame.js";
 import { isDefaultImg } from "../../utils/strings.js";
 import { SYSTEM_ID } from "../../system-id.js";
+import { touchesFlag } from "../../utils/touches-flag.js";
 import { openApplications } from "../../utils/open-windows.js";
 
 /** The flag on a Person naming whose crew they are on: `{characterUuid}`. */
@@ -497,10 +498,8 @@ export function onUpdateActorCrewPerson(actor, changed, options, userId) {
 	if (actor?.type !== "npc") return;
 	const ownerUuid = crewOwnerUuid(actor);
 	if (!ownerUuid) return;
-	// In brackets: a dotted read of the hyphenated id parses as a subtraction.
-	const flags = changed?.flags?.[SYSTEM_ID] ?? {};
 	const touched = !!changed && ("name" in changed || "img" in changed
-		|| "portraitFrame" in flags || "-=portraitFrame" in flags);
+		|| touchesFlag(changed, "portraitFrame"));
 	if (!touched) return;
 	const character = worldActorFromUuid(ownerUuid);
 	if (!character?.isOwner) return;

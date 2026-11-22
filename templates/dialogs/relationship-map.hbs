@@ -114,7 +114,7 @@
     <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--new"
             data-relmap-action="pagenew"
             data-tooltip="{{this.pageNewHint}}" aria-label="{{this.pageNewHint}}">
-      <i class="fas fa-plus"></i>
+      <i class="fas fa-plus" aria-hidden="true"></i>
     </button>
     {{/if}}
 
@@ -145,12 +145,12 @@
               {{~#if pageHidden}} is-hidden-board{{/if}}" data-relmap-action="pagehide"
               data-tooltip="{{this.pageHideHint}}" aria-label="{{this.pageHideHint}}"
               {{#unless pageHideOn}}hidden{{/unless}}>
-        <i class="fas {{this.pageHideIcon}}"></i>
+        <i class="fas {{this.pageHideIcon}}" aria-hidden="true"></i>
       </button>
 
       <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagerename"
               data-tooltip="{{this.pageRenameHint}}" aria-label="{{this.pageRenameHint}}">
-        <i class="fas fa-pen"></i>
+        <i class="fas fa-pencil" aria-hidden="true"></i>
       </button>
 
       {{!-- ⚠ ALWAYS RENDERED AND HIDDEN, never behind an `{{#if}}`, for the reason the two panels
@@ -162,7 +162,7 @@
       <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--drop"
               data-relmap-action="pagedelete" data-tooltip="{{this.pageDeleteHint}}"
               aria-label="{{this.pageDeleteHint}}" {{#unless canDropPage}}hidden{{/unless}}>
-        <i class="fas fa-trash"></i>
+        <i class="fas fa-trash" aria-hidden="true"></i>
       </button>
     </div>
     {{/if}}
@@ -206,7 +206,7 @@
             edit — which can change without the render that would otherwise have to put it there. --}}
       <button type="button" class="stonetop-cta stonetop-relmap-empty-cast"
               data-relmap-action="{{emptyAction.action}}" {{#unless emptyAction}}hidden{{/unless}}>
-        <i class="fas {{emptyAction.icon}}"></i>
+        <i class="fas {{emptyAction.icon}}" aria-hidden="true"></i>
         <span>{{emptyAction.label}}</span>
       </button>
     </div>
@@ -448,7 +448,7 @@
         <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-tie="dir"
                 data-relmap-tie-value="{{this.key}}" role="radio" aria-checked="false" tabindex="-1"
                 data-tooltip="{{this.name}}" aria-label="{{this.name}}">
-          <i class="fas {{this.icon}}"></i>
+          <i class="fas {{this.icon}}" aria-hidden="true"></i>
         </button>
         {{/each}}
       </div>
@@ -612,7 +612,7 @@
             this one ends it. --}}
       <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-rub"
               data-relmap-tie="rub" data-tooltip="{{tie.rub}}" aria-label="{{tie.rub}}">
-        <i class="fas fa-trash"></i>
+        <i class="fas fa-trash" aria-hidden="true"></i>
       </button>
     </div>
 
@@ -648,7 +648,7 @@
         <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-groupbar-inkmore"
                 data-relmap-gbar="inkmore" aria-expanded="false"
                 aria-label="{{this.inkCustomField}}" data-tooltip="{{this.inkCustomField}}">
-          <i class="fas fa-plus"></i>
+          <i class="fas fa-plus" aria-hidden="true"></i>
         </button>
         <color-picker class="stonetop-relmap-tiebar-hex" data-relmap-gbar="inkhex"
                       aria-label="{{this.inkCustomField}}" data-tooltip="{{this.inkCustomField}}"
@@ -678,17 +678,17 @@
       <div class="stonetop-relmap-tiebar-group">
         <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-groupbar-who"
                 data-relmap-gbar="add" data-relmap-said="{{groupBar.add}}" hidden>
-          <i class="fas fa-user-plus"></i>
+          <i class="fas fa-user-plus" aria-hidden="true"></i>
         </button>
         <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-groupbar-who"
                 data-relmap-gbar="take" data-relmap-said="{{groupBar.take}}" hidden>
-          <i class="fas fa-user-minus"></i>
+          <i class="fas fa-user-minus" aria-hidden="true"></i>
         </button>
         {{!-- NO CONFIRM, for the tie bar's reason: the undo is one press away, and it takes away an
               outline, never a person. --}}
         <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-rub"
                 data-relmap-gbar="drop" data-tooltip="{{groupBar.drop}}" aria-label="{{groupBar.drop}}">
-          <i class="fas fa-trash"></i>
+          <i class="fas fa-trash" aria-hidden="true"></i>
         </button>
       </div>
     </div>
@@ -757,7 +757,7 @@
           <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-chipform-inkmore"
                   data-relmap-pbar="chipinkmore" aria-expanded="false"
                   aria-label="{{personBar.chips.colourOwn}}" data-tooltip="{{personBar.chips.colourOwn}}">
-            <i class="fas fa-plus"></i>
+            <i class="fas fa-plus" aria-hidden="true"></i>
           </button>
           <color-picker class="stonetop-relmap-tiebar-hex" data-relmap-pbar="chiphex"
                         aria-label="{{personBar.chips.colourOwn}}" data-tooltip="{{personBar.chips.colourOwn}}"
@@ -767,14 +767,14 @@
           {{#each personBar.chips.icons}}
           <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-pbar="chipicon"
                   data-relmap-pbar-value="{{this.key}}" role="radio" aria-checked="false" tabindex="-1"
-                  aria-label="{{this.name}}" data-tooltip="{{this.name}}"><i class="fas {{this.glyph}}"></i></button>
+                  aria-label="{{this.name}}" data-tooltip="{{this.name}}"><i class="fas {{this.glyph}}" aria-hidden="true"></i></button>
           {{/each}}
         </div>
         <div class="stonetop-relmap-chipform-row stonetop-relmap-chipform-foot">
           <span class="stonetop-relmap-chipform-preview" role="img" aria-label="{{personBar.chips.preview}}"></span>
           <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-rub" data-relmap-pbar="chipdrop"
                   aria-label="{{personBar.chips.delete}}" data-tooltip="{{personBar.chips.delete}}" hidden>
-            <i class="fas fa-trash"></i>
+            <i class="fas fa-trash" aria-hidden="true"></i>
           </button>
         </div>
       </div>
@@ -824,7 +824,7 @@
     <button type="button" class="stonetop-relmap-tool stonetop-relmap-popout"
             data-relmap-action="popout"
             data-tooltip="{{this.popOutLabel}}" aria-label="{{this.popOutLabel}}">
-      <i class="fas fa-expand"></i>
+      <i class="fas fa-expand" aria-hidden="true"></i>
     </button>
     {{/if}}
   </div>
@@ -1013,11 +1013,11 @@
       <span class="stonetop-relmap-history">
         <button type="button" class="stonetop-relmap-tool" data-relmap-action="undo" disabled
                 data-tooltip-text="{{this.undoNothing}}" aria-label="{{this.undoNothing}}">
-          <i class="fas fa-rotate-left"></i>
+          <i class="fas fa-rotate-left" aria-hidden="true"></i>
         </button>
         <button type="button" class="stonetop-relmap-tool" data-relmap-action="redo" disabled
                 data-tooltip-text="{{this.redoNothing}}" aria-label="{{this.redoNothing}}">
-          <i class="fas fa-rotate-right"></i>
+          <i class="fas fa-rotate-right" aria-hidden="true"></i>
         </button>
       </span>
 
@@ -1028,7 +1028,7 @@
       <button type="button" class="stonetop-relmap-tool stonetop-relmap-grouptool"
               data-relmap-action="group" aria-pressed="false"
               data-tooltip="{{this.groupHint}}" aria-label="{{this.groupHint}}">
-        <i class="fas fa-object-group"></i>
+        <i class="fas fa-object-group" aria-hidden="true"></i>
         <span>{{this.groupLabel}}</span>
       </button>
 
@@ -1039,7 +1039,7 @@
       <button type="button" class="stonetop-relmap-tool stonetop-relmap-linetool"
               data-relmap-action="lines" aria-pressed="false"
               data-tooltip="{{this.lineHint}}" aria-label="{{this.lineHint}}">
-        <i class="fas fa-bezier-curve"></i>
+        <i class="fas fa-bezier-curve" aria-hidden="true"></i>
         <span>{{this.lineLabel}}</span>
       </button>
 
@@ -1054,7 +1054,7 @@
       <button type="button" class="stonetop-relmap-tool"
               data-relmap-action="create"
               data-tooltip="{{this.createHint}}" aria-label="{{this.createHint}}">
-        <i class="fas fa-user-pen"></i>
+        <i class="fas fa-user-pen" aria-hidden="true"></i>
         <span>{{this.createLabel}}</span>
       </button>
       {{/if}}
@@ -1075,7 +1075,7 @@
       <button type="button" class="stonetop-relmap-tool stonetop-relmap-add"
               data-relmap-action="add"
               data-tooltip="{{this.addHint}}" aria-label="{{this.addHint}}">
-        <i class="fas fa-user-plus"></i>
+        <i class="fas fa-user-plus" aria-hidden="true"></i>
         <span>{{this.addLabel}}</span>
       </button>
     </div>

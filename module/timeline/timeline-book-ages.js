@@ -8,7 +8,7 @@
 // The primary GM writes it: two GMs loading together would otherwise both add the six.
 
 import { localize } from "../utils/i18n.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import {
 	getTimelineAgeColourSeq, getTimelineAges, getTimelineBookAgesAdded,
 	setTimelineAgeColourSeq, setTimelineAges, setTimelineBookAgesAdded,
@@ -25,7 +25,7 @@ function bookAgeText(key) {
 
 /** Add the book's Ages to this world, if they never have been. Call once the world is ready. */
 export async function addBookAgesOnce() {
-	if (!game.user?.isGM || !isPrimaryGM() || getTimelineBookAgesAdded()) return;
+	if (!isActingPrimaryGM() || getTimelineBookAgesAdded()) return;
 	try {
 		const ages = getTimelineAges();
 		const { added, seq } = bookAgesToAdd({ ages, seq: getTimelineAgeColourSeq(), text: bookAgeText });

@@ -4,9 +4,9 @@
 	      Minor sections (see below). The empty-state line only shows when there's
 	      nothing to create with either — i.e. the sections themselves won't render. --}}
 	{{#unless stonetop.canCreateArcana}}
-	{{#unless stonetop.arcana.major.hasOwned}}{{#unless stonetop.arcana.minor.hasOwned}}{{#unless stonetop.seekerMajorOwed}}
+	{{#unless stonetop.arcana.major.hasOwned}}{{#unless stonetop.arcana.minor.hasOwned}}{{#unless stonetop.seekerMajorOwed}}{{#unless stonetop.seekerMajorGrant.shown}}
 	<p class="stonetop-arcana-empty">{{localize "stonetop.arcana.empty"}}</p>
-	{{/unless}}{{/unless}}{{/unless}}
+	{{/unless}}{{/unless}}{{/unless}}{{/unless}}
 	{{/unless}}
 
 	{{!-- A Seeker's background grants 1 major arcanum, and "Choose later" on the Details tab's ask
@@ -20,12 +20,21 @@
 	</div>
 	{{/if}}
 
+	{{!-- GM only, on a Seeker: give a starting major from outside the background's three
+	      (seeker-major-grant.js#giveSeekerMajor), or change or take back the one given. --}}
+	{{#if stonetop.seekerMajorGrant.shown}}
+	<div class="stonetop-seeker-major-grant">
+		<span class="stonetop-seeker-major-grant-text">{{#if stonetop.seekerMajorGrant.name}}{{localize "stonetop.seekerMajor.grant.set" name=stonetop.seekerMajorGrant.name}}{{else}}{{localize "stonetop.seekerMajor.grant.none"}}{{/if}}</span>
+		<button type="button" class="stonetop-inline-btn stonetop-seeker-major-grant-btn"><i class="fas fa-hand-sparkles" aria-hidden="true"></i>{{#if stonetop.seekerMajorGrant.name}}{{localize "stonetop.seekerMajor.grant.change"}}{{else}}{{localize "stonetop.seekerMajor.grant.give"}}{{/if}}</button>
+	</div>
+	{{/if}}
+
 	{{!-- "Roll 1d4+8" (A9): a track whose size is rolled when found, offered while it is untouched.
 	      data-slug is the track's key, as its pips send it. --}}
 	{{#*inline "arcanumRollUses"}}
 	<button type="button" class="stonetop-arcanum-roll-uses-btn" data-slug="{{resource.key}}"
 	        data-formula="{{resource.rollUses}}" data-max="{{resource.max}}"
-	        title="{{localize 'stonetop.arcana.engine.rollUsesTitle' formula=resource.rollUses}}">
+	        data-tooltip-text="{{localize 'stonetop.arcana.engine.rollUsesTitle' formula=resource.rollUses}}">
 		<i class="fas fa-dice" aria-hidden="true"></i> {{localize "stonetop.arcana.engine.rollUses" formula=resource.rollUses}}
 	</button>
 	{{/inline}}
@@ -56,7 +65,7 @@
 		      actor; the chevron rotates like the section headers (see stonetop.css). --}}
 		<button type="button" class="stonetop-arcanum-collapse-btn"
 		        aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}"
-		        title="{{localize 'stonetop.arcana.toggleCard'}}"
+		        data-tooltip="{{localize 'stonetop.arcana.toggleCard'}}"
 		        aria-label="{{localize 'stonetop.arcana.toggleCard'}}"></button>
 
 		{{#if missing}}
@@ -74,8 +83,8 @@
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
-			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+			        data-tooltip="{{localize 'stonetop.arcana.removeArcanum'}}">
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 		</div>
 		{{/if}}
@@ -91,7 +100,7 @@
 		      its back (back-only view). Always present in a spread. --}}
 		<div class="stonetop-arcanum-header">
 			{{#if img}}
-			<img class="stonetop-arcanum-thumb" src="{{this.img}}" data-name="{{front.title}}" alt="" title="{{front.title}}">
+			<img class="stonetop-arcanum-thumb" src="{{this.img}}" data-name="{{front.title}}" alt="" data-tooltip-text="{{front.title}}">
 			{{/if}}
 			<div class="stonetop-arcanum-header-left">
 				<span class="stonetop-arcanum-title stonetop-arcanum-title--clickable"
@@ -124,7 +133,7 @@
 			      back in chat; the GM settles it with the footer's reveal toggle. --}}
 			{{#if showBackOwed}}
 			<div class="stonetop-arcanum-backowed">
-				<i class="fas fa-hourglass-half"></i>
+				<i class="fas fa-hourglass-half" aria-hidden="true"></i>
 				<span>{{localize "stonetop.arcana.backOwedText"}}</span>
 				<button type="button" class="stonetop-arcanum-backowed-btn" data-slug="{{this.slug}}">
 					{{localize "stonetop.arcana.backOwedStudy"}}
@@ -162,7 +171,7 @@
 			{{else if unlockChoice}}
 			{{#if (and unlockChoice.owed @root.stonetop.canEdit)}}
 			<div class="stonetop-arcanum-backowed stonetop-arcanum-unlock-choice-owed">
-				<i class="fas fa-book-open"></i>
+				<i class="fas fa-book-open" aria-hidden="true"></i>
 				<span>{{localize "stonetop.arcana.unlockChoiceOwed" name=unlockChoice.name owed=unlockChoice.owed}}</span>
 				<button type="button" class="stonetop-arcanum-unlock-choice-btn" data-slug="{{this.slug}}">
 					{{localize "stonetop.arcana.unlockChoiceChoose"}}
@@ -240,7 +249,7 @@
 			<div class="stonetop-arcanum-summon">
 				<button type="button" class="stonetop-arcanum-summon-btn{{#if summon.added}} is-added{{/if}}"
 				        data-slug="{{this.slug}}"{{#if summon.added}} disabled{{/if}}>
-					<i class="fas {{#if summon.added}}fa-check{{else}}fa-user-plus{{/if}}"></i> {{summon.label}}
+					<i class="fas {{#if summon.added}}fa-check{{else}}fa-user-plus{{/if}}" aria-hidden="true"></i> {{summon.label}}
 				</button>
 				{{!-- Another character already has this creature (A16, arcana-summon-gates.js): flagged, never blocked. --}}
 				{{#if summon.caution}}<p class="stonetop-arcanum-summon-caution">{{summon.caution}}</p>{{/if}}
@@ -282,7 +291,7 @@
 			{{#if canFlip}}
 			<button type="button" class="stonetop-arcanum-flip-btn"
 			        data-slug="{{this.slug}}" data-show="{{this.showBack}}">
-				<i class="fas fa-rotate"></i>
+				<i class="fas fa-rotate" aria-hidden="true"></i>
 				{{#if showBack}}{{localize "stonetop.arcana.showFront"}}{{else}}{{localize "stonetop.arcana.showBack"}}{{/if}}
 			</button>
 			{{/if}}
@@ -292,7 +301,7 @@
 			{{#if canToggleBoth}}
 			<button type="button" class="stonetop-arcanum-showboth-btn{{#if showBoth}} is-active{{/if}}"
 			        data-slug="{{this.slug}}" data-show="{{this.showBoth}}">
-				<i class="fas {{#if showBoth}}fa-book{{else}}fa-book-open{{/if}}"></i>
+				<i class="fas {{#if showBoth}}fa-book{{else}}fa-book-open{{/if}}" aria-hidden="true"></i>
 				{{#if showBoth}}{{localize "stonetop.arcana.showFrontOnly"}}{{else}}{{localize "stonetop.arcana.showBothSides"}}{{/if}}
 			</button>
 			{{/if}}
@@ -303,14 +312,14 @@
 			{{#if canReveal}}
 			<button type="button" class="stonetop-arcanum-reveal-btn{{#if revealedToPlayers}} is-revealed{{/if}}"
 			        data-slug="{{this.slug}}" data-revealed="{{this.revealedToPlayers}}">
-				<i class="fas {{#if revealedToPlayers}}fa-eye-slash{{else}}fa-eye{{/if}}"></i>
+				<i class="fas {{#if revealedToPlayers}}fa-eye-slash{{else}}fa-eye{{/if}}" aria-hidden="true"></i>
 				{{#if revealedToPlayers}}{{localize "stonetop.arcana.hideFromPlayers"}}{{else}}{{localize "stonetop.arcana.revealToPlayers"}}{{/if}}
 			</button>
 			{{/if}}
 			{{#if sectionEditable}}
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
-			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+			        data-tooltip="{{localize 'stonetop.arcana.removeArcanum'}}">
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 			{{/if}}
 		</div>
@@ -326,7 +335,7 @@
 			</div>
 		</div>
 		<div class="stonetop-arcanum-body stonetop-arcanum-lead-body">
-			<i class="fas fa-map-location-dot stonetop-arcanum-lead-icon"></i>
+			<i class="fas fa-map-location-dot stonetop-arcanum-lead-icon" aria-hidden="true"></i>
 			<p>{{localize "stonetop.arcana.leadText"}}</p>
 			{{#if @root.stonetop.canEdit}}
 			<button type="button" class="stonetop-arcanum-discover-btn" data-slug="{{this.slug}}">
@@ -337,8 +346,8 @@
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
-			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+			        data-tooltip="{{localize 'stonetop.arcana.removeArcanum'}}">
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 		</div>
 		{{/if}}
@@ -358,14 +367,14 @@
 			<div class="stonetop-arcanum-identify-row">
 				{{#if @root.stonetop.canEdit}}
 				<button type="button" class="stonetop-arcanum-identify-btn" data-slug="{{this.slug}}"
-				        title="{{localize 'stonetop.arcana.identifyHint'}}">
-					<i class="fas fa-dice-d6"></i> {{localize "stonetop.arcana.identify"}}
+				        data-tooltip="{{localize 'stonetop.arcana.identifyHint'}}">
+					<i class="fas fa-dice-d6" aria-hidden="true"></i> {{localize "stonetop.arcana.identify"}}
 				</button>
 				{{/if}}
 				{{#if canGiveCard}}
 				<button type="button" class="stonetop-arcanum-givecard-btn" data-slug="{{this.slug}}"
-				        title="{{localize 'stonetop.arcana.giveCardHint'}}">
-					<i class="fas fa-hand-holding"></i> {{localize "stonetop.arcana.giveCard"}}
+				        data-tooltip="{{localize 'stonetop.arcana.giveCardHint'}}">
+					<i class="fas fa-hand-holding" aria-hidden="true"></i> {{localize "stonetop.arcana.giveCard"}}
 				</button>
 				{{/if}}
 			</div>
@@ -373,8 +382,8 @@
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
 			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
-			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
-				<i class="fas fa-trash"></i> Remove
+			        data-tooltip="{{localize 'stonetop.arcana.removeArcanum'}}">
+				<i class="fas fa-trash" aria-hidden="true"></i> Remove
 			</button>
 		</div>
 		{{/if}}

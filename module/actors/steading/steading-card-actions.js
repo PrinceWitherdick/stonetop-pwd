@@ -78,7 +78,7 @@ export function assetFromButton(btn) {
  */
 export function requisitionMissCostAction(asset = {}) {
 	return `<button type="button" class="stonetop-requisition-miss-cost" data-action="requisition-miss-cost"${assetAttrs(asset)}>
-		<i class="fas fa-arrow-down"></i> Take it on a miss: reduce Fortunes by 1
+		<i class="fas fa-arrow-down" aria-hidden="true"></i> Take it on a miss: reduce Fortunes by 1
 	</button>`;
 }
 
@@ -86,23 +86,23 @@ export function requisitionMissCostAction(asset = {}) {
 export function requisitionTakeAction(asset = {}) {
 	if (!assetAttrs(asset)) return "";
 	return `<button type="button" class="stonetop-requisition-take-asset" data-action="requisition-take-asset"${assetAttrs(asset)}>
-		<i class="fas fa-hand-holding"></i> Take it: mark ${escHtml(asset.name)} out
+		<i class="fas fa-hand-holding" aria-hidden="true"></i> Take it: mark ${escHtml(asset.name)} out
 	</button>`;
 }
 
 /** Muster's cost, left to the card: the roller could not write the steading, or Fortunes was at -1. */
 export const MUSTER_PAY_COST_ACTION = `<button type="button" class="stonetop-muster-pay-cost" data-action="muster-pay-cost">
-		<i class="fas fa-arrow-down"></i> Pay the Muster's 1 Fortunes
+		<i class="fas fa-arrow-down" aria-hidden="true"></i> Pay the Muster's 1 Fortunes
 	</button>`;
 
 /** Muster's "Everyone's willing to pitch in; don't reduce Fortunes after all", for a cost already paid. */
 export const MUSTER_PITCH_IN_ACTION = `<button type="button" class="stonetop-muster-pitch-in" data-action="muster-pitch-in">
-		<i class="fas fa-people-group"></i> Everyone pitches in: give back the Fortunes
+		<i class="fas fa-people-group" aria-hidden="true"></i> Everyone pitches in: give back the Fortunes
 	</button>`;
 
 /** Pull Together's 7-9 "It gets done, but other work doesn't; reduce Fortunes by 1". */
 export const PULL_TOGETHER_COST_ACTION = `<button type="button" class="stonetop-pull-together-cost" data-action="pull-together-cost">
-		<i class="fas fa-arrow-down"></i> Other work doesn't get done: reduce Fortunes by 1
+		<i class="fas fa-arrow-down" aria-hidden="true"></i> Other work doesn't get done: reduce Fortunes by 1
 	</button>`;
 
 /**

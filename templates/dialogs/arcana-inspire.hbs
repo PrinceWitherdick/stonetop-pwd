@@ -13,7 +13,7 @@
 		<div class="stonetop-guide-main">
 
 			<div class="stonetop-guide-banner">
-				<i class="fas {{this.stepIcon}} stonetop-guide-banner-icon"></i>
+				<i class="fas {{this.stepIcon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
 				<div class="stonetop-guide-banner-info">
 					<div class="stonetop-guide-banner-title">{{this.stepTitle}}</div>
 					<div class="stonetop-guide-banner-sub">Inspire an arcanum</div>
@@ -61,8 +61,8 @@
 						<option value="{{this.value}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>
 						{{/each}}
 					</select>
-					<button type="button" class="stonetop-inspire-roll" data-field="{{this.key}}" title="Roll 1d12">
-						<i class="fas fa-dice-d20" aria-hidden="true"></i>
+					<button type="button" class="stonetop-inspire-roll" data-field="{{this.key}}" data-tooltip="Roll 1d12" aria-label="Roll 1d12">
+						<i class="fas fa-dice-d6" aria-hidden="true"></i>
 					</button>
 				</div>
 			</div>

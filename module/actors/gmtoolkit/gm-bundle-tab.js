@@ -158,7 +158,7 @@ export const BUNDLE_DOC_TYPES = Object.freeze({
 		icon: "fas fa-map", labelKey: "stonetop.gmToolkit.encounters.kind.scene",
 		open: doc => (doc.pack ? null : doc.view?.()),
 	},
-	RollTable:        { icon: "fas fa-dice-d20",        labelKey: "stonetop.gmToolkit.encounters.kind.table" },
+	RollTable:        { icon: "fas fa-dice-d6",        labelKey: "stonetop.gmToolkit.encounters.kind.table" },
 	Macro:            { icon: "fas fa-code",            labelKey: "stonetop.gmToolkit.encounters.kind.macro" },
 });
 

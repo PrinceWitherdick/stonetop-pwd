@@ -214,19 +214,6 @@ export function relationshipDropNotice(result, actor, doc) {
 	return [level, game.i18n.format(`stonetop.relationships.drop.${result}`, { name })];
 }
 
-// Dashed-outline affordance while a drag is over a relationships section, so "drop a
-// person here" is discoverable rather than found by accident. Returns a clear() the host
-// must call from its own drop handling: a sheet-level handler often consumes the drop
-// before it would ever reach a listener here, so dragleave alone can't be trusted.
-export function wireRelationshipDropHighlight(section) {
-	if (!section) return () => {};
-	let depth = 0;
-	const clear = () => { depth = 0; section.classList.remove("is-drop-target"); };
-	section.addEventListener("dragenter", () => { depth++; section.classList.add("is-drop-target"); });
-	section.addEventListener("dragleave", () => { if (--depth <= 0) clear(); });
-	return clear;
-}
-
 // Patch one field of a relationship entry. Writes the entry OBJECT under the row's id
 // (never a nested key), so a legacy bare-number value is cleanly replaced by the
 // { hearts, notes } shape — and since actor.update merges, a field this write omits keeps

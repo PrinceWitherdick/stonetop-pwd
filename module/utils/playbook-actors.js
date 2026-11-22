@@ -5,6 +5,7 @@
 
 import { WBH_PLAYBOOK_NAME, WBH_HERO_FLAG, heroDisplayName } from "../actors/character/WouldBeHeroAsterisk.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
+import { touchesFlag, touchesKey } from "./touches-flag.js";
 import { playbookSlug } from "./playbook-slug.js";
 
 // Lives one module down, and is re-exported from here because this is where callers look
@@ -42,10 +43,7 @@ export function playbookTitle(actor) {
  * @param {object} changed  the update that was applied
  */
 export function playbookTitleChanged(changed) {
-	const bag = changed?.flags?.[STONETOP_SCOPE];
-	if (bag && (WBH_HERO_FLAG in bag || `-=${WBH_HERO_FLAG}` in bag)) return true;
-	const sys = changed?.system;
-	return !!sys && ("playbook" in sys || "-=playbook" in sys);
+	return touchesFlag(changed, WBH_HERO_FLAG) || touchesKey(changed?.system, "playbook");
 }
 
 /**

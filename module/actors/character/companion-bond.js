@@ -154,7 +154,7 @@ export async function lendStrength(actor, { cardHp, npc = companionNpc(actor), g
 
 /** The buttons Loyal to the End's roll card carries (roll-engine's tierActions): the 7-9's and the 6-'s. */
 export function loyalToTheEndTierActions() {
-	const button = `<button type="button" class="stonetop-companion-injured"><i class="fas fa-band-aid"></i> `
+	const button = `<button type="button" class="stonetop-companion-injured"><i class="fas fa-band-aid" aria-hidden="true"></i> `
 		+ `${escHtml(localize(`${KEY}.injuredButton`))}</button>`;
 	return { partial: button, failure: button };
 }

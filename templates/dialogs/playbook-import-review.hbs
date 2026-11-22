@@ -126,9 +126,9 @@
 			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-cancel">Cancel</button>
 		</span>
 		<span class="stonetop-custom-move-nav-btns">
-			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-undo" title="Undo the last move, split, join or answer (Ctrl+Z)"{{#unless this.canUndo}} disabled{{/unless}}><i class="fas fa-rotate-left" aria-hidden="true"></i> <span class="stonetop-chip-text">Undo</span></button>
-			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-redo" title="Redo what was undone (Ctrl+Y)"{{#unless this.canRedo}} disabled{{/unless}}><i class="fas fa-rotate-right" aria-hidden="true"></i> <span class="stonetop-chip-text">Redo</span></button>
-			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-reset" title="Undo every move, split, join and answer, back to how the PDF was read"{{#unless this.changed}} disabled{{/unless}}><i class="fas fa-backward-fast" aria-hidden="true"></i> <span class="stonetop-chip-text">Start over</span></button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-undo" data-tooltip="Undo the last move, split, join or answer (Ctrl+Z)"{{#unless this.canUndo}} disabled{{/unless}}><i class="fas fa-rotate-left" aria-hidden="true"></i> <span class="stonetop-chip-text">Undo</span></button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-redo" data-tooltip="Redo what was undone (Ctrl+Y)"{{#unless this.canRedo}} disabled{{/unless}}><i class="fas fa-rotate-right" aria-hidden="true"></i> <span class="stonetop-chip-text">Redo</span></button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-reset" data-tooltip="Undo every move, split, join and answer, back to how the PDF was read"{{#unless this.changed}} disabled{{/unless}}><i class="fas fa-backward-fast" aria-hidden="true"></i> <span class="stonetop-chip-text">Start over</span></button>
 		</span>
 	</footer>
 </form>

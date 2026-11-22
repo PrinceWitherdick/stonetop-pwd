@@ -1443,10 +1443,30 @@
         "boostedBy": " <strong>(with {moves})</strong>"
       }
     },
+    "moments": {
+      "fight": {
+        "title": "A fight breaks out",
+        "onTheRoad": "On the road to {place}"
+      },
+      "setOut": {
+        "title": "The expedition sets out"
+      },
+      "home": {
+        "title": "Home again"
+      },
+      "arrive": {
+        "title": "The party arrives",
+        "reached": "Reached {place}"
+      }
+    },
     "settings": {
       "attackFx": {
         "name": "Attack Effects on the Map",
         "hint": "When on, a blow that lands is drawn on the map and heard at the table: a sword swings, an arrow flies, a thrown spear arcs, a bite snaps on the one bitten. A ranged miss flies wide, and pressing Apply bursts on every token that loses HP, or clanks when armor held. The pictures need the Sequencer and JB2A modules, and the sounds need the SoundFx Library module; without them, that half does nothing. Anyone whose system asks for reduced motion, who has switched Sequencer's Enable Effects off, or who has switched Foundry's Photosensitive Mode on, keeps the sounds without the pictures."
+      },
+      "tableMoments": {
+        "name": "Table moments",
+        "hint": "Show a brief banner on everyone's screen when a fight begins, when an expedition sets out or comes home, and when the party reaches a stop on a route the players can see. A player's own Reduce Motion setting stills it."
       },
       "weatherSceneFx": {
         "name": "Weather on the Scene (FXMaster)",
@@ -1524,6 +1544,14 @@
       "arcanaSeekerDrawsHomebrew": {
         "name": "Include homebrew minor arcana in the Seeker's draw",
         "hint": "When on, the minor arcana made in this world (finished, not drafts) join the shipped ones in the deck a new Seeker draws 3 from. Off by default."
+      },
+      "seekerAnyMajorArcanum": {
+        "name": "Seekers may start with any major arcanum",
+        "hint": "Off, a Seeker takes 1 of the 3 major arcana their background lists. On, a player may pick any major arcanum at creation, for a character brought over from another table. They will see every major arcanum's name."
+      },
+      "seekerAnyMajorHomebrew": {
+        "name": "Players may pick homebrew major arcana",
+        "hint": "Only matters while Seekers may start with any major arcanum. Off, players pick from the books' major arcana. On, your world's finished homebrew major arcana are listed too, by name. You can always give a homebrew major arcanum yourself."
       },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",
@@ -1821,7 +1849,26 @@
       "later": "Choose later",
       "stays": "{major} stays: it has been played. Your new background grants no second major arcanum.",
       "owed": "Your Background grants you 1 major arcanum, and you haven't chosen it yet.",
-      "owedButton": "Choose your major arcanum"
+      "owedButton": "Choose your major arcanum",
+      "grant": {
+        "give": "Give a major arcanum",
+        "change": "Change",
+        "none": "Give this Seeker a major arcanum of your choosing instead of the background's three.",
+        "set": "Starting major arcanum: {name}, given by you.",
+        "pickTitle": "Give {name} a major arcanum",
+        "pickButton": "Give this arcanum",
+        "clear": "The background's own three",
+        "clearHint": "The player chooses one, as the book has it.",
+        "stays": "{major} stays: it has been played. {given} is now the starting major arcanum."
+      },
+      "groups": {
+        "listed": "From this background",
+        "other": "Other major arcana",
+        "homebrew": "Homebrew"
+      },
+      "other": "Choose a different arcanum",
+      "otherTitle": "Choose a major arcanum",
+      "otherButton": "Take this arcanum"
     },
     "backgroundNeighbors": {
       "title": "{background}: Neighbors",
@@ -1833,6 +1880,11 @@
       "skipTraits": "Add them without traits"
     },
     "onboarding": {
+      "majorHint": {
+        "choose": "Choose the major arcanum granted by your background.",
+        "locked": "Your GM has given you this major arcanum."
+      },
+      "backgroundMajorGranted": "Major arcanum, given by your GM",
       "wellVersedExtra": "Well Versed: mark 1 more topic",
       "wellVersedFromBackground": "from your Background",
       "creationMarkHint": "Go mark it now: each Veteran Crew you start with picks 1.",
@@ -3661,6 +3713,36 @@
       "start": {
         "offTheMap": "That click was past the printed edge of {map}, so where they set out from is unchanged. Click inside the map itself.",
         "pinLabel": "setting out"
+      },
+      "rail": {
+        "done": "done"
+      },
+      "fight": {
+        "start": "Start a fight…",
+        "hint": "Opens Start a fight with every character on this map already ticked."
+      },
+      "road": {
+        "heading": "The road",
+        "noRoute": "No route is plotted for this trip yet.",
+        "plot": "Plot the route",
+        "notSetOut": "They have not set out yet, from {place}.",
+        "atStart": "At {place}, ready to leave.",
+        "onLeg": "Leg {n} of {total}: next stop {place}.",
+        "arrived": "Arrived at {place}.",
+        "travel": "Travel on to {place}",
+        "back": "Back a leg",
+        "walked": "travelled",
+        "next": "next",
+        "days": "Spend {days} of supplies…",
+        "daysHint": "The leg just travelled took {days}. Opens Days pass on the road with that many.",
+        "legLine": "{from} to {to}"
+      },
+      "status": {
+        "planning": "Planning",
+        "road": "On the road",
+        "roadLeg": "On the road, leg {n} of {total}",
+        "arrived": "Arrived",
+        "home": "Home"
       }
     },
     "suggestionMenu": {

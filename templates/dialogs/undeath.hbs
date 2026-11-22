@@ -18,7 +18,7 @@
 			Roll
 			<button type="button" class="undeath-roll-btn">
 				<span class="undeath-roll-chip">{{this.rollLabel}}</span>
-				<i class="fas fa-dice-d6"></i>
+				<i class="fas fa-dice-d6" aria-hidden="true"></i>
 			</button>
 			{{#if favor}}<span class="undeath-favor-note">You hold <strong>{{this.favor}}</strong> Favor.</span>{{/if}}
 		</p>
@@ -77,7 +77,7 @@
 		<p class="undeath-hint">{{tetherDestroyed.hint}}</p>
 		{{#if tetherDestroyed.on}}
 		<p class="undeath-hint undeath-warning">
-			<i class="fas fa-triangle-exclamation"></i>
+			<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
 			There is nothing left to reform beside. Your connection to humanity is lost, and you pass
 			into the GM's hands.
 		</p>
@@ -90,7 +90,7 @@
 		<div class="undeath-unholy-vessel">
 			<p class="undeath-pick-label">{{unholyVessel.label}}</p>
 			<p class="undeath-hint undeath-warning">
-				<i class="fas fa-triangle-exclamation"></i>
+				<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
 				{{unholyVessel.warning}}
 			</p>
 		</div>
@@ -140,7 +140,7 @@
 		{{#if unpayable}}
 		<div class="undeath-unpayable">
 			<p class="undeath-hint undeath-warning">
-				<i class="fas fa-triangle-exclamation"></i>
+				<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
 				{{this.unpayable.note}}
 			</p>
 			<label class="undeath-toggle">
@@ -162,14 +162,14 @@
 		{{/if}}
 
 		{{#if resetsFavor}}
-		<p class="undeath-hint"><i class="fas fa-rotate-left"></i> Regardless of the roll, your Favor resets to 0.</p>
+		<p class="undeath-hint"><i class="fas fa-rotate-left" aria-hidden="true"></i> Regardless of the roll, your Favor resets to 0.</p>
 		{{/if}}
 	</div>
 	{{/if}}
 
 	{{#if isDone}}
 	<div class="undeath-step undeath-step--done">
-		<p class="undeath-result-banner"><i class="fas fa-check"></i> Recorded on your sheet:</p>
+		<p class="undeath-result-banner"><i class="fas fa-check" aria-hidden="true"></i> Recorded on your sheet:</p>
 		<ul class="undeath-summary">
 			{{#each summary}}<li>{{{this}}}</li>{{/each}}
 		</ul>
@@ -186,13 +186,13 @@
 	{{#if isResolve}}
 	<button class="undeath-cancel-btn" type="button">Cancel</button>
 	<button class="undeath-apply-btn is-primary" type="button" {{#unless canApply}}disabled{{/unless}}>
-		<i class="fas fa-check"></i> {{this.applyLabel}}
+		<i class="fas fa-check" aria-hidden="true"></i> {{this.applyLabel}}
 	</button>
 	{{/if}}
 
 	{{#if isDone}}
 	<button class="undeath-close-btn is-primary" type="button">
-		<i class="fas fa-check"></i> Done
+		<i class="fas fa-check" aria-hidden="true"></i> Done
 	</button>
 	{{/if}}
 </div>

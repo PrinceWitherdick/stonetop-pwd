@@ -14,6 +14,8 @@
 /**
  * Has this reader asked for less motion, in their OS or in this system's own "Reduce motion" setting
  * (the `stonetop-reduce-motion` root class, settings.js#applyReduceMotion)? Either one is asking.
+ * The same question the CSS asks through the `stonetop-less-motion` root class. It reads the query
+ * itself rather than that class, so it answers before applyReduceMotion has run.
  *
  * ⚠ NO `matchMedia` MEANS NO, not "don't know". A test and a headless run both land there, and
  * animation is what those callers are usually checking -- so the honest default is the one that

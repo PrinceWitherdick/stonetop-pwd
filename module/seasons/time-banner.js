@@ -1,6 +1,7 @@
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { prefersReducedMotion } from "../utils/reduced-motion.js";
+import { setTooltip } from "../utils/set-tooltip.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
 import { currentSeasonView, nextSeasonStamp, readCurrentSeason, readCurrentYear } from "./current-season.js";
 import { START_YEAR_CHANGED_HOOK } from "./campaign-year.js";
@@ -220,8 +221,7 @@ function paint(tabs) {
 		const tab = banner.querySelector(`[data-part="${face.part}"]`);
 		if (!tab) continue;
 		// A season part's hover would drop over the buttons let down under it, so it waits until they're put away.
-		if (face.tooltip && !(menu && SEASON_PARTS.includes(face.part))) tab.dataset.tooltip = face.tooltip;
-		else delete tab.dataset.tooltip;
+		setTooltip(tab, menu && SEASON_PARTS.includes(face.part) ? "" : face.tooltip);
 		// Already sliding in; a second change straight after the first puts that one up and slides again.
 		const sliding = turning.get(tab);
 		if (sliding && tab.dataset.value === face.value) continue;
@@ -282,7 +282,7 @@ function openSeasonMenu() {
 	for (const part of SEASON_PARTS) {
 		const tab = banner.querySelector(`[data-part="${part}"]`);
 		tab?.setAttribute("aria-expanded", "true");
-		if (tab) delete tab.dataset.tooltip;
+		setTooltip(tab, "");
 	}
 	game.tooltip?.deactivate?.();
 	document.addEventListener("pointerdown", awayFromSeasonMenu, true);

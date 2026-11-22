@@ -121,6 +121,8 @@ npm run unpack     # extract packs back to JSON source
 npm test           # run tests
 ```
 
+Changing how something looks? Read [STYLEGUIDE.md](STYLEGUIDE.md) first: the colour, type and spacing tokens, the shared buttons, chips and cards, and what a new surface has to do to hold up under the dark pages, high contrast and a larger text size.
+
 ## Credits & Attribution
 
 Stonetop is the work of many hands. Per the credits page in the rulebooks, this system builds on:

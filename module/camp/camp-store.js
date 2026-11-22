@@ -12,6 +12,7 @@ import { deletionTarget, serverNow } from "../utils/foundry-compat.js";
 import { asArray, playsCharacter } from "../utils/playbook-actors.js";
 import { postMoveToChat, rolledTotalCard } from "../utils/chat.js";
 import { capitalizeFirst } from "../utils/strings.js";
+import { touchesFlag } from "../utils/touches-flag.js";
 import {
 	A_SAFE_PLACE, BREAK_BREAD, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_STATE, CAMP_STATUS, HAD_ALL_ALONG, HOME_FIRES, SETTLE_REFUSAL,
 	campLedger, campShareUpdate, campState, count, freezeCampPlan, isFurLinedBedrollName, isSettledRecord, messKitAllAlong, newCampRecord,
@@ -820,8 +821,7 @@ export function refreshCampCards(campId = null) {
 
 /** Whether an actor update wrote, or removed, a character's camp flag. */
 export function touchesCamp(changes) {
-	const scoped = changes?.flags?.[SYSTEM_ID];
-	return !!scoped && Object.keys(scoped).some(key => key.replace(/^-=/, "") === CAMP_FLAG);
+	return touchesFlag(changes, CAMP_FLAG);
 }
 
 /**

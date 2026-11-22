@@ -240,6 +240,7 @@ export function makeColumnsSortable(table, storageKey) {
 		if (!cell.querySelector(":scope > .steading-residents-sort-icon")) {
 			const icon = document.createElement("i");
 			icon.className = "fas fa-sort steading-residents-sort-icon";
+			icon.setAttribute("aria-hidden", "true");
 			cell.appendChild(icon);
 		}
 		cell.addEventListener("click", ev => {

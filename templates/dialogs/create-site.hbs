@@ -14,7 +14,7 @@
     <div class="stonetop-guide-main">
 
       <div class="stonetop-guide-banner">
-        <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+        <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">{{#if isEdit}}Edit a site{{else}}Create a site{{/if}}</div>
@@ -77,7 +77,7 @@
               <div class="stonetop-cs-pick-body">
                 <div class="stonetop-field-btns stonetop-cs-foundation-field">
                   <select class="stonetop-cf-input stonetop-cs-pick" disabled aria-label="Terrain"><option>(choose a region first)</option></select>
-                  <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" disabled aria-label="Roll terrain"><i class="fas fa-dice-d20"></i></button>
+                  <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" disabled aria-label="Roll terrain"><i class="fas fa-dice-d6" aria-hidden="true"></i></button>
                 </div>
               </div>
             </div>
@@ -92,7 +92,7 @@
           {{!-- Roll the lot rolls the manner's tables only, so it heads the list rather than the strip. --}}
           {{#if tables.length}}
           <div class="stonetop-cs-picks-head">
-            <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll the lot</button>
+            <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll the lot</button>
           </div>
           {{/if}}
           <div class="stonetop-cs-picks-grid">
@@ -157,7 +157,7 @@
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <input type="text" class="stonetop-cf-input stonetop-cs-table-caption stonetop-cs-title" data-index="{{this.index}}" value="{{this.caption}}" placeholder="What the crinwin are up to">
             <span class="stonetop-cs-die">{{this.die}}</span>
-            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
+            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this table"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{#each rows}}
           <div class="stonetop-cf-gear-row stonetop-field-btns stonetop-cs-trow-line">
@@ -168,13 +168,13 @@
               <span aria-hidden="true">&times;</span>
               <input type="number" class="stonetop-cf-input stonetop-cs-trow-span stonetop-cs-body" data-table="{{../index}}" data-index="{{this.rowIndex}}" min="1" max="{{@root.maxRowSpan}}" step="1" value="{{this.span}}" aria-label="Faces this result covers">
             </label>
-            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{this.rowIndex}}"><i class="fas fa-times"></i></button>
+            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{this.rowIndex}}" aria-label="Remove this row"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
-          <button type="button" class="stonetop-cs-trow-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-table="{{this.index}}"><i class="fas fa-plus"></i> Add result</button>
+          <button type="button" class="stonetop-cs-trow-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-table="{{this.index}}"><i class="fas fa-plus" aria-hidden="true"></i> Add result</button>
         </div>
         {{/each}}
-        <button type="button" class="stonetop-cs-table-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add"><i class="fas fa-table-list"></i> Add a table</button>
+        <button type="button" class="stonetop-cs-table-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add"><i class="fas fa-table-list" aria-hidden="true"></i> Add a table</button>
         {{/if}}
 
         {{#if is_review}}
@@ -227,7 +227,7 @@
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
-    <button class="stonetop-cs-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-mountain-sun{{/if}}"></i> {{#if isEdit}}Save site{{else}}Create site{{/if}}</button>
+    <button class="stonetop-cs-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-mountain-sun{{/if}}" aria-hidden="true"></i> {{#if isEdit}}Save site{{else}}Create site{{/if}}</button>
     {{else}}
     {{!-- Save what's there from any step: a new site lands on the GM Toolkit to finish later; an edit is written. --}}
     <span class="stonetop-guide-nav-group">

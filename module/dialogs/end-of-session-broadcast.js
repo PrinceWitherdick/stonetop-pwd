@@ -21,15 +21,12 @@
 // GM-only at the source and checked again on arrival, as the book broadcast is: a socket is open
 // to anyone signed in. A GM's own client never mirrors: they have the real window, and a co-GM
 // opening theirs would only get two windows fighting.
-import { SYSTEM_ID } from "../system-id.js";
+import { emitSystemMessage, onSystemMessage, sentByGM } from "../utils/system-socket.js";
 
-/** The system's socket channel (shared with books/book-broadcast.js), and the messages on it. */
-export const EOS_SOCKET = `system.${SYSTEM_ID}`;
+/** The messages this feature sends on the system's channel. */
 export const EOS_SHOW  = "eosShow";
 export const EOS_CLOSE = "eosClose";
 export const EOS_ASK   = "eosAsk";
-
-const ACTIONS = new Set([EOS_SHOW, EOS_CLOSE, EOS_ASK]);
 
 /** The GM's open window on this client, so a late player's ask can be answered. */
 let host = null;
@@ -44,7 +41,7 @@ export const EOS_ASK_WAIT_MS = 1500;
 let queue = Promise.resolve();
 
 const isGM = () => !!globalThis.game?.user?.isGM;
-const emit = payload => globalThis.game?.socket?.emit?.(EOS_SOCKET, { ...payload, userId: globalThis.game?.user?.id });
+const emit = ({ action, ...fields }) => emitSystemMessage(action, fields);
 
 /** The GM's window drew: tell the table what it shows. False on a player's client. */
 export function sendEndOfSession(win, checks) {
@@ -130,14 +127,11 @@ async function closeMirror(payload) {
 }
 
 async function receive(payload) {
-	if (!ACTIONS.has(payload?.action)) return;
 	if (payload.action === EOS_ASK) {
 		if (isGM() && host?.rendered) sendEndOfSession(host, host.groupChecks);
 		return;
 	}
-	// Not a permission gate (see the book broadcast's `receive`): what keeps a stray message from
-	// opening a window on every screen.
-	if (!globalThis.game?.users?.get?.(payload.userId)?.isGM) return;
+	if (!sentByGM(payload)) return;
 	if (isGM() || typeof payload.run !== "string") return;
 	if (payload.action === EOS_SHOW) await showMirror(payload);
 	else await closeMirror(payload);
@@ -145,7 +139,7 @@ async function receive(payload) {
 
 /** Listen, and a player asks whether a GM already has the window open. Once, for every user, at `ready`. */
 export function registerEndOfSessionBroadcast() {
-	globalThis.game?.socket?.on?.(EOS_SOCKET, payload => {
+	onSystemMessage([EOS_SHOW, EOS_CLOSE, EOS_ASK], payload => {
 		queue = queue.then(() => receive(payload)).catch(err =>
 			console.error("Stonetop | Could not show the GM's End of Session window.", err));
 	});

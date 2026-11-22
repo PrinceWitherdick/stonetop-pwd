@@ -8,5 +8,5 @@ import { escHtml } from "../../utils/strings.js";
 export function cardButton(className, { key, label, icon, data = {} }) {
 	const attrs = Object.entries({ key, ...data })
 		.map(([name, value]) => ` data-${name}="${escHtml(String(value))}"`).join("");
-	return `<button type="button" class="stonetop-pd-card-btn ${className}"${attrs}><i class="fas ${icon}"></i> ${escHtml(label)}</button>`;
+	return `<button type="button" class="stonetop-pd-card-btn ${className}"${attrs}><i class="fas ${icon}" aria-hidden="true"></i> ${escHtml(label)}</button>`;
 }

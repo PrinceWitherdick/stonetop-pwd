@@ -237,8 +237,8 @@ describe("reaching the reader who already stored a value", () => {
 		expect(block, "onReady not found — did Ready.js reorganize?").not.toBeNull();
 		expect(block[1]).toContain('applySheetContrast(getSetting("sheetContrast"))');
 		// A page stored as "dark-high" is split before anything reads it.
-		expect(block[1].indexOf("splitLegacyHighContrast()")).toBeGreaterThan(-1);
-		expect(block[1].indexOf("splitLegacyHighContrast()")).toBeLessThan(block[1].indexOf("applySheetContrast("));
+		expect(block[1].indexOf("splitLegacyHighContrast")).toBeGreaterThan(-1);
+		expect(block[1].indexOf("splitLegacyHighContrast")).toBeLessThan(block[1].indexOf("applySheetContrast("));
 		expect(block[1]).toContain('applySheetTexture(getSetting("sheetTexture"))');
 		expect(block[1]).toContain('applyNoItalics(getSetting("noItalics"))');
 		// And they are imported, or the call above is a ReferenceError at `ready`.

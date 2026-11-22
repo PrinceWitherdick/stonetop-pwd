@@ -217,8 +217,11 @@ export function applyJournalRollTables(app, html) {
 		btn.className = "stonetop-roll-table-btn";
 		btn.setAttribute("role", "button");
 		btn.setAttribute("tabindex", "0");
-		btn.title = `Roll ${formula} on this table`;
-		btn.innerHTML = '<i class="fas fa-dice-d20"></i>';
+		// The formula is read from the journal's own table, so it is text, not HTML; and the die is
+		// the button's only content, so the same words are its spoken name.
+		btn.dataset.tooltipText = `Roll ${formula} on this table`;
+		btn.setAttribute("aria-label", `Roll ${formula} on this table`);
+		btn.innerHTML = '<i class="fas fa-dice-d6" aria-hidden="true"></i>';
 		th.prepend(btn);
 
 		const fire = () => rollTable({ formula, label: labelParts, rows });

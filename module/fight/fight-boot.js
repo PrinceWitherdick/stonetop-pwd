@@ -26,12 +26,13 @@ import { combatantSide, snapshotFight, FIGHT_FLAG, SIDE_FLAG } from "./fight-sta
 import { refreshFightOverlay, invalidateFightOverlay, teardownFightOverlay } from "./fight-overlay.js";
 import { openStartFight, lineUpFight } from "./start-fight.js";
 import { sendAgainst, handleSendQuery, SEND_QUERY } from "./send-against.js";
-import { installCombatWindow, installFightWindow, syncFightWindow } from "./fight-window.js";
+import { installCombatWindow, installFightWindow, readerFight, syncFightWindow } from "./fight-window.js";
 import { fightVitalsKey } from "./fight-vitals.js";
 import { createFightTokenClass, installFightRing, syncFightRing } from "./fight-ring.js";
 import { installReadinessLoss } from "../combat/readiness-loss.js";
 import { installHiddenMirror } from "./fight-hidden.js";
 import { isFight } from "./in-battle.js";
+import { seedFightCurtain, syncFightCurtain } from "./fight-curtain.js";
 
 /**
  * `preCreateCombat`: mark a new Combat as a fight, and tie it to the scene it is started on.
@@ -78,9 +79,11 @@ export function refreshFightTab(tab = globalThis.ui?.combat) {
  * @returns {boolean} whether it was turned on
  */
 export function registerFightTab({ config = globalThis.CONFIG, hooks = globalThis.Hooks, foundryNs = globalThis.foundry, game = globalThis.game } = {}) {
+	// The fight curtain (fight-curtain.js) plays for a fight met after ready, never one under way at load.
+	hooks.on("ready", seedFightCurtain);
 	if (!isFightTabEnabled()) {
 		// The tab is core's, and so is everything in it; only the window is ours (see the head of this file).
-		installCombatWindow({ hooks });
+		installCombatWindow({ hooks, onSync: syncFightCurtain });
 		// And the rules a fight ending keeps, which are Stonetop's however the tracker looks: a core Combat is
 		// the fight then, so its end lets Readiness, the Marshal's holds and the mooks' grudges go (p.216).
 		installReadinessLoss({ hooks });
@@ -118,7 +121,14 @@ export function registerFightTab({ config = globalThis.CONFIG, hooks = globalThi
 		// The watcher follows an engagement change with a geometry run, which then paints afresh.
 		// Everything that can start, end or reveal a fight is an engagement change, so the Fight
 		// window (fight-window.js) opens and closes from here too.
-		onEngagement: () => { invalidateFightOverlay(); refreshFightTab(); syncFightWindow(); syncFightRing(); },
+		onEngagement: () => {
+			invalidateFightOverlay();
+			refreshFightTab();
+			const at = readerFight();
+			syncFightWindow(at);
+			syncFightRing();
+			syncFightCurtain(at);
+		},
 		onGeometry: () => refreshFightOverlay({ reuse: true }),
 	});
 	installFightWindow({ hooks });

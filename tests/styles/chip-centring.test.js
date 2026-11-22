@@ -78,6 +78,7 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-cf-preview-tag",
 		".stonetop .threat-themes__item",
 		".stonetop-expedition-dialog .stonetop-exp-load-pill",
+		".stonetop-expedition-dialog .stonetop-exp-status",
 		".stonetop-journey-canvas .stonetop-journey-tag",
 		".stonetop-rel-lane-count",
 		".stonetop-fight-badge",
@@ -398,6 +399,43 @@ describe("the Playbook Builder's buttons and the sheet's Restore it centre by fl
 	});
 });
 
+// The Expedition road panel's Travel, Back a leg and "Spend N days of supplies…" wear the roll-button skin
+// on core's flex button, in a gap-spaced row. Measured 11-20 with the text-centring audit
+// (exp-trail-verify.mjs) at UI roots 16 and 20, 1x/1.25x/1.5x: each label within 0.5px of its button's
+// centre, the row within 0.1px. What would break them is a nudge in the skin or in their own rules.
+describe("the Expedition road panel's buttons centre by flex, unnudged", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+
+	it.each([
+		".stonetop-spring-roll-btn",
+		".stonetop-spring-roll-btn--primary",
+		".stonetop-expedition-dialog .stonetop-exp-trail-buttons > button",
+		".stonetop-exp-trail-travel",
+		".stonetop-exp-trail-back",
+		".stonetop-exp-trail-days",
+	])("%s nudges nothing", sel => {
+		const body = declarations(MAIN, sel) ?? "";
+		for (const prop of NUDGES) expect(declared(body, prop), `${sel} nudges with ${prop}`).toBeNull();
+		const display = declared(body, "display");
+		if (display) expect(display).toMatch(/flex/);
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it("spaces the row by gap, with no margin under its buttons", () => {
+		const row = declarations(MAIN, ".stonetop-expedition-dialog .stonetop-exp-trail-buttons");
+		expect(declared(row, "display")).toBe("flex");
+		expect(declared(row, "gap")).toBeTruthy();
+		expect(declared(declarations(MAIN, ".stonetop-expedition-dialog .stonetop-exp-trail-buttons > button"), "margin")).toBe("0");
+	});
+
+	it("draws each icon as an element before its label", () => {
+		const trail = readRepo("templates/dialogs/partials/expedition-trail.hbs");
+		expect(trail).toMatch(/class="stonetop-exp-trail-travel [^"]*"[^>]*>\s*<i class="fas fa-person-hiking" aria-hidden="true"><\/i> \{\{this\.road\.travel\.label\}\}/);
+		expect(trail).toMatch(/class="stonetop-exp-trail-days [^"]*"[^>]*>\s*<i class="fas fa-utensils" aria-hidden="true"><\/i> \{\{this\.road\.daysOffer\.label\}\}/);
+	});
+});
+
 // Core drops every AppV1 radio 2px (`body.game .app input[type="radio"] { position: relative; top: 2px }`,
 // layered), and our unlayered rule beats it only for the properties it names. The import review's answer
 // radios measured 2px below their words until their rule named `top` (playbook-review-centre.mjs, 11-11).
@@ -491,7 +529,7 @@ describe("the post-death card buttons and Death's Door's caution row carry no ha
 	it("draws the Forced out button as the audit measured it: an icon element, then the label", async () => {
 		const { cardButton } = await import("../../module/actors/character/post-death-card-button.js");
 		expect(cardButton("stonetop-pd-forced-out", { key: "forced-out", label: "Forced out", icon: "fa-person-walking-arrow-right" }))
-			.toMatch(/^<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out"[^>]*><i class="fas fa-person-walking-arrow-right"><\/i> Forced out<\/button>$/);
+			.toMatch(/^<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out"[^>]*><i class="fas fa-person-walking-arrow-right" aria-hidden="true"><\/i> Forced out<\/button>$/);
 		expect(readRepo("templates/dialogs/partials/deaths-door-dictates.hbs"))
 			.toMatch(/<p class="deaths-door-dictated"><i class="fas [\w-]+" aria-hidden="true"><\/i> /);
 	});
@@ -582,6 +620,17 @@ describe("the shared left rail centres its words by trimming them", () => {
 		expect(declared(body, "top")).toBeNull();
 	});
 
+	// The Expedition's done tick (partials/guide-toc.hbs `isDone`), measured 11-20 against its words'
+	// first-line cap middle: within 0.64px in Signika, Caslon and Fell, roots 16 and 20, 1x/1.25x/1.5x.
+	it("draws the done tick on the words' line at a whole-pixel size, unnudged", () => {
+		const body = ownRule(MAIN, ".stonetop-guide-toc-done");
+		expect(body, "the tick has no rule").toBeTruthy();
+		expect(declared(body, "line-height")).toBe("inherit");
+		expect(declared(body, "font-size")).toMatch(/^round\(.+, 1px\)$/);
+		expect(declared(body, "margin-top")).toBeNull();
+		expect(declared(body, "top")).toBeNull();
+	});
+
 	it("lays the Welcome guide's bold-width copy over the words' line, so the trim's bottom edge is theirs", () => {
 		const body = ownRule(MAIN, ".stonetop-welcome-split .stonetop-guide-toc-text::after");
 		expect(declared(body, "margin-top")).toBe("-1lh");
@@ -610,5 +659,34 @@ describe("the shared left rail centres its words by trimming them", () => {
 			for (const m of btns) if (!m[1].includes('class="stonetop-guide-toc-text"')) bare.push(`${file}: ${m[0].slice(0, 80)}`);
 		}
 		expect(bare).toEqual([]);
+	});
+});
+
+// A Seeker's major from off the background's list: onboarding's Major Arcanum step buttons, the Details
+// tab ask's "Choose a different arcanum" and the Arcana tab's GM row all stand on the house
+// .stonetop-inline-btn, unnudged, in rows spaced by gap. Measured 11-20 with the text-centring audit at UI
+// roots 16 and 20, 1x/1.25x/1.5x: rows within 0.5px, chips within 0.5px, the row's buttons on one line.
+describe("the Seeker major-grant buttons centre on the house inline button", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+
+	it.each([".stonetop-seeker-major-actions", ".stonetop-seeker-major-grant"])("%s spaces its buttons by gap and nudges none", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		expect(declared(body, "display")).toBe("flex");
+		expect(declared(body, "gap")).toBeTruthy();
+		expect(declarations(MAIN, `${sel} .stonetop-inline-btn`), `${sel} restyles its buttons`).toBeFalsy();
+	});
+
+	it("the grant button carries no rule of its own", () => {
+		const body = declarations(MAIN, ".stonetop-seeker-major-grant-btn") ?? "";
+		for (const prop of NUDGES) expect(declared(body, prop), `nudges with ${prop}`).toBeNull();
+	});
+
+	it.each([
+		["templates/dialogs/character-onboarding.hbs", /<div class="stonetop-seeker-major-actions">\s*\{\{#each[^}]*\}\}\s*<button type="button" class="stonetop-inline-btn"/],
+		["templates/dialogs/seeker-major-arcanum.hbs", /<div class="stonetop-seeker-major-actions">\s*<button type="button" class="stonetop-inline-btn" data-action="other">/],
+		["templates/actor/partials/tab-arcana.hbs", /class="stonetop-inline-btn stonetop-seeker-major-grant-btn"><i class="fas fa-hand-sparkles" aria-hidden="true"><\/i>/],
+	])("%s draws the house inline button", (file, pattern) => {
+		expect(readRepo(file)).toMatch(pattern);
 	});
 });

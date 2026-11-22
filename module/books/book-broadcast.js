@@ -17,11 +17,10 @@
 // that says so out loud), so the URL the GM is reading is a URL every signed-in client can
 // fetch. A world whose GM never pointed at a copy has no path, `openBookReader` answers null,
 // and the message lands as a no-op rather than an error.
-import { SYSTEM_ID } from "../system-id.js";
+import { emitSystemMessage, onSystemMessage, sentByGM } from "../utils/system-socket.js";
 import { rulebookPath } from "./rulebooks.js";
 
-/** The socket channel this system talks on, and the one message sent over it. */
-export const BOOK_SOCKET = `system.${SYSTEM_ID}`;
+/** The one message this feature sends on the system's channel. */
 export const SHOW_BOOK = "showBook";
 
 /**
@@ -34,13 +33,7 @@ export function showBookToPlayers(book, page) {
 	if (!globalThis.game?.user?.isGM) return false;
 	const n = Number(page);
 	if (!Number.isFinite(n) || n < 1) return false;
-	globalThis.game?.socket?.emit?.(BOOK_SOCKET, {
-		action: SHOW_BOOK, book: Number(book), page: Math.trunc(n),
-		// Who sent it, carried IN the payload: Foundry relays a system message's arguments
-		// verbatim and does not append the sender, so a receiver that wants to know has to be
-		// told. See `receive` for what that check is and is not worth.
-		userId: globalThis.game?.user?.id,
-	});
+	emitSystemMessage(SHOW_BOOK, { book: Number(book), page: Math.trunc(n) });
 	return true;
 }
 
@@ -52,12 +45,7 @@ export function showBookToPlayers(book, page) {
  * is never shown a page needs to have loaded.
  */
 async function receive(payload) {
-	if (payload?.action !== SHOW_BOOK) return;
-	// The sender says it is a GM and we take its word for it, because a socket is open to
-	// anyone signed in and there is no way to prove otherwise from here. Worth having anyway:
-	// this is not a permission gate, it is what keeps an unrelated message on the same channel
-	// from opening a book on every screen at the table.
-	if (!globalThis.game?.users?.get?.(payload.userId)?.isGM) return;
+	if (!sentByGM(payload)) return;
 	const book = Number(payload.book);
 	const page = Number(payload.page);
 	if (!Number.isFinite(page) || page < 1) return;
@@ -70,8 +58,6 @@ async function receive(payload) {
 
 /** Listen for the message. Called once, for every user, at `ready`. */
 export function registerBookBroadcast() {
-	globalThis.game?.socket?.on?.(BOOK_SOCKET, (payload) => {
-		receive(payload).catch(err =>
-			console.error("Stonetop | Could not open the page the GM shared.", err));
-	});
+	onSystemMessage(SHOW_BOOK, payload => receive(payload).catch(err =>
+		console.error("Stonetop | Could not open the page the GM shared.", err)));
 }

@@ -124,7 +124,7 @@ export const BATTLE_JOY_REGAIN_CHOICE = "regain";
 export function battleJoyTierActions(debilities = []) {
 	const button = (choice, icon, label) =>
 		`<button type="button" class="stonetop-battle-joy-result" data-choice="${escHtml(choice)}">`
-		+ `<i class="fas ${icon}"></i> ${escHtml(label)}</button>`;
+		+ `<i class="fas ${icon}" aria-hidden="true"></i> ${escHtml(label)}</button>`;
 	return {
 		success: button(BATTLE_JOY_REGAIN_CHOICE, "fa-heart", localize("stonetop.battleJoy.regainButton")),
 		failure: debilities.filter(d => d?.key && !d.marked)

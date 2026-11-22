@@ -32,13 +32,13 @@
 						       value="{{this.prompt}}" placeholder='{{localize "stonetop.bestiary.questionPlaceholder"}}'>
 						<textarea class="stonetop-entry-qa-input stonetop-entry-qa-answer"
 						          placeholder='{{localize "stonetop.bestiary.answerPlaceholder"}}'>{{this.answer}}</textarea>
-						<a class="stonetop-entry-remove-qa" title="Remove"><i class="fas fa-trash"></i></a>
+						<a class="stonetop-entry-remove-qa" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
 					</div>
 				</li>
 				{{/each}}
 			</ul>
 			<button type="button" class="stonetop-entry-add-qa">
-				<i class="fas fa-plus"></i> {{localize "stonetop.bestiary.addQuestion"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.bestiary.addQuestion"}}
 			</button>
 			{{else}}
 			<ul class="stonetop-entry-qa-list">
@@ -67,12 +67,12 @@
 					<prose-mirror class="stonetop-entry-rich-editor stonetop-entry-group-body"
 					              data-section-index="{{../index}}" data-group-index="{{@index}}"
 					              value="{{this.body}}" data-drawn-value="{{this.body}}">{{{this.enrichedBody}}}</prose-mirror>
-					<a class="stonetop-entry-remove-group" title="Remove"><i class="fas fa-trash"></i></a>
+					<a class="stonetop-entry-remove-group" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
 				</div>
 				{{/each}}
 			</div>
 			<button type="button" class="stonetop-entry-add-group">
-				<i class="fas fa-plus"></i> {{localize "stonetop.bestiary.addDanger"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.bestiary.addDanger"}}
 			</button>
 			{{else}}
 			{{#each groups}}

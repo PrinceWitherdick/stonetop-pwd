@@ -11,7 +11,7 @@
     <div class="stonetop-guide-main">
 
       <div class="stonetop-guide-banner">
-        <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+        <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">{{#if isEdit}}Edit a hazard{{else}}Make a hazard{{/if}}</div>
@@ -64,7 +64,7 @@
         <label class="stonetop-cf-label stonetop-cf-group-label stonetop-ch-certain-label">
           <span><input type="checkbox" class="stonetop-ch-certain-death" {{#if certainDeath}}checked{{/if}}> <strong>Certain death.</strong> It would definitely, absolutely kill a normal person: no damage roll, straight to 0 HP and Death's Door. Telegraph it very clearly.</span>
         </label>
-        <div class="stonetop-cf-total"><i class="fas fa-burst"></i> <strong>{{this.damagePreview}}</strong></div>
+        <div class="stonetop-cf-total"><i class="fas fa-burst" aria-hidden="true"></i> <strong>{{this.damagePreview}}</strong></div>
         <p class="stonetop-ch-advice">{{this.damageAdvice}}</p>
         {{/if}}
 
@@ -74,10 +74,10 @@
           {{#each moveRows}}
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <input type="text" class="stonetop-cf-input stonetop-ch-move-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="{{this.placeholder}}">
-            <button type="button" class="stonetop-ch-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
+            <button type="button" class="stonetop-ch-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this move"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
-          <button type="button" class="stonetop-ch-move-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add GM move</button>
+          <button type="button" class="stonetop-ch-move-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add GM move</button>
         </div>
         <label class="stonetop-cf-label">Instinct <span class="stonetop-cf-pick-hint">(for dynamic hazards; optional)</span>
           <input type="text" class="stonetop-cf-input" data-field="instinct" value="{{sel.instinct}}" placeholder="to ensnare, to spread, to bury…">
@@ -94,10 +94,10 @@
           <div class="stonetop-cf-gear-row stonetop-field-btns">
             <span class="stonetop-ch-portent-glyph stonetop-glyph stonetop-glyph--circle" aria-hidden="true">○</span>
             <input type="text" class="stonetop-cf-input stonetop-ch-portent-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="pillar cracks and buckles, dirt pours down…">
-            <button type="button" class="stonetop-ch-portent-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
+            <button type="button" class="stonetop-ch-portent-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this portent"><i class="fas fa-xmark" aria-hidden="true"></i></button>
           </div>
           {{/each}}
-          <button type="button" class="stonetop-ch-portent-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add grim portent</button>
+          <button type="button" class="stonetop-ch-portent-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add grim portent</button>
         </div>
         <label class="stonetop-cf-label">Impending doom
           <input type="text" class="stonetop-cf-input stonetop-ch-doom-final" value="{{sel.impendingDoom.text}}" placeholder="the ceiling collapses, burying anyone still inside…">
@@ -110,12 +110,12 @@
           <div class="stonetop-ch-pm-row">
             <div class="stonetop-cf-gear-row stonetop-field-btns">
               <input type="text" class="stonetop-cf-input stonetop-ch-pm-label" data-index="{{this.index}}" value="{{this.label}}" placeholder="When you fall from the boughs of the tree…">
-              <button type="button" class="stonetop-ch-pm-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
+              <button type="button" class="stonetop-ch-pm-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}" aria-label="Remove this player move"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
             <textarea class="stonetop-cf-textarea stonetop-ch-pm-text" data-index="{{this.index}}" rows="3" placeholder="…take 1d10+3 damage (ignores armor, forceful) and roll +CON: on a 10+…">{{this.text}}</textarea>
           </div>
           {{/each}}
-          <button type="button" class="stonetop-ch-pm-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add player move</button>
+          <button type="button" class="stonetop-ch-pm-add stonetop-cf-mini-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add player move</button>
         </div>
         {{/if}}
 
@@ -150,7 +150,7 @@
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
-    <button class="stonetop-ch-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-triangle-exclamation{{/if}}"></i> {{#if isEdit}}Save hazard{{else}}Create hazard{{/if}}</button>
+    <button class="stonetop-ch-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-triangle-exclamation{{/if}}" aria-hidden="true"></i> {{#if isEdit}}Save hazard{{else}}Create hazard{{/if}}</button>
     {{else}}
     {{!-- Save what's there from any step: a new hazard lands on the GM Toolkit to finish later; an edit is written. --}}
     <span class="stonetop-guide-nav-group">

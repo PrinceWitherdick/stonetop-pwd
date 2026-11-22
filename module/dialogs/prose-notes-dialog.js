@@ -103,7 +103,7 @@ export async function openProseNotesDialog({
 	const dialog = new Dialog({
 		title,
 		content,
-		buttons: { done: { icon: '<i class="fas fa-check"></i>', label: doneLabel } },
+		buttons: { done: { icon: '<i class="fas fa-check" aria-hidden="true"></i>', label: doneLabel } },
 		default: "done",
 		close: () => commit(live?.value),
 		render: (html) => {

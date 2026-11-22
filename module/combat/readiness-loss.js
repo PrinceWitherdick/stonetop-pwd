@@ -35,7 +35,7 @@ import { characterBehind, followerCardFor } from "../actors/character/follower-m
 import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
 import { UNSTOPPABLE_FIGHTING_FLAG } from "../actors/character/deaths-door.js";
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
-import { isPrimaryGM, primaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM, primaryGM } from "../utils/primary-gm.js";
 import { postMoveNote } from "../utils/chat.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { changedKeys } from "../utils/foundry-compat.js";
@@ -306,7 +306,7 @@ export function installReadinessLoss({ hooks = globalThis.Hooks, cardFor = follo
 	const listening = [];
 	// Whose writes this client makes: every one on the primary GM's; with no GM online, those it answers for (a
 	// follower's are its character's, whose card holds them).
-	const lead = () => !!globalThis.game?.user?.isGM && isPrimaryGM();
+	const lead = isActingPrimaryGM;
 	const mine = actor => { if (lead()) return true; const who = characterBehind(actor, cardFor) ?? actor; return !!who && answersFor(who); };
 	const on = (name, fn) => listening.push([name, hooks.on(name, (...args) => {
 		if (!lead() && primaryGM()) return;

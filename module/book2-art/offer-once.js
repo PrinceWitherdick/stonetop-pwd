@@ -1,5 +1,5 @@
 import { getSetting, setSetting } from "../settings.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { whisperGm } from "../utils/chat.js";
 
 /**
@@ -49,10 +49,7 @@ export async function offerDurableArtOnce({ setting, findWork, card, offer }) {
 	// both whisper the same card to the GM group. The gate belongs here rather than at each call
 	// site: WorldSetup's caller had it and both of Ready.js's did not, which is precisely the
 	// asymmetry a shared helper exists to remove.
-	//
-	// Paired with isGM because isPrimaryGM() alone is true when NO GM is connected, which would
-	// let a lone player run it — the same pairing every other world-writing sweep uses.
-	if (!game.user?.isGM || !isPrimaryGM()) return;
+	if (!isActingPrimaryGM()) return;
 	if (getSetting(setting)) return;
 	const work = await findWork();
 	if (!work) return;

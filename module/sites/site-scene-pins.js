@@ -33,7 +33,7 @@ import { posterMapFor, posterMapSlugOf, sceneOrigin } from "../book2-art/poster-
 import { TRAVEL_MAPS, markedMap, percentSpot, sceneFrame } from "../data/travel-times.js";
 import { posterSpotPixels } from "../utils/map-pins.js";
 import { warn } from "../utils/logger.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { listSitePages, sitePageById } from "./site-store.js";
 import { siteMapSpot, setSiteMapSpot } from "./site-map-spots.js";
 
@@ -305,7 +305,7 @@ export async function onUpdateSiteNote(note, changes) {
 export async function reconcileSitePins(steading) {
 	// ONE GM, not every GM (audit RTE-15). Two GMs loading after a version bump both found no Note
 	// for a placed site and both created one, so every pinned site came out pinned twice.
-	if (!steading || !globalThis.game?.user?.isGM || !isPrimaryGM()) return 0;
+	if (!steading || !isActingPrimaryGM()) return 0;
 	let marked = 0;
 	for (const page of listSitePages(steading)) {
 		const spot = siteMapSpot(page);

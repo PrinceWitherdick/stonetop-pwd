@@ -49,7 +49,7 @@ vi.mock("../../module/settings.js", () => ({
 }));
 
 const table = { primary: true };
-vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => table.primary }));
+vi.mock("../../module/utils/primary-gm.js", () => ({ isPrimaryGM: () => table.primary, isActingPrimaryGM: () => !!globalThis.game?.user?.isGM && table.primary }));
 
 // Silenced rather than asserted on: a failing seed logs, and a suite that let it through would
 // print a stack per run for a case it is deliberately provoking.

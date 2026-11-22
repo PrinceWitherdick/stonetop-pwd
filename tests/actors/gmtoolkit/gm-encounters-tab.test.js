@@ -815,8 +815,8 @@ describe("the Encounters tab: a row's thumbnail", () => {
 	it("draws the picture, the medallion or the broken link inside the name button", () => {
 		const btn = CARD_MARKUP.slice(CARD_MARKUP.indexOf('class="stonetop-gm-encounter-entry-open"'));
 		const inner = btn.slice(0, btn.indexOf("</button>"));
-		expect(inner).toMatch(/\{\{#if unresolved\}\}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph"[^>]*><i class="fas fa-link-slash"><\/i><\/span>\{\{else if img\}\}<img class="stonetop-gm-entry-thumb" src="\{\{this\.img\}\}"/);
-		expect(inner).toMatch(/\{\{else\}\}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph"[^>]*><i class="\{\{this\.icon\}\}"><\/i><\/span>\{\{\/if\}\}/);
+		expect(inner).toMatch(/\{\{#if unresolved\}\}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph"[^>]*><i class="fas fa-link-slash" aria-hidden="true"><\/i><\/span>\{\{else if img\}\}<img class="stonetop-gm-entry-thumb" src="\{\{this\.img\}\}"/);
+		expect(inner).toMatch(/\{\{else\}\}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph"[^>]*><i class="\{\{this\.icon\}\}" aria-hidden="true"><\/i><\/span>\{\{\/if\}\}/);
 		const thumb = declarations(CSS, ".stonetop-gm-entry-thumb");
 		expect(thumb).toMatch(/object-fit:\s*cover/);
 		expect(thumb).toMatch(/width:\s*var\(--st-entry-thumb, 28px\)/);
@@ -897,8 +897,9 @@ describe("the Encounters tab: the pane around the cards", () => {
 		expect(PANE_BAR).toContain('aria-expanded="{{#if pane.introOpen}}true{{else}}false{{/if}}" aria-controls="{{pane.id}}-intro"');
 		expect(PANE_BAR).toContain('aria-label="{{localize "stonetop.gmToolkit.prep.aboutView"}}"');
 		expect(PANE_BAR).toMatch(/<p class="stonetop-gm-pane-intro" id="\{\{pane\.id\}\}-intro"\{\{#unless pane\.introOpen\}\} hidden\{\{\/unless\}\}>\{\{this\.intro\}\}<\/p>/);
-		// `display` on the paragraph would beat the UA's [hidden] rule, so it is stated back.
-		expect(declarations(CSS, ".stonetop-gm-pane-intro[hidden]")).toMatch(/display:\s*none/);
+		// No re-hide of its own: the one `[hidden]` rule near the top covers it
+		// (tests/styles/hidden-hides.test.js).
+		expect(CSS).not.toContain(".stonetop-gm-pane-intro[hidden]");
 		expect(CSS).toMatch(/:is\([^)]*\.stonetop-gm-pane-help[^)]*\):focus-visible/);
 		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
 		expect(en.prep.aboutView).toBeTruthy();
@@ -2521,7 +2522,7 @@ describe("the Encounters tab: the Completed section", () => {
 	it("marks a filed card with a green edge, quieter ink and a check in the grip's place", () => {
 		expect(declarations(CSS, ".stonetop-gm-encounter.is-used")).toMatch(/--st-bundle-edge:\s*var\(--st-green-border\)/);
 		expect(CSS).toMatch(/\.stonetop-gm-encounter\.is-used :is\(\.stonetop-gm-encounter-name[^)]*\)\s*\{[^}]*opacity:\s*0\.75/);
-		expect(CARD_MARKUP).toMatch(/\{\{#if used\}\}<i class="fas fa-check stonetop-gm-encounter-done-mark"><\/i>\{\{\/if\}\}/);
+		expect(CARD_MARKUP).toMatch(/\{\{#if used\}\}<i class="fas fa-check stonetop-gm-encounter-done-mark" aria-hidden="true"><\/i>\{\{\/if\}\}/);
 		expect(declarations(CSS, ".stonetop-gm-encounter-done-mark")).toMatch(/display:\s*none/);
 	});
 });
@@ -2633,7 +2634,7 @@ describe("the Encounters tab: deploy and fight", () => {
 		expect(inner).toContain('{{localize "stonetop.gmToolkit.encounters.deployAndFightShort"}}');
 		expect(inner).not.toContain("aria-label");
 		// Core's own combat glyph, which the Fight tab wears (Font Awesome Pro).
-		expect(inner).toContain('<i class="fa-solid fa-swords" aria-hidden="true"></i>');
+		expect(inner).toContain('<i class="fas fa-swords" aria-hidden="true"></i>');
 		expect(CARD_MARKUP.match(/class="stonetop-gm-encounter-deploy"/g)).toHaveLength(1);
 		// The same pill as Deploy: one rule, so the pair cannot drift apart.
 		expect(CSS).toMatch(/\.stonetop-gm-entry-card-head > \.stonetop-gm-encounter-deploy,\s*\.stonetop-gm-entry-card-head > \.stonetop-gm-encounter-fight\s*\{/);

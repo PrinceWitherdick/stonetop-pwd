@@ -173,7 +173,7 @@ describe("ATK-8: the GM's 'Ignores armor' tick", () => {
 		const appended = [];
 		const actions = { append: el => appended.push(el) };
 		const savedDocument = globalThis.document;
-		globalThis.document = { createElement: () => ({ append() {}, addEventListener() {}, set textContent(v) { this.text = v; } }) };
+		globalThis.document = { createElement: () => ({ dataset: {}, append() {}, addEventListener() {}, set textContent(v) { this.text = v; } }) };
 		const html = { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) };
 		wireIgnoresArmorBox(makeMessage({ damage: damage() }), html, { isGM: false });
 		expect(appended).toHaveLength(0);
@@ -297,7 +297,7 @@ describe("ATK-5: one live Confirm at the table", () => {
 		globalThis.game.users = { players, get: id => players.find(p => p.id === id), activeGM: null, find: () => undefined };
 		const actor = { uuid: "Actor.pim", isOwner: true, testUserPermission: u => u.id === "p1" };
 		globalThis.fromUuid = async () => actor;
-		const btn = { disabled: false, title: "", dataset: {}, listeners: 0, addEventListener() { this.listeners += 1; } };
+		const btn = { disabled: false, dataset: {}, listeners: 0, addEventListener() { this.listeners += 1; } };
 		const root = { querySelectorAll: sel => (sel === ".stonetop-attack-confirm" ? [btn] : []), querySelector: () => null };
 		const message = makeMessage({ attack: { moveKey: "clash", attackerUuid: "Actor.pim", targets: [] } });
 		message.canUserModify = () => true;
@@ -310,7 +310,7 @@ describe("ATK-5: one live Confirm at the table", () => {
 		const btn = confirmCard({ id: "gm1", isGM: true }, [{ id: "p1", name: "Ana", active: true }]);
 		await flush();
 		expect(btn.disabled).toBe(true);
-		expect(btn.title).toContain("Ana");
+		expect(btn.dataset.tooltipText).toContain("Ana");
 		expect(btn.listeners).toBe(0);
 	});
 

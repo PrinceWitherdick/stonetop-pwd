@@ -10,7 +10,7 @@
     <div class="stonetop-guide-main">
 
       <div class="stonetop-guide-banner">
-        <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+        <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">Create a corrupted site</div>
@@ -35,7 +35,7 @@
             {{#each features}}<option value="{{this.text}}"{{#if selected}} selected{{/if}}>{{this.text}}</option>{{/each}}
           </select>
         </label>
-        <button type="button" class="stonetop-tb-roll-feature stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll a feature</button>
+        <button type="button" class="stonetop-tb-roll-feature stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll a feature</button>
         <div class="stonetop-cf-pick">
           <div class="stonetop-cf-pick-label">Proximity</div>
           <div class="stonetop-cf-option-list stonetop-cf-option-list--row">
@@ -61,7 +61,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-themes stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll 2</button>
+        <button type="button" class="stonetop-tb-roll-themes stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll 2</button>
         {{/if}}
 
         {{#if is_cause}}
@@ -71,7 +71,7 @@
             {{#each causes}}<option value="{{this.text}}"{{#if selected}} selected{{/if}}>{{this.text}}</option>{{/each}}
           </select>
         </label>
-        <button type="button" class="stonetop-tb-roll-cause stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll a cause</button>
+        <button type="button" class="stonetop-tb-roll-cause stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll a cause</button>
         {{#if isFateful}}
         <div class="stonetop-cf-pick">
           <div class="stonetop-cf-pick-label">Was it&hellip; <span class="stonetop-cf-pick-hint">(roll the Die of Fate, or decide)</span></div>
@@ -99,9 +99,9 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-severity stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll</button>
+        <button type="button" class="stonetop-tb-roll-severity stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll</button>
         {{#if doomPreview}}
-        <div class="stonetop-cf-total"><i class="fas fa-hourglass-half"></i> This seeds an <strong>impending doom</strong>: {{doomPreview.impending}}</div>
+        <div class="stonetop-cf-total"><i class="fas fa-hourglass-half" aria-hidden="true"></i> This seeds an <strong>impending doom</strong>: {{doomPreview.impending}}</div>
         {{#if doomPreview.portents.length}}
         <p class="stonetop-ch-advice">Grim portents (it getting worse): {{#each doomPreview.portents}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}</p>
         {{/if}}
@@ -161,7 +161,7 @@
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
-    <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-hand-sparkles"></i> Create the site</button>
+    <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-hand-sparkles" aria-hidden="true"></i> Create the site</button>
     {{else}}
     <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
     {{/if}}

@@ -10,7 +10,7 @@
 		<button type="button" class="stonetop-people-chip is-on" data-filter="presenting" data-value="any"><span class="stonetop-chip-text">All</span> <span class="stonetop-people-count">{{counts.all}}</span></button>
 		<button type="button" class="stonetop-people-chip" data-filter="presenting" data-value="masculine"><span class="stonetop-chip-text">Masculine</span> <span class="stonetop-people-count">{{counts.masculine}}</span></button>
 		<button type="button" class="stonetop-people-chip" data-filter="presenting" data-value="feminine"><span class="stonetop-chip-text">Feminine</span> <span class="stonetop-people-count">{{counts.feminine}}</span></button>
-		<button type="button" class="stonetop-people-chip" data-filter="presenting" data-value="unspecified" title="Portraits left untagged: a bucket of their own, not a gap"><span class="stonetop-chip-text">Unspecified</span> <span class="stonetop-people-count">{{counts.unspecified}}</span></button>
+		<button type="button" class="stonetop-people-chip" data-filter="presenting" data-value="unspecified" data-tooltip="Portraits left untagged: a bucket of their own, not a gap"><span class="stonetop-chip-text">Unspecified</span> <span class="stonetop-people-count">{{counts.unspecified}}</span></button>
 	</div>
 	{{#if hasKids}}
 	<div class="stonetop-people-filtergroup" role="group" aria-label="Filter by age">
@@ -21,9 +21,9 @@
 	{{/if}}
 	{{#if hasUsed}}
 	<div class="stonetop-people-filtergroup" role="group" aria-label="Filter by whether the portrait is already assigned">
-		<button type="button" class="stonetop-people-chip is-on" data-filter="used" data-value="any" title="Show every portrait, assigned or not"><span class="stonetop-chip-text">Any use</span></button>
-		<button type="button" class="stonetop-people-chip" data-filter="used" data-value="unused" title="Hide the portraits other people already wear"><span class="stonetop-chip-text">Unused</span> <span class="stonetop-people-count">{{counts.unused}}</span></button>
-		<button type="button" class="stonetop-people-chip" data-filter="used" data-value="used" title="Only the portraits someone already wears"><span class="stonetop-chip-text">Assigned</span> <span class="stonetop-people-count">{{counts.used}}</span></button>
+		<button type="button" class="stonetop-people-chip is-on" data-filter="used" data-value="any" data-tooltip="Show every portrait, assigned or not"><span class="stonetop-chip-text">Any use</span></button>
+		<button type="button" class="stonetop-people-chip" data-filter="used" data-value="unused" data-tooltip="Hide the portraits other people already wear"><span class="stonetop-chip-text">Unused</span> <span class="stonetop-people-count">{{counts.unused}}</span></button>
+		<button type="button" class="stonetop-people-chip" data-filter="used" data-value="used" data-tooltip="Only the portraits someone already wears"><span class="stonetop-chip-text">Assigned</span> <span class="stonetop-people-count">{{counts.used}}</span></button>
 	</div>
 	{{/if}}
 </div>
@@ -33,8 +33,8 @@
       so the footer holds only the roll-and-take pair, and so neither of them sits in the
       bottom-right corner every other Stonetop dialog uses for a way to back out. --}}
 <div class="stonetop-people-actions">
-	{{#if canBrowse}}<button type="button" class="stonetop-people-browse"><i class="fas fa-folder-open"></i> Browse files&hellip;</button>{{/if}}
-	<button type="button" class="stonetop-people-clear"><i class="fas fa-rotate-left"></i> Use default</button>
+	{{#if canBrowse}}<button type="button" class="stonetop-people-browse"><i class="fas fa-folder-open" aria-hidden="true"></i> Browse files&hellip;</button>{{/if}}
+	<button type="button" class="stonetop-people-clear"><i class="fas fa-rotate-left" aria-hidden="true"></i> Use default</button>
 </div>
 </div>
 <div class="stonetop-people-gallery-body">
@@ -55,7 +55,7 @@
 		      square as a rect over that illustration — which is how the committed portrait still
 		      draws as a face on every small round surface — is read back out of `data-src`'s own
 		      filename at click time (PeopleGalleryDialog#_frameOf), so it needs no attribute. --}}
-		<button type="button" class="stonetop-people-pick{{#if isSquare}} is-square{{/if}}{{#if selected}} is-selected{{/if}}{{#if usedBy}} is-used{{/if}}" data-src="{{this.src}}" data-full="{{this.full}}" data-presenting="{{#if presenting}}{{this.presenting}}{{else}}unspecified{{/if}}" data-kid="{{#if kid}}kids{{else}}adults{{/if}}" data-used="{{#if usedBy}}used{{else}}unused{{/if}}" data-used-by="{{this.usedBy}}" title="{{this.name}}{{#if usedBy}} (already assigned to {{this.usedBy}}){{/if}}">
+		<button type="button" class="stonetop-people-pick{{#if isSquare}} is-square{{/if}}{{#if selected}} is-selected{{/if}}{{#if usedBy}} is-used{{/if}}" data-src="{{this.src}}" data-full="{{this.full}}" data-presenting="{{#if presenting}}{{this.presenting}}{{else}}unspecified{{/if}}" data-kid="{{#if kid}}kids{{else}}adults{{/if}}" data-used="{{#if usedBy}}used{{else}}unused{{/if}}" data-used-by="{{this.usedBy}}" data-tooltip-text="{{this.name}}{{#if usedBy}} (already assigned to {{this.usedBy}}){{/if}}">
 			<img src="{{this.src}}" alt="{{this.name}}" loading="lazy">
 			<span class="stonetop-people-label">{{this.name}}</span>
 		</button>
@@ -71,7 +71,7 @@
 		<p>No <strong>People of Stonetop</strong> portraits are available yet.</p>
 		<p>{{empty.blurb}}</p>
 		{{#if empty.canRebuild}}
-		<button type="button" class="stonetop-people-rebuild" title="Cut the portraits out of book art this world already has, without opening your PDFs"><i class="fas fa-crop-simple"></i> {{empty.rebuildLabel}}</button>
+		<button type="button" class="stonetop-people-rebuild" data-tooltip="Cut the portraits out of book art this world already has, without opening your PDFs"><i class="fas fa-crop-simple" aria-hidden="true"></i> {{empty.rebuildLabel}}</button>
 		{{/if}}
 		{{#if empty.canImport}}
 		{{!-- The books, asked for here rather than in the importer's own window: a GM in front of an
@@ -102,11 +102,11 @@
 		{{!-- Disabled until a book is chosen, and re-armed by _activateBookImport. The fields it is
 		      waiting on are two lines above it, which is what makes a dead button read as waiting
 		      rather than as broken; the hint under it says the same thing in words. --}}
-		<button type="button" class="stonetop-people-import" disabled="disabled" title="Rebuild the illustrations from your own Stonetop PDFs, on your own machine"><i class="fas fa-images"></i> {{empty.importLabel}}</button>
+		<button type="button" class="stonetop-people-import" disabled="disabled" data-tooltip="Rebuild the illustrations from your own Stonetop PDFs, on your own machine"><i class="fas fa-images" aria-hidden="true"></i> {{empty.importLabel}}</button>
 		<p class="stonetop-people-import-hint"></p>
 		{{!-- The poster maps, the free GM playbook and the force-update tick are separate errands
 		      with nothing to do with faces, so they keep the window they have always lived in. --}}
-		<button type="button" class="stonetop-people-import-more" title="Open the full Import Book Art window: poster maps, the free GM playbook, and the force-update option"><i class="fas fa-sliders"></i> More import options&hellip;</button>
+		<button type="button" class="stonetop-people-import-more" data-tooltip="Open the full Import Book Art window: poster maps, the free GM playbook, and the force-update option"><i class="fas fa-sliders" aria-hidden="true"></i> More import options&hellip;</button>
 		{{/if}}
 		{{#if canBrowse}}<p class="stonetop-people-empty-note">In the meantime you can choose any image with <strong>Browse files&hellip;</strong> above.</p>{{/if}}
 	</div>
@@ -123,8 +123,8 @@
       the Next-on-the-right exception does not apply; Randomize is a repeatable action rather
       than a step forward, and it sits beside the thing it arms. --}}
 <footer class="stonetop-people-footer">
-	<button type="button" class="stonetop-people-accept" disabled="disabled" title="Use the portrait on offer: click one, or roll for it"><i class="fas fa-check"></i> Accept</button>
-	<button type="button" class="stonetop-people-random" title="Roll a portrait at random from the ones shown (the filters above apply)"><i class="fas fa-dice-d6"></i> Randomize</button>
+	<button type="button" class="stonetop-people-accept" disabled="disabled" data-tooltip="Use the portrait on offer: click one, or roll for it"><i class="fas fa-check" aria-hidden="true"></i> Accept</button>
+	<button type="button" class="stonetop-people-random" data-tooltip="Roll a portrait at random from the ones shown (the filters above apply)"><i class="fas fa-dice-d6" aria-hidden="true"></i> Randomize</button>
 </footer>
 {{/if}}
 </div>

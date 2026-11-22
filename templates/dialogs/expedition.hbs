@@ -12,7 +12,7 @@
     <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+      <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
         {{!-- Past the opening step this reads "Expedition: <the trip's name>",
@@ -20,8 +20,23 @@
               Truncated, because the name is whatever the table typed. --}}
         <div class="stonetop-guide-banner-sub stonetop-guide-truncate">{{this.bannerSub}}</div>
       </div>
+      {{!-- Where the trip stands, once there is one (the footer and the rail already say the step).
+            Rewritten in place by a Travel press (ExpeditionDialog `_refreshRoadPanel`). --}}
+      {{#if this.tripStatus}}
+      <span class="stonetop-exp-status stonetop-exp-status--{{this.tripStatus.key}}" data-exp-status>{{this.tripStatus.label}}</span>
+      {{else}}
       <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
+      {{/if}}
     </div>
+
+    {{!-- Setting out is the first thing that happens on Running the journey, so its stamp opens
+          the step (`tripStamp.atTop`); Going home's stays at the foot, after the homecoming. --}}
+    {{#if this.tripStamp.atTop}}{{> stonetopTripStamp}}{{/if}}
+
+    {{!-- The road panel, under the set-out stamp: where the party is and the GM's Travel. --}}
+    {{#if this.road}}
+    <div class="stonetop-exp-trail-wrap">{{> "stonetop.expedition-trail" road=this.road}}</div>
+    {{/if}}
 
     {{!-- Expedition-log bar: name the current trip, switch between logged trips, or
           start a fresh one. Each trip with content becomes its own Chronicle page.
@@ -42,11 +57,11 @@
       </select>
       {{/if}}
       {{#if expedition.hasAny}}
-      <button type="button" class="stonetop-exp-delete" title="Delete this expedition" aria-label="Delete this expedition">
+      <button type="button" class="stonetop-exp-delete" data-tooltip="Delete this expedition" aria-label="Delete this expedition">
         <i class="fas fa-trash" aria-hidden="true"></i>
       </button>
       {{/if}}
-      <button type="button" class="stonetop-exp-new" title="Start a new expedition">
+      <button type="button" class="stonetop-exp-new" data-tooltip="Start a new expedition">
         <i class="fas fa-plus" aria-hidden="true"></i> New
       </button>
     </div>
@@ -128,11 +143,11 @@
         <span class="stonetop-spring-roll-result-label">{{{roll.label}}}</span>
       </div>
       <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn">
-        <i class="fas fa-rotate-right"></i> Roll again
+        <i class="fas fa-rotate-right" aria-hidden="true"></i> Roll again
       </button>
       {{else}}
       <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-dice"></i> Roll +Fortunes ({{this.fortunesLabel}})
+        <i class="fas fa-dice" aria-hidden="true"></i> Roll +Fortunes ({{this.fortunesLabel}})
       </button>
       {{/if}}
     </div>
@@ -239,7 +254,7 @@
       </div>
       {{/if}}
       <button type="button" class="stonetop-exp-fate-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-dice-d6"></i> Roll the Die of Fate
+        <i class="fas fa-dice-d6" aria-hidden="true"></i> Roll the Die of Fate
       </button>
     </div>
     {{/if}}
@@ -274,6 +289,16 @@
         <i class="fas fa-utensils" aria-hidden="true"></i> Days pass on the road&hellip;
       </button>
       <span class="stonetop-gm-struggle-hint">Glossing a few days of travel? Spend the supplies they eat: 1 use a head a day, a mess kit feeds four.</span>
+    </div>
+    {{/if}}
+
+    {{!-- A fight on the road, GM-only and only with the Fight tab on: opens Start a fight. --}}
+    {{#if this.fight}}
+    <div class="stonetop-gm-struggle-bar stonetop-exp-fight">
+      <button type="button" class="stonetop-exp-fight-btn stonetop-spring-roll-btn">
+        <i class="fas fa-swords" aria-hidden="true"></i> {{localize "stonetop.expedition.fight.start"}}
+      </button>
+      <span class="stonetop-gm-struggle-hint">{{localize "stonetop.expedition.fight.hint"}}</span>
     </div>
     {{/if}}
 
@@ -478,7 +503,7 @@
       {{/if}}
       <button type="button" class="stonetop-exp-triumph-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary"
               {{#unless returnTriumphant.hasSteading}}disabled{{/unless}}>
-        <i class="fas fa-house-chimney-heart"></i> Return Triumphant
+        <i class="fas fa-house-chimney-heart" aria-hidden="true"></i> Return Triumphant
       </button>
       {{#unless returnTriumphant.hasSteading}}
       <p class="stonetop-exp-triumph-note">No steading sheet in this world yet, so there is nothing to clear.</p>
@@ -486,10 +511,13 @@
     </div>
     {{/if}}
 
+    {{#if this.tripStamp}}{{#unless this.tripStamp.atTop}}{{> stonetopTripStamp}}{{/unless}}{{/if}}
+
     {{!-- The trip's stamp for this step: on Running the journey whether they have set out, on
           Going home whether they are home (and so on the timeline). Asked on the first Next in;
-          this says where it stands, for whom, and stamps, redoes or clears it. GM-only. --}}
-    {{#if this.tripStamp}}
+          this says where it stands, for whom, and stamps, redoes or clears it. GM-only. Written
+          once and drawn in one of two places (see `atTop` under the banner). --}}
+    {{#*inline "stonetopTripStamp"}}
     <div class="stonetop-exp-timeline">
       <p class="stonetop-exp-timeline-note">
         <i class="fas {{this.tripStamp.icon}}" aria-hidden="true"></i>
@@ -502,7 +530,7 @@
         {{/each}}
       </div>
     </div>
-    {{/if}}
+    {{/inline}}
 
     </div>
 
@@ -524,7 +552,7 @@
       <button type="button" class="stonetop-sidebar-toggle"
               aria-expanded="{{#if movesRailCollapsed}}false{{else}}true{{/if}}"
               aria-label="{{#if movesRailCollapsed}}Expand exploration moves{{else}}Collapse exploration moves{{/if}}">
-        <i class="fas fa-chevron-right"></i>
+        <i class="fas fa-chevron-right" aria-hidden="true"></i>
         <span class="stonetop-sidebar-toggle-label" aria-hidden="true">Exploration moves</span>
       </button>
       <div class="stonetop-sidebar-body">
@@ -603,7 +631,7 @@
       <button type="button" class="stonetop-spring-done stonetop-guide-btn--primary">Done <span aria-hidden="true">✦</span></button>
     </span>
     {{else}}
-    <button type="button" class="stonetop-spring-next">Next<span class="stonetop-nav-arrow" aria-hidden="true"></span></button>
+    <button type="button" class="stonetop-spring-next stonetop-guide-btn--primary">Next<span class="stonetop-nav-arrow" aria-hidden="true"></span></button>
     {{/if}}
   </div>
 

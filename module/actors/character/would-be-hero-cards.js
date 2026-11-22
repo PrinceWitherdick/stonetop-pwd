@@ -67,7 +67,7 @@ export const VOICE_ASKED_FLAG = "voiceOfExperienceAsked";
  */
 export function speakTruthRefusedActions() {
 	const button = `<button type="button" class="stonetop-speak-truth-refused" data-tooltip="${escHtml(localize("stonetop.wouldBeHero.refusedTooltip"))}" data-tooltip-direction="UP">`
-		+ `<i class="fas fa-fire"></i> ${escHtml(localize("stonetop.wouldBeHero.refusedButton"))}</button>`;
+		+ `<i class="fas fa-fire" aria-hidden="true"></i> ${escHtml(localize("stonetop.wouldBeHero.refusedButton"))}</button>`;
 	return { success: button, partial: button, failure: button };
 }
 
@@ -99,7 +99,7 @@ export function inOverYourHeadCardHtml(actor, moveName, item = null) {
 	if (!ownsLearnedBookMoveNamed(actor, IN_OVER_YOUR_HEAD)) return "";
 	return `<div class="card-buttons stonetop-roll-actions"><button type="button" class="stonetop-in-over-your-head-xp" `
 		+ `data-tooltip="${escHtml(localize("stonetop.wouldBeHero.rescuedTooltip"))}" data-tooltip-direction="UP">`
-		+ `<i class="fas fa-star"></i> ${escHtml(localize("stonetop.wouldBeHero.rescuedButton"))}</button></div>`;
+		+ `<i class="fas fa-star" aria-hidden="true"></i> ${escHtml(localize("stonetop.wouldBeHero.rescuedButton"))}</button></div>`;
 }
 
 /** Mark In Over Your Head's XP and post the receipt (with its Undo), as a miss's is posted. */

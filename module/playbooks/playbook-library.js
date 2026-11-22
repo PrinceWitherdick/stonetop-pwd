@@ -22,7 +22,7 @@
 import { listDataDir } from "../book2-art/browse.js";
 import { book2ArtPrefix } from "../book2-art/art-root.js";
 import { ensureDataDir, uploadFile } from "../utils/foundry-compat.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { escHtml, fileNameOf, joinNames, looseName } from "../utils/strings.js";
 import { readMarkers, setMarker } from "../utils/marker-setting.js";
@@ -396,7 +396,7 @@ export async function adoptLibraryPlaybooks({ afterAdding = null } = {}) {
 
 async function _adoptRun(afterAdding) {
 	const none = { added: [], offered: 0, backfilled: 0 };
-	if (!game.user?.isGM || !isPrimaryGM()) return none;
+	if (!isActingPrimaryGM()) return none;
 	const { entries, listed, unreadable } = await readLibrary();
 	const plan = planAdoption({ library: entries, world: worldPlaybooks(), forgotten: forgottenSlugs(), unreadable });
 

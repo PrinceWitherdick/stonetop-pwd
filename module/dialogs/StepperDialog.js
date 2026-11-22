@@ -5,6 +5,10 @@ import { warn } from "../utils/logger.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { getWalkthroughResume, patchWalkthroughResume, saveWalkthroughPosition } from "./walkthrough-resume.js";
 import { mayClose, notePristineWork } from "../utils/close-guard.js";
+import { playClassOnce } from "../utils/flash-highlight.js";
+
+/** How long a step's entrance class may stay on when its `animationend` never comes (a hidden tab). */
+const STEP_ENTER_FALLBACK_MS = 400;
 
 // ── StepperDialog ────────────────────────────────────────────────────────────
 // Shared scaffolding for the linear "walkthrough" dialogs (Spring Burst,
@@ -81,6 +85,9 @@ export class StepperDialog extends Application {
 	 *  without this a new step opens scrolled to the previous one's reading position. */
 	get _stepScrollSelector() { return ".stonetop-guide-main"; }
 
+	/** Override to true to fade each new step in (`is-entering` on the step's scrollport). Off by default. */
+	get _stepMotion() { return false; }
+
 	// ── Reload-resume ────────────────────────────────────────────────────────────
 	// A walkthrough is a plain Application, so it does not survive a browser refresh: it
 	// records the step it is on and that it is open, and hooks/Ready.js reopens it there on
@@ -149,6 +156,7 @@ export class StepperDialog extends Application {
 		// The step this render draws, read before the await: `_step` can move while it runs.
 		const drawing = this._step;
 		const stepChanged = this._renderedStep !== drawing;
+		const firstDraw = this._renderedStep === undefined;
 		// An auto-height wizard changes size from step to step. Where the previous step stood is
 		// taken BEFORE the redraw, so the new size can be centred on it (utils/hold-centre.js):
 		// otherwise it grows downward from its top edge, and a tall step walks off the screen.
@@ -164,6 +172,7 @@ export class StepperDialog extends Application {
 			if (stepChanged) {
 				const port = this.element?.[0]?.querySelector(this._stepScrollSelector);
 				if (port) port.scrollTop = 0;
+				if (port && !firstDraw && this._stepMotion) enterStep(port, this._lastVia);
 			}
 			// Auto-height wizards recompute height after each render so the window hugs the
 			// current step's content (AppV1 caps the result via CSS max-height).
@@ -293,6 +302,8 @@ export class StepperDialog extends Application {
 	_moveTo(index, via) {
 		const from = this._steps[this._step]?.key ?? null;
 		this._step = index;
+		// Which way the step fade slides (`enterStep`).
+		this._lastVia = via;
 		this.render(false);
 		try {
 			Promise.resolve(this._onStepEntered(this._steps[index]?.key ?? null, { from, via }))
@@ -319,4 +330,13 @@ export class StepperDialog extends Application {
 		this._onBeforeStepChange();
 		this._moveTo(index, "jump");
 	}
+}
+
+/**
+ * Fade a step in: `is-entering` (and `is-entering--back` after a Back) for one run of its animation.
+ * Guarded by tests/dialogs/stepper-step-motion.test.js.
+ */
+function enterStep(port, via) {
+	const classes = via === "back" ? ["is-entering", "is-entering--back"] : ["is-entering"];
+	playClassOnce(port, classes, { fallbackMs: STEP_ENTER_FALLBACK_MS });
 }

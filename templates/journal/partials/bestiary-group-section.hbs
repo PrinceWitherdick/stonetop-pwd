@@ -13,11 +13,11 @@
 		          placeholder='{{localize "stonetop.bestiary.discoveryBodyPlaceholder"}}'>{{this.body}}</textarea>
 		<textarea class="stonetop-discovery-input stonetop-discovery-items-input"
 		          placeholder='{{localize "stonetop.bestiary.discoveryItemsPlaceholder"}}'>{{this.itemsText}}</textarea>
-		<a class="stonetop-discovery-remove-group" title="Remove"><i class="fas fa-trash"></i></a>
+		<a class="stonetop-discovery-remove-group" data-tooltip="Remove" aria-label="Remove"><i class="fas fa-trash" aria-hidden="true"></i></a>
 	</div>
 	{{/each}}
 	<button type="button" class="stonetop-discovery-add-group" data-field="{{this.field}}">
-		<i class="fas fa-plus"></i> {{this.addLabel}}
+		<i class="fas fa-plus" aria-hidden="true"></i> {{this.addLabel}}
 	</button>
 	{{else}}
 	{{#each groups}}

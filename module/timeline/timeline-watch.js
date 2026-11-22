@@ -25,7 +25,7 @@
 import { STONETOP_SCOPE, readableFlags } from "../actors/character/StonetopFlags.js";
 import { creationFlowOpen } from "../actors/character/creation-flow.js";
 import { isMidCreation } from "../actors/character/onboarding-progress.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { format, localize } from "../utils/i18n.js";
 import {
 	LEARNED_OPTION, arcanaTrackSlugs, creationMilestones, detectArcanaTracks, detectMilestones, snapshotFrom,
@@ -266,13 +266,13 @@ export async function recordFollowerDeath(actor, { follower = "", slug = "", ind
 
 /** `createActor`: a new character gets a thread now, not at the next load. Primary GM only. */
 export function onCreateActor(actor) {
-	if (actor?.type !== "character" || !globalThis.game?.user?.isGM || !isPrimaryGM()) return;
+	if (actor?.type !== "character" || !isActingPrimaryGM()) return;
 	watched(syncTrackPages(), "could not make a timeline page for a new character");
 }
 
 /** `updateActor`: a renamed character (or steading) renames their page. Primary GM only. */
 export function onRenameActor(actor, changed) {
-	if (!("name" in (changed ?? {})) || !globalThis.game?.user?.isGM || !isPrimaryGM()) return;
+	if (!("name" in (changed ?? {})) || !isActingPrimaryGM()) return;
 	const track = trackForActor(actor);
 	if (!track) return;
 	watched(renameTrackPage(track.trackId, actor.name), "could not rename a timeline page");

@@ -14,7 +14,7 @@
       {{!-- Banner: the active panel's title, and the batch as it stands so far, so a size
             die or a trait shows what it does while it is being chosen. --}}
       <div class="stonetop-guide-banner">
-        <i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-cu-banner-icon"></i>
+        <i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-cu-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title stonetop-cu-banner-title">{{active.title}}</div>
           <div class="stonetop-guide-banner-sub stonetop-cu-stat-line">{{this.statLine}}</div>
@@ -89,7 +89,7 @@
 
         <div class="stonetop-cu-preview">
           <div class="stonetop-cu-preview-head">
-            <i class="fas fa-fish"></i>
+            <i class="fas fa-fish" aria-hidden="true"></i>
             <span class="stonetop-cu-preview-name">{{preview.name}}</span>
             <span class="stonetop-cu-preview-type">{{preview.typeLabel}}{{#if preview.strength}} · {{preview.strength}}, rolled as they appear{{/if}}</span>
           </div>

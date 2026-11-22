@@ -3,7 +3,8 @@ import { readRepo as read, readCss, repoFileExists } from "../fakes/css.js";
 import { RulebooksDialog } from "../../module/books/RulebooksDialog.js";
 import { BookReaderWindow, bookReaderWindowId, zoomStepTarget } from "../../module/books/BookReaderWindow.js";
 import { RULEBOOKS_SETTING } from "../../module/books/rulebooks.js";
-import { BOOK_SOCKET, SHOW_BOOK } from "../../module/books/book-broadcast.js";
+import { SHOW_BOOK } from "../../module/books/book-broadcast.js";
+import { SYSTEM_SOCKET } from "../../module/utils/system-socket.js";
 
 const READER_HBS = "templates/dialogs/book-reader.hbs";
 const SETUP_HBS  = "templates/dialogs/rulebooks.hbs";
@@ -256,7 +257,7 @@ describe("the reader window", () => {
 		const win = new BookReaderWindow({ book: 1, page: 5 });
 		win._viewerApp = fakeViewer();
 		win._showPlayers();
-		expect(game.socket.emit).toHaveBeenCalledWith(BOOK_SOCKET, {
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, {
 			action: SHOW_BOOK, book: 1, page: 91, userId: "gm",
 		});
 	});

@@ -201,7 +201,7 @@ registerRollCardAction(UNDO_MISS_XP_ACTION, ({ message: card, user, data }) => {
  */
 export function markCardUndone(btn) {
 	btn.disabled = true;
-	btn.innerHTML = `<i class="fas fa-rotate-left"></i> Undone`;
+	btn.innerHTML = `<i class="fas fa-rotate-left" aria-hidden="true"></i> Undone`;
 	// Found from the BUTTON rather than from the message element: the render hook is handed the
 	// whole message on some paths and the card on others, and `closest` is right either way.
 	btn.closest(".stonetop-xp-mark-card")?.classList.add("is-xp-undone");

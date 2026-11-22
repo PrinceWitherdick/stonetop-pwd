@@ -16,7 +16,7 @@
 // speaker), which is why an added character leaves an existing assignment where it is.
 
 import { assignedToAnother, charactersPlayedBy } from "../../utils/playbook-actors.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { bringDialogToFront } from "../../utils/front-on-open.js";
 import { escHtml } from "../../utils/strings.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
@@ -202,20 +202,20 @@ function _askAboutExisting(user, existing, { canReplace = true, isSelf = false }
 		// leads, and Replace never occupies the spot a reflexive click lands on.
 		const buttons = {
 			add: {
-				icon: '<i class="fas fa-user-plus"></i>',
+				icon: '<i class="fas fa-user-plus" aria-hidden="true"></i>',
 				label: "Add Another",
 				callback: () => resolve({ choice: "add", deleteIds: [] }),
 			},
 		};
 		if (canReplace) {
 			buttons.replace = {
-				icon: '<i class="fas fa-triangle-exclamation"></i>',
+				icon: '<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>',
 				label: "Replace",
 				callback: html => resolve({ choice: "replace", deleteIds: _tickedIds(html) }),
 			};
 		}
 		buttons.cancel = {
-			icon: '<i class="fas fa-xmark"></i>',
+			icon: '<i class="fas fa-xmark" aria-hidden="true"></i>',
 			label: "Cancel",
 			callback: () => resolve(null),
 		};
@@ -231,7 +231,9 @@ function _askAboutExisting(user, existing, { canReplace = true, isSelf = false }
 			// A dismissed dialog is a "no". Harmless after a button already answered: a
 			// settled promise ignores a second resolve.
 			close: () => resolve(null),
-		}).render(true);
+		// Tagged like every other Stonetop confirm. Left bare, this one window came up in core's
+		// own chrome: no slate title bar, no parchment, cream buttons with the orange glow.
+		}, { classes: ["dialog", "stonetop"] }).render(true);
 	});
 }
 
@@ -340,7 +342,7 @@ function liveInsertRecordsDropped(data) {
 
 /** Drop an actor's greeting flag if the player it names can no longer be greeted. Primary GM only. */
 export function dropStaleAutoOpen(actor) {
-	if (!game.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	if (actor?.type !== "character") return null;
 	const target = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor");
 	if (!target) return null;

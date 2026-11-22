@@ -68,7 +68,8 @@ describe("the person picker's checkbox", () => {
 	it("leaves no accent-colour rule claiming the checkboxes", () => {
 		const pinned = declarations(CSS, '.stonetop-person-picker-row input[type="radio"]');
 		expect(pinned, "the radio pinning is gone").toBeTruthy();
-		expect(pinned).toMatch(/accent-color:\s*slategrey/);
+		// The slate is read off its token, so the high-contrast palette can re-pitch it.
+		expect(pinned).toMatch(/accent-color:\s*var\(--st-accent-fill\)/);
 		expect(declarations(CSS, '.stonetop-person-picker-row input[type="checkbox"]')).toBe(null);
 	});
 });

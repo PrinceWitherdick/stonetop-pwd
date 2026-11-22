@@ -14,7 +14,7 @@
 // tracker) is left as it is until its token next changes.
 
 import { each } from "./in-battle.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 
 /**
  * The combatant updates that bring every fight in line with a token's `hidden`, per Combat. PURE.
@@ -46,7 +46,7 @@ export function hiddenMirrorUpdates(combats, tokenDoc, hidden) {
 export function installHiddenMirror({ hooks = globalThis.Hooks } = {}) {
 	const id = hooks.on("updateToken", (tokenDoc, changes) => {
 		if (!changes || !("hidden" in changes)) return;
-		if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return;
+		if (!isActingPrimaryGM()) return;
 		for (const { combat, updates } of hiddenMirrorUpdates(globalThis.game?.combats, tokenDoc, changes.hidden)) {
 			Promise.resolve(combat.updateEmbeddedDocuments("Combatant", updates))
 				.catch(err => console.error("Stonetop | showing a fighter as their token is shown failed", err));

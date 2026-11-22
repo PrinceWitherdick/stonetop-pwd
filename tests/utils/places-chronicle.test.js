@@ -39,34 +39,31 @@ describe("buildPlacePages", () => {
 		expect(pages).toHaveLength(1);
 	});
 
-	it("opens every page with where the place sits on the map", () => {
-		const [page] = buildPlacePages([{ letter: "d", name: "Cistern" }]);
+	it("gives a printed landmark the book's own paragraph and the way to the village entry", () => {
+		const [page] = buildPlacePages([{ letter: "d", name: "Cistern" }], { villageLink: VILLAGE_LINK });
 		const [section] = page.sections;
 
 		expect(section.heading).toBe("Overview");
-		expect(section.body).toContain("Marked <strong>D</strong> on the village map.");
+		expect(section.body).toContain("The Cistern is an underground vault");
+		expect(section.body).toContain(VILLAGE_LINK);
 	});
 
-	it("follows that with the book's own paragraph for a printed landmark", () => {
+	// The pin already wears the letter; the page does not repeat it.
+	it("says nothing of the map letter", () => {
 		const [page] = buildPlacePages([{ letter: "d", name: "Cistern" }], { villageLink: VILLAGE_LINK });
 
-		expect(page.sections[0].body).toContain("The Cistern is an underground vault");
-		expect(page.sections[0].body).toContain(VILLAGE_LINK);
+		expect(page.sections[0].body).not.toMatch(/Marked|village map/);
+		expect(page.sections[0].body.startsWith("<p>The Cistern")).toBe(true);
 	});
 
 	// A place the GM invented has nothing to read in the village entry, so pointing them at
-	// it would be a dead end dressed up as a lead.
-	it("offers no village link on a page the book says nothing about", () => {
-		const [page] = buildPlacePages([{ letter: "g", name: "Bethany's smithy" }], { villageLink: VILLAGE_LINK });
+	// it would be a dead end dressed up as a lead. Its page is still made, for the pin to open
+	// and the GM to write into.
+	it("gives a place the book says nothing about an empty Overview", () => {
+		const pages = buildPlacePages([{ letter: "g", name: "Bethany's smithy" }], { villageLink: VILLAGE_LINK });
 
-		expect(page.sections[0].body).toContain("Marked <strong>G</strong>");
-		expect(page.sections[0].body).not.toContain(VILLAGE_LINK);
-	});
-
-	it("escapes a letter rather than trusting it into the page HTML", () => {
-		const [page] = buildPlacePages([{ letter: "<b>", name: "Odd" }]);
-
-		expect(page.sections[0].body).not.toContain("<b>");
+		expect(pages).toHaveLength(1);
+		expect(pages[0].sections).toEqual([expect.objectContaining({ kind: "prose", heading: "Overview", body: "" })]);
 	});
 
 	// The key is the SLOT, not the name — so renaming a place keeps its page and everything
@@ -118,8 +115,7 @@ describe("the printed defaults", () => {
 
 		expect(pages).toHaveLength(6);
 		for (const page of pages) {
-			expect(page.sections[0].body.length, `${page.name} has only its map line`)
-				.toBeGreaterThan("<p>Marked <strong>X</strong> on the village map.</p>".length + 40);
+			expect(page.sections[0].body.length, `${page.name} has no paragraph`).toBeGreaterThan(40);
 		}
 	});
 });

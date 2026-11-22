@@ -2,6 +2,7 @@ import { fxMasterActive } from "./weather-fx.js";
 import { getSetting, setSetting } from "../settings.js";
 import { pastWelcomeGuide } from "../dialogs/walkthrough-resume.js";
 import { stonetopChatCard, whisperGm } from "../utils/chat.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 
 // ── "You could have weather on the map" ───────────────────────────────────────
 // The one place this system says the name FXMaster to a GM who has not got it.
@@ -42,7 +43,9 @@ export const FXMASTER_PACKAGE_URL = "https://foundryvtt.com/packages/fxmaster";
  * @returns {Promise<boolean>} Whether a card was actually posted.
  */
 export async function postFxMasterSuggestionOnce() {
-	if (!globalThis.game?.user?.isGM) return false;
+	// The primary GM only, like the greeting it follows: two GMs whose `ready` lands together would
+	// both read the latch unset and both whisper the card.
+	if (!isActingPrimaryGM()) return false;
 	if (getSetting(FXMASTER_SUGGESTION_SETTING)) return false;
 	// Mirrors _postBook2ArtReminderOnce's gate: past the guide means the GM ticked "Don't show
 	// this again", or finished both session-zero walkthroughs.

@@ -200,7 +200,7 @@ describe("the mirrored rail CSS", () => {
 	// rounded corner where the sheet is.
 	it("mirrors the chrome, not just the position", () => {
 		const rule = flipped();
-		expect(rule, "border").toMatch(/border-left:\s*2px solid slategrey/);
+		expect(rule, "border").toMatch(/border-left:\s*2px solid var\(--st-slate-rule\)/);
 		expect(rule, "border").toMatch(/border-right:\s*none/);
 		expect(rule, "radius").toMatch(/border-radius:\s*8px 0 0 8px/);
 		expect(rule, "shadow casts away from the seam").toMatch(/box-shadow:\s*-3px/);

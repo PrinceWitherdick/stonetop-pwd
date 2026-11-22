@@ -26,6 +26,12 @@
 		</div>
 	</div>
 
+	{{#if otherLabel}}
+	<div class="stonetop-seeker-major-actions">
+		<button type="button" class="stonetop-inline-btn" data-action="other"><i class="fas fa-wand-sparkles" aria-hidden="true"></i>{{this.otherLabel}}</button>
+	</div>
+	{{/if}}
+
 	<footer class="stonetop-pc-footer">
 		<button type="button" class="stonetop-pc-done" data-action="choose">{{this.chooseLabel}}</button>
 		<button type="button" class="stonetop-pc-done" data-action="later">{{this.laterLabel}}</button>

@@ -16,8 +16,9 @@ import { BackgroundAnswersDialog } from "../../../module/actors/character/dialog
 import {
 	seekerMajorTrack, pickSeekerMajorMark, minorArcanaHeldElsewhere, drawableMinorSlugs,
 	seekerMajorSwitchPlan, withMinorRole, seekerCardRoles, seekerMajorOwed, frontTaskMarkers, frontTaskTrack,
-	seekerMinorRolesAssigned, seekerMinorStepComplete,
+	seekerMinorRolesAssigned, seekerMinorStepComplete, seekerOfferedMajors,
 } from "../../../module/actors/character/seeker-collection.js";
+import { SYSTEM_ID } from "../../../module/system-id.js";
 
 const PACK = new Map(loadPlaybookPackDocs().map(doc => [doc.system.slug, doc]));
 const playbookDoc = slug => ({ ...structuredClone(PACK.get(slug)), uuid: `Compendium.test.${slug}` });
@@ -68,7 +69,13 @@ const CHOICE = (arcanaSel, backgroundSlug = "patriot") => ({
 });
 const run = (sheet, sel) => sheet._applyPlaybookSelections(playbookDoc("the-seeker"), sel);
 
-afterEach(() => { vi.restoreAllMocks(); });
+const realGame = globalThis.game;
+// The world switches seekerOfferedMajors reads (getBooleanSetting), on for the keys named.
+const worldSwitches = (...on) => {
+	globalThis.game = { ...realGame, settings: { get: (scope, key) => scope === SYSTEM_ID && on.includes(key) } };
+};
+
+afterEach(() => { vi.restoreAllMocks(); globalThis.game = realGame; });
 
 describe("onboarding's apply of the Seeker's arcana", () => {
 	it("gives the major marked, the mastered card unlocked, the found card read on both sides, the lead as a lead", async () => {
@@ -213,6 +220,16 @@ describe("a change of playbook away from the Seeker", () => {
 		await char.ensureSeekerLeadCard();
 		expect(has(actor, "owned", "giant-oak-leaf")).toBe(false);
 	});
+
+	it("drops the GM's given major with the rest of the creation bookkeeping", async () => {
+		const { actor, sheet, char } = seeker();
+		await char.setSeekerMajorGrant("mindgem");
+		await run(sheet, CHOICE({ major: "mindgem", majorMarks: ["front:0"], majorMarksFor: "mindgem" }));
+		expect(arcana(actor, "majorGrant")).toBe("mindgem");
+		await char.clearPlaybookData("The Seeker");
+		expect(arcana(actor, "majorGrant") ?? undefined).toBeUndefined();
+		expect(char.seekerMajorGrant()).toBe("");
+	});
 });
 
 describe("the Details tab's background switch and the major arcanum", () => {
@@ -226,6 +243,13 @@ describe("the Details tab's background switch and the major arcanum", () => {
 		expect(seekerMajorSwitchPlan({ major: "", offered })).toBe("ask");
 		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", held: false, offered })).toBe("ask");
 		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", offered: [] })).toBe("none");
+	});
+
+	it("plans with a GM's grant: a played major stays held and the grant is still asked for", () => {
+		const offered = ["mindgem"];
+		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", offered, asGranted: false, locked: true })).toBe("ask");
+		expect(seekerMajorSwitchPlan({ major: "hectumel-codex", offered, asGranted: true, locked: true })).toBe("replace");
+		expect(seekerMajorSwitchPlan({ major: "mindgem", offered, locked: true })).toBe("keep");
 	});
 
 	it("the dialog's answer: a ○ major takes its first ○, a □ major waits for its task", () => {
@@ -280,6 +304,11 @@ describe("the Details tab's background switch and the major arcanum", () => {
 		expect(seekerMajorOwed({ offered: [], owned: [], major: "" })).toBe(false);
 	});
 
+	it("with a GM's grant only the grant settles the debt, not an older creation major held", () => {
+		expect(seekerMajorOwed({ offered: ["mindgem"], owned: ["hectumel-codex"], major: "hectumel-codex", locked: true })).toBe(true);
+		expect(seekerMajorOwed({ offered: ["mindgem"], owned: ["mindgem"], major: "hectumel-codex", locked: true })).toBe(false);
+	});
+
 	it("'Choose later' leaves the major owed, and the Arcana tab's button asks again and gives it", async () => {
 		const { actor, sheet, char } = seeker();
 		await run(sheet, CHOICE());
@@ -314,6 +343,73 @@ describe("the Details tab's background switch and the major arcanum", () => {
 		const settled = tab({ stonetop: { seekerMajorOwed: false, arcana: {}, arcanaOpen: {} } });
 		expect(settled).not.toContain("stonetop-seeker-major-owed");
 		expect(settled).toContain("stonetop.arcana.empty");
+	});
+
+	it("the Arcana tab draws the GM's give-a-major row in place of the empty line, and names a grant", () => {
+		const hb = Handlebars.create();
+		hb.registerHelper("localize", (k, opts) => `${k}${opts?.hash?.name ? `|${opts.hash.name}` : ""}`);
+		for (const name of ["eq", "lt", "and", "not", "times", "moveBody"]) hb.registerHelper(name, () => false);
+		hb.registerHelper("or", (...args) => args.slice(0, -1).some(Boolean));
+		const tab = hb.compile(readRepo("templates/actor/partials/tab-arcana.hbs"));
+		const none = tab({ stonetop: { seekerMajorGrant: { shown: true, name: "" }, arcana: {}, arcanaOpen: {} } });
+		expect(none).toContain('class="stonetop-seeker-major-grant"');
+		expect(none).toContain("stonetop.seekerMajor.grant.none");
+		expect(none).toMatch(/class="stonetop-inline-btn stonetop-seeker-major-grant-btn"><i class="fas fa-hand-sparkles" aria-hidden="true"><\/i>stonetop.seekerMajor.grant.give</);
+		expect(none).not.toContain("stonetop.arcana.empty");
+		const given = tab({ stonetop: { seekerMajorGrant: { shown: true, name: "The Mindgem" }, arcana: {}, arcanaOpen: {} } });
+		expect(given).toContain("stonetop.seekerMajor.grant.set|The Mindgem");
+		expect(given).toContain(">stonetop.seekerMajor.grant.change<");
+		expect(tab({ stonetop: { seekerMajorGrant: { shown: false }, arcana: {}, arcanaOpen: {} } })).not.toContain("stonetop-seeker-major-grant");
+	});
+
+	// A major given by the GM (arcana.majorGrant) or picked freely under the world's "any major" switch
+	// is on the offered list (seekerOfferedMajors), so the switch keeps it; with neither, the book's
+	// rule replaces an untouched off-list major.
+	describe("a major given or picked off the background's list", () => {
+		// Patriot lists the Hectumel Codex; mindgem is the Antiquarian's.
+		const offList = async ({ grant = "" } = {}) => {
+			const made = seeker();
+			if (grant) await made.char.setSeekerMajorGrant(grant);
+			await run(made.sheet, CHOICE({ major: "mindgem", majorMarks: ["front:0"], majorMarksFor: "mindgem" }));
+			vi.spyOn(BackgroundAnswersDialog, "ask").mockResolvedValue(null);
+			return { ...made, ask: vi.spyOn(SeekerMajorArcanumDialog, "ask").mockResolvedValue(null) };
+		};
+
+		it("given by the GM: a background switch keeps it, asks nothing, and owes nothing", async () => {
+			const { actor, sheet, char, ask } = await offList({ grant: "mindgem" });
+			expect((await char.settleSeekerMajorOnBackground()).plan).toBe("keep");
+			await choose(sheet, "witch-hunter");
+			expect(ask).not.toHaveBeenCalled();
+			expect(has(actor, "owned", "mindgem")).toBe(true);
+			expect(ticked(actor, "mindgem")).toEqual(["mindgem:front:0"]);
+			expect(await char.seekerMajorOwed()).toBe(false);
+		});
+
+		it("picked under the world's switch, with no grant: kept the same way", async () => {
+			worldSwitches("seekerAnyMajorArcanum");
+			const { actor, sheet, char, ask } = await offList();
+			expect((await char.settleSeekerMajorOnBackground()).plan).toBe("keep");
+			await choose(sheet, "witch-hunter");
+			expect(ask).not.toHaveBeenCalled();
+			expect(has(actor, "owned", "mindgem")).toBe(true);
+		});
+
+		it("with neither, the untouched off-list major is replaced, as the book has it", async () => {
+			const { actor, char } = await offList();
+			expect((await char.settleSeekerMajorOnBackground()).plan).toBe("replace");
+			expect(has(actor, "owned", "mindgem")).toBe(false);
+		});
+
+		it("a grant with nothing held yet is owed, and the ask offers only the grant", async () => {
+			const { actor, sheet, char } = seeker();
+			await char.setSeekerMajorGrant("mindgem");
+			const ask = vi.spyOn(SeekerMajorArcanumDialog, "ask").mockResolvedValue({ major: "mindgem", marks: ["front:1"] });
+			vi.spyOn(BackgroundAnswersDialog, "ask").mockResolvedValue(null);
+			await choose(sheet, "patriot");
+			expect(ask.mock.calls[0][1].map(c => c.slug)).toEqual(["mindgem"]);
+			expect(ticked(actor, "mindgem")).toEqual(["mindgem:front:1"]);
+			expect(await char.seekerMajorOwed()).toBe(false);
+		});
 	});
 
 	it("owes nothing after a played major stays, and the button does nothing then", async () => {
@@ -400,6 +496,144 @@ describe("onboarding's major step: mark 1 ○ or □", () => {
 	});
 });
 
+// The GM's grant (arcana.majorGrant, read live off the character) locks onboarding's major to it; the
+// world's "any major" switch keeps an off-list pick. Both go through seekerOfferedMajors.
+describe("onboarding's major step with a major given or picked off the list", () => {
+	const OPTION = slug => ({
+		slug, name: card(slug)?.front?.title ?? slug, description: "", homebrew: false,
+		frontDescription: card(slug)?.front?.description ?? "", unlockDescription: card(slug)?.front?.unlock?.description ?? "",
+	});
+	const dialog = ({ grant = "", major = "hectumel-codex", majors = ["hectumel-codex", "red-scepter", "staff-of-the-lidless-orb", "mindgem"] } = {}) => {
+		const d = Object.create(CharacterOnboardingDialog.prototype);
+		d._initializeState(playbookDoc("the-seeker"), null, null);
+		d._selections.backgroundSlug = "patriot";
+		d._seekerActor = { id: "a1", name: "Ada", typedActor: { seekerMajorGrant: () => d._grant } };
+		d._grant = grant;
+		d._arcanaCache = { major: majors.map(OPTION), minor: [] };
+		d._selections.arcana.major = major;
+		d._selections.arcana.majorMarks = ["unlock:0"];
+		d._selections.arcana.majorMarksFor = major;
+		return d;
+	};
+	const slugs = data => data.major.map(m => m.slug);
+
+	it("a grant is the only choice, picked, with the locked hint; the mark resets for its track", async () => {
+		const d = dialog({ grant: "mindgem" });
+		const data = await d._seekerArcanaChoiceData();
+		expect(slugs(data)).toEqual(["mindgem"]);
+		expect(data.major[0].selected).toBe(true);
+		expect(data.majorLocked).toBe(true);
+		expect(data.majorHint).toBe("Your GM has given you this major arcanum.");
+		expect(data.majorActions).toEqual([]);
+		d._reconcileSeekerMajorMarks(d._seekerMajorMysteryTrack(d._arcanaCache.major.find(o => o.slug === "mindgem")));
+		expect(d._selections.arcana.majorMarks).toEqual([]);
+		expect(d._isStepComplete("seekerArcana")).toBe(false);
+	});
+
+	it("taking the grant back offers the background's three again", async () => {
+		const d = dialog({ grant: "mindgem" });
+		await d._seekerArcanaChoiceData();
+		d._grant = "";
+		const data = await d._seekerArcanaChoiceData();
+		expect(slugs(data).sort()).toEqual(["hectumel-codex", "red-scepter", "staff-of-the-lidless-orb"]);
+		expect(data.majorLocked).toBe(false);
+		expect(data.majorHint).toBe("Choose the major arcanum granted by your background.");
+	});
+
+	it("the background step draws the grant alone, with no radio, under the GM's label", async () => {
+		const d = dialog({ grant: "mindgem" });
+		d._step = d._steps.indexOf("background");
+		const { backgrounds } = await d.getData();
+		const patriot = backgrounds.find(b => b.slug === "patriot");
+		expect(patriot.majorGranted).toBe(true);
+		expect(patriot.majorGrantedLabel).toBe("Major arcanum, given by your GM");
+		expect(patriot.majorArcana.map(m => [m.slug, m.granted, m.selected])).toEqual([["mindgem", true, true]]);
+		const hb = Handlebars.create();
+		for (const name of ["eq", "and", "or", "not", "gt", "lt", "includes", "localize", "times", "concat", "json"]) hb.registerHelper(name, () => "");
+		const html = hb.compile(readRepo("templates/dialogs/character-onboarding.hbs"))({ ...await d.getData(), isBackground: true });
+		const block = html.slice(html.indexOf("Major arcanum, given by your GM"));
+		expect(block.slice(0, block.indexOf("</label>"))).not.toContain('name="onboard-background-major-arcanum"');
+	});
+
+	it("finishing applies the granted major with its mark", async () => {
+		const { actor, sheet, char } = seeker();
+		await char.setSeekerMajorGrant("mindgem");
+		const d = dialog({ grant: "mindgem" });
+		await d._seekerArcanaChoiceData();
+		d._markSeekerMajor("front:1", true);
+		await run(sheet, CHOICE({ ...structuredClone(d._selections.arcana), minorDraw: CHOICE().arcana.minorDraw, minorRoles: CHOICE().arcana.minorRoles }));
+		expect(has(actor, "owned", "mindgem") && has(actor, "identified", "mindgem")).toBe(true);
+		expect(ticked(actor, "mindgem")).toEqual(["mindgem:front:1"]);
+		expect(arcana(actor, "major")).toBe("mindgem");
+	});
+
+	it("a homebrew major grant is loaded, shown, and never joins the minor pool", async () => {
+		const homebrew = (slug, major) => ({ type: "move", name: slug, flags: { stonetop: { slug, major, front: { title: slug, description: "<p>x</p>" } } }, system: { moveType: "arcanum" } });
+		globalThis.game = { ...realGame, packs: { get: () => null }, items: [homebrew("our-orb", true), homebrew("our-pebble", false)],
+			settings: { get: (scope, key) => scope === SYSTEM_ID && key === "arcanaSeekerDrawsHomebrew" } };
+		const d = dialog({ grant: "our-orb" });
+		d._arcanaCache = null;
+		// The card's first paragraph is read through the DOM, which this suite does not have.
+		d._firstParagraph = () => "";
+		const loaded = await d._loadArcanaOptions();
+		expect(loaded.major.map(o => [o.slug, o.homebrew])).toEqual([["our-orb", true]]);
+		expect(loaded.minor.map(o => o.slug)).toEqual(["our-pebble"]);
+		expect(slugs(await d._seekerArcanaChoiceData())).toEqual(["our-orb"]);
+	});
+
+	it("with the world's switch on, an off-list pick survives the ensure and a change of background", async () => {
+		worldSwitches("seekerAnyMajorArcanum");
+		const d = dialog({ major: "mindgem" });
+		const data = await d._seekerArcanaChoiceData();
+		expect(d._selections.arcana.major).toBe("mindgem");
+		expect(slugs(data)).toContain("mindgem");
+		expect(data.majorActions.map(a => a.action)).toEqual(["other-major"]);
+		d._applyBackgroundChange("witch-hunter");
+		expect(d._selections.arcana.major).toBe("mindgem");
+	});
+
+	it("with the switch on, a major from the old background's list follows the background", () => {
+		worldSwitches("seekerAnyMajorArcanum");
+		const d = dialog({ major: "red-scepter", majors: ["hectumel-codex", "red-scepter", "norubas-ice-sphere", "azure-hand", "mindgem"] });
+		d._applyBackgroundChange("antiquarian");
+		expect(d._selections.arcana.major).toBe("norubas-ice-sphere");
+	});
+
+	it("a stale slug is snapped, switch on or off; with the switch off an off-list pick is snapped too", () => {
+		worldSwitches("seekerAnyMajorArcanum");
+		const stale = dialog({ major: "a-card-since-deleted" });
+		stale._ensureSeekerMajorSelection();
+		expect(stale._selections.arcana.major).toBe("hectumel-codex");
+		globalThis.game = realGame;
+		const off = dialog({ major: "mindgem" });
+		off._ensureSeekerMajorSelection();
+		expect(off._selections.arcana.major).toBe("hectumel-codex");
+	});
+
+	it("the GM's button shows for a GM only, and never on the Builder's try-out (no character)", async () => {
+		globalThis.game = { ...realGame, user: { isGM: true } };
+		const d = dialog();
+		expect((await d._seekerArcanaChoiceData()).majorActions.map(a => [a.action, a.label])).toEqual([["give-major", "Give a major arcanum"]]);
+		d._grant = "mindgem";
+		expect((await d._seekerArcanaChoiceData()).majorActions.map(a => a.label)).toEqual(["Change"]);
+		d._seekerActor = null;
+		expect((await d._seekerArcanaChoiceData()).majorActions).toEqual([]);
+		globalThis.game = { ...realGame, user: { isGM: false } };
+		expect((await dialog()._seekerArcanaChoiceData()).majorActions).toEqual([]);
+	});
+
+	it("the Major Arcanum step draws its hint and buttons from the data", () => {
+		const hb = Handlebars.create();
+		for (const name of ["eq", "and", "or", "not", "gt", "lt", "includes", "localize", "times", "concat", "json"]) hb.registerHelper(name, () => "");
+		const html = hb.compile(readRepo("templates/dialogs/character-onboarding.hbs"))({
+			isSeekerArcana: true, seekerArcanaData: { title: "Collection", sections: [] },
+			seekerArcanaChoices: { major: [], majorHint: "HINT", majorActions: [{ action: "other-major", icon: "fa-wand-sparkles", label: "Choose a different arcanum" }] },
+		});
+		expect(html).toContain('<p class="stonetop-onboarding-step-hint">HINT</p>');
+		expect(html).toMatch(/<button type="button" class="stonetop-inline-btn" data-seeker-major-action="other-major"><i class="fas fa-wand-sparkles" aria-hidden="true"><\/i>Choose a different arcanum<\/button>/);
+	});
+});
+
 // The minor page ("Minor Arcana & Questions") asks for a role on each drawn card and the three
 // questions under them. Next and the reopen's first-unfinished-page both read seekerMinorStepComplete,
 // so whatever one says the other says too: a page Next let the player past is never the page a
@@ -477,6 +711,16 @@ describe("the minor draw leaves out cards already held", () => {
 });
 
 describe("pure helpers", () => {
+	it("seekerOfferedMajors: a grant wins and locks; the world's switch keeps an off-list pick; else the list", () => {
+		const listed = ["a", "b", "c"];
+		expect(seekerOfferedMajors({ listed, grant: "x", open: true, major: "y" })).toEqual({ offered: ["x"], locked: true });
+		expect(seekerOfferedMajors({ listed, open: true, major: "x" })).toEqual({ offered: ["a", "b", "c", "x"], locked: false });
+		expect(seekerOfferedMajors({ listed, open: true, major: "b" })).toEqual({ offered: listed, locked: false });
+		expect(seekerOfferedMajors({ listed, major: "x" })).toEqual({ offered: listed, locked: false });
+		expect(seekerOfferedMajors({ listed: ["a", "", "a"] })).toEqual({ offered: ["a"], locked: false });
+		expect(seekerOfferedMajors()).toEqual({ offered: [], locked: false });
+	});
+
 	it("withMinorRole moves a card out of any other role", () => {
 		expect(withMinorRole({ mastered: "x", found: "y", lead: "z" }, "lead", "x")).toEqual({ mastered: "", found: "y", lead: "x" });
 		expect(withMinorRole({ mastered: "x" }, "found", "")).toEqual({ mastered: "x", found: "", lead: "" });

@@ -229,7 +229,7 @@
       {{#if img}}
       <img src="{{this.img}}" alt="" draggable="false" style="{{this.imgStyle}}">
       {{else}}
-      <i class="fas fa-user"></i>
+      <i class="fas fa-user" aria-hidden="true"></i>
       {{/if}}
     </span>
   </button>
@@ -284,7 +284,7 @@
   {{#if ../canEdit}}
   <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{this.id}}"
           data-tooltip="{{../linkHint}}" aria-label="{{this.linkLabel}}">
-    <i class="fas fa-link"></i>
+    <i class="fas fa-link" aria-hidden="true"></i>
   </button>
   {{!-- TAKING SOMEBODY OFF, and the only way to do it with a mouse. It used to be the Delete key
         and nothing else, which is a gesture with nothing on screen to suggest it exists.
@@ -307,7 +307,7 @@
         for why that one asks where rubbing out a LINE does not. --}}
   <button type="button" class="stonetop-relmap-bin" data-relmap-remove="{{this.id}}"
           data-tooltip-text="{{this.removeLabel}}" aria-label="{{this.removeLabel}}">
-    <i class="fas fa-trash"></i>
+    <i class="fas fa-trash" aria-hidden="true"></i>
   </button>
   {{/if}}
 </div>

@@ -18,14 +18,14 @@
 {{#if (or stonetop.canEdit @root.stonetop.canEdit)}}
 {{#unless (or stonetop.editMode @root.stonetop.editMode)}}
 {{#if editing}}
-<a class="stonetop-section-done {{this.toggleClass}}" data-section="{{this.section}}" title="Done editing"><i class="fas fa-check"></i></a>
+<a class="stonetop-section-done {{this.toggleClass}}" data-section="{{this.section}}" data-tooltip="Done editing" aria-label="Done editing"><i class="fas fa-check" aria-hidden="true"></i></a>
 {{else}}
 {{#if (lookup (or stonetop.recentlyEdited @root.stonetop.recentlyEdited) section)}}
 {{!-- Just left edit mode: a non-interactive check that fades out, then a
      re-render swaps in the hover pencil below. --}}
-<a class="stonetop-section-done {{this.toggleClass}} steading-section-toggle-faded" tabindex="-1"><i class="fas fa-check"></i></a>
+<a class="stonetop-section-done {{this.toggleClass}} steading-section-toggle-faded" tabindex="-1" aria-hidden="true"><i class="fas fa-check" aria-hidden="true"></i></a>
 {{else}}
-<a class="stonetop-section-edit {{this.toggleClass}}" data-section="{{this.section}}" title="Edit: make this section editable"><i class="fas fa-pencil"></i></a>
+<a class="stonetop-section-edit {{this.toggleClass}}" data-section="{{this.section}}" data-tooltip="Edit: make this section editable" aria-label="Edit: make this section editable"><i class="fas fa-pencil" aria-hidden="true"></i></a>
 {{/if}}
 {{/if}}
 {{/unless}}

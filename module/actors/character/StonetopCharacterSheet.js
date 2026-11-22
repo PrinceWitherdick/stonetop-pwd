@@ -1,5 +1,7 @@
 import {MoveResourceButton} from "./elements/move-resource-button.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
+import { renderAfterWrite } from "../../utils/render-after-write.js";
+import { setTooltip } from "../../utils/set-tooltip.js";
 import { confirmOutcome, askWithButtons } from "../../utils/ask-with-buttons.js";
 import { parseMovePickCount, backgroundMoveNames, backgroundPossessionSlugs, splitMarkedActions } from "./StonetopCharacter.js";
 import {BackgroundInputChoice} from "./elements/background-input-choice.js";
@@ -56,6 +58,8 @@ import {CallUpDeepOnesDialog} from "./dialogs/CallUpDeepOnesDialog.js";
 import {BackgroundNeighborsDialog, storedNeighborPicks, storedNeighborTraits, traitedNeighbors} from "./dialogs/BackgroundNeighborsDialog.js";
 import {BackgroundAnswersDialog, backgroundSetupAsks} from "./dialogs/BackgroundAnswersDialog.js";
 import {SeekerMajorArcanumDialog} from "./dialogs/SeekerMajorArcanumDialog.js";
+import {giveSeekerMajor, pickOtherSeekerMajor} from "./seeker-major-grant.js";
+import {pipRow, readinessPips} from "../../utils/resource-checks.js";
 import {minorArcanaHeldElsewhere} from "./seeker-collection.js";
 import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower, findRingFollower, loyaltyOwnerId, RING_ARCANUM_SLUG} from "../../data/servant-of-daagon.js";
 import {characterSummonBlocker, followerReadinessBonus, summonBlockedMessage, summonHeldElsewhere, summonHeldElsewhereText, summonHoldersBySource} from "../../data/arcana-summon-gates.js";
@@ -202,7 +206,8 @@ import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
 import {canAuthorCustomMoves, canAuthorCustomMovesOn, canCreateArcana} from "../../utils/authoring-gates.js";
 import {enrichMoveRefsInEl, fetchMoveRef} from "../../utils/move-refs.js";
-import {buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice, wireRelationshipDropHighlight} from "../../utils/relationship-hearts.js";
+import {buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice} from "../../utils/relationship-hearts.js";
+import {wireDropHighlight} from "../../utils/drop-highlight.js";
 import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview.js";
 import {relationshipViewContext, wireRelationshipBoard} from "../../utils/relationship-board.js";
 import {BEAST_CATALOG} from "../../data/beasts.js";
@@ -986,19 +991,16 @@ function _animalCompanionTraitTooltip(trait) {
 		?? null;
 }
 
+// Each pip carries its own spoken name ("Loyalty 2 of 3"): a pip is an empty button, and its
+// tooltip ("Set Loyalty") is the same on every one, so the name is what tells them apart for a
+// screen reader. tests/templates/icon-conventions.test.js keeps every empty control named.
 function _makeLoyaltyPips(val, max = 3) {
-	return Array.from({ length: max }, (_, i) => ({ index: i, filled: i < val }));
+	return pipRow("Loyalty", val, max);
 }
 
-
-// Readiness circles (Defend, p.216 / followers p.469). The Defend move holds up
-// to 3 (10+) or 1 (7-9); a borne shield adds +1 to either, so the cap is 4 with
-// a shield, 3 without. Never render fewer circles than are held, so an over-held
-// pool (e.g. shield dropped mid-fight) stays spendable.
-function _makeReadinessPips(val, max = 3) {
-	const count = Math.max(max, val);
-	return Array.from({ length: count }, (_, i) => ({ index: i, filled: i < val }));
-}
+// Readiness circles (Defend, p.216 / followers p.469) are resource-checks.js#readinessPips. The
+// Defend move holds up to 3 (10+) or 1 (7-9); a borne shield adds +1 to either, so the cap is 4
+// with a shield, 3 without.
 
 // An Order button's tag and move lists: trimmed text, blanks dropped.
 const cleanList = (list) => (list ?? []).map(v => String(v ?? "").trim()).filter(Boolean);
@@ -1447,7 +1449,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (oldImg && newImg
 				&& oldSrc === newImg.getAttribute("src")
 				&& oldStyle === (newImg.getAttribute("style") ?? "")) {
-				oldImg.title = newImg.title;
+				// The portrait's tooltip is its name (actor-header.hbs), and a rename keeps the picture.
+				setTooltip(oldImg, newImg.getAttribute("data-tooltip-text"), { text: true });
 				oldImg.alt = newImg.alt;
 				newImg.replaceWith(oldImg);
 			}
@@ -1572,8 +1575,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			// the session, once for every character sheet anybody ever opened on that tab.
 			closeTimelineTab(this);
 			this._masonries?.forEach(m => m.disconnect());
+			// The basic-move panel and the move cross-reference tooltip both live on
+			// document.body. activateListeners replaces them per render, but a sheet that is
+			// closed rather than re-rendered never reaches that, so both go here.
 			this._movePanel?.remove();
 			this._movePanel = null;
+			this._moveRefPanel?.remove();
+			this._moveRefPanel = null;
 			// The art hover preview lives on document.body, so it survives the sheet's DOM
 			// being torn down — clear it or it orphans if the sheet closes (e.g. Escape) while
 			// the cursor is still over a card's art and no mouseleave ever fires.
@@ -1589,25 +1597,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			injectHeaderToggle(this, "Character", { lockLabel: "Lock Sheet" });
 		}
 
-		/**
-		 * Repaint once `work` settles, and surface a failed write instead of dropping it.
-		 *
-		 * A dozen handlers below share the shape "write to the actor, then re-render". Written
-		 * as a bare `.then(() => this.render(false))` the rejection went nowhere: the repaint
-		 * never ran, so the sheet kept showing the state the player had been told they were in —
-		 * the arcanum they just "revealed", the insert they just "chose" — with nothing in the
-		 * console and nothing on screen to say otherwise.
-		 *
-		 * The render runs on the failure path TOO, deliberately: falling back to what actually
-		 * stored is the whole point, and it is what makes the optimistic DOM honest again.
-		 */
+		/** Repaint once `work` settles, and surface a failed write instead of dropping it (utils/render-after-write.js). */
 		_renderAfter(work) {
-			return Promise.resolve(work)
-				.catch(err => {
-					console.error("Stonetop | character sheet write failed", err);
-					ui.notifications?.error("That change could not be saved. The sheet has been refreshed.");
-				})
-				.finally(() => this.render(false));
+			return renderAfterWrite(this, work, "character sheet");
 		}
 
 		// Jump to this character's page in the shared "Player Introductions" Chronicle
@@ -2167,6 +2159,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// edit the sheet, and shows even while it holds no card yet.
 			context.stonetop.seekerMajorOwed = this.isEditable
 				&& !!(await this._stonetopCharacter.seekerMajorOwed?.(playbookDoc));
+			// The GM's "Give a major arcanum" row, on a playbook whose backgrounds grant a major (the
+			// Seeker's): the grant's card name, or "" for none (seeker-major-grant.js#giveSeekerMajor).
+			context.stonetop.seekerMajorGrant = await this._seekerMajorGrantRow(playbookDoc);
 			context.stonetop.hasArcana = !!(
 				context.stonetop.arcana?.minor?.hasOwned ||
 				context.stonetop.arcana?.major?.hasOwned ||
@@ -3181,7 +3176,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// un-learned Shield Wall stays on the sheet and changes nothing), as orderFollower's own
 				// Shield Wall offer already does.
 				const crewHasShieldWall = ownsLearned(SHIELD_WALL_MOVE) && formedInShieldWall(sf);
-				const crewReadinessPips = _makeReadinessPips(crewReadiness, crewReadinessCap({ hasShield: crewHasShield, formed: crewHasShieldWall }));
+				const crewReadinessPips = readinessPips(crewReadiness, crewReadinessCap({ hasShield: crewHasShield, formed: crewHasShieldWall }));
 				// Crew shares the common card body but supplies its own gear (the
 				// inventory section below), so spread the shared extras then override
 				// `gear`. Details live under crew.details so they don't collide with the
@@ -3741,7 +3736,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						card.readinessValue    = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, _followerReadinessPath(card.ftype, rSlug))) || 0);
 						card.readinessHasShield = _followerBearsShield(card.gear);
 						// The Bronze Protector's "+1 Readiness on a 7+ to Defend" prints Readiness ○○○○ (p.533).
-						card.readinessPips      = _makeReadinessPips(card.readinessValue,
+						card.readinessPips      = readinessPips(card.readinessValue,
 							readinessCap(card.readinessHasShield) + this._followerReadinessBonus(card.ftype, rSlug));
 					}
 					// The two pip tracks reserve the same number of slots so their Spend
@@ -4081,31 +4076,28 @@ export function createStonetopCharacterSheetClass(Base) {
 			});
 			html.find(".stonetop-moves-level-notice-dismiss").on("click", async ev => {
 				const key = ev.currentTarget.dataset.overageKey;
-				if (key) await this.actor.setFlag(STONETOP_SCOPE, "moves.dismissedLevelOverage", key);
-				this.render(false);
+				await this._renderAfter(key ? this.actor.setFlag(STONETOP_SCOPE, "moves.dismissedLevelOverage", key) : null);
 			});
 
 			// Reveal the "Drop a playbook here" hint only while a drag is actually
 			// over the sheet — a blank sheet shouldn't show a confusing dashed box,
-			// but the player can still drop a playbook anywhere on it. dragenter and
-			// dragleave bubble up from every child, so track the nesting depth and
-			// only clear the hint once the drag has truly left the form.
-			let dragDepth = 0;
-			// Drop affordance for the Relationships section. Its clear() is folded into
-			// clearDropHint because the sheet-wide drop handler runs in the capture phase and
-			// stops propagation before a listener on the section would ever see the drop.
-			const clearRelHighlight = wireRelationshipDropHighlight(
+			// but the player can still drop a playbook anywhere on it. The playbook zone
+			// itself lights up while the drag is over it, and so does the Relationships
+			// section. All three count the drag's nesting depth through the shared helper,
+			// so none flickers off as the pointer crosses a child (the zone's instinct
+			// badge), and all three clears are folded into clearDropHint because the
+			// sheet-wide drop handler runs in the capture phase and stops propagation before
+			// a listener on any of them would ever see the drop.
+			const clearDraggingHint = wireDropHighlight(html[0], "stonetop-dragging-playbook");
+			const clearPlaybookZone = wireDropHighlight(
+				html[0].querySelector(".stonetop-playbook-drop-zone"), "drag-over");
+			const clearRelHighlight = wireDropHighlight(
 				html[0].querySelector(".stonetop-character-relationships"));
 			const clearDropHint = () => {
-				dragDepth = 0;
-				html[0].classList.remove("stonetop-dragging-playbook");
+				clearDraggingHint();
+				clearPlaybookZone();
 				clearRelHighlight();
 			};
-			html[0].addEventListener("dragenter", () => {
-				dragDepth++;
-				html[0].classList.add("stonetop-dragging-playbook");
-			});
-			html[0].addEventListener("dragleave", () => { if (--dragDepth <= 0) clearDropHint(); });
 
 			html[0].addEventListener("dragover", (ev) => ev.preventDefault());
 			html[0].addEventListener("drop", async (ev) => {
@@ -4145,8 +4137,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						return;
 					}
 					if (doc?.system?.customType === "stonetop") {
-						await this.actor.setFlag(STONETOP_SCOPE, "steadingId", doc.id);
-						this.render(false);
+						await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "steadingId", doc.id));
 					} else if (doc?.type === "monster") {
 						// Dropping a monster offers to convert it to a follower (NPCs &
 						// Followers, p.475): keep its stats, add tags, choose a cost.
@@ -4181,13 +4172,6 @@ export function createStonetopCharacterSheetClass(Base) {
 					await this._onDropItemCreate(item.toObject());
 				}
 			}, true);
-
-			const dropZone = html[0].querySelector(".stonetop-playbook-drop-zone");
-			if (dropZone) {
-				dropZone.addEventListener("dragenter", () => dropZone.classList.add("drag-over"));
-				dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-				dropZone.addEventListener("drop", () => dropZone.classList.remove("drag-over"));
-			}
 
 			html.find(".cell--stats .stat-value").each((_, el) => {
 				el.value = el.value.replace(/^\+/, "");
@@ -4551,8 +4535,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!this.isEditable) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = this._stonetopCharacter.defendReadiness;
-				await this._stonetopCharacter.setDefendReadiness(current === idx + 1 ? idx : idx + 1);
-				this.render(false);
+				await this._renderAfter(this._stonetopCharacter.setDefendReadiness(current === idx + 1 ? idx : idx + 1));
 			});
 
 			// Big Damn Hero's leap, beside Defend: no roll, Defend's 10+ applied, once per fight
@@ -4562,8 +4545,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopPropagation();
 				if (!this.isEditable) return;
 				ev.currentTarget.disabled = true;
-				await leapIn(this.actor, { character: this._stonetopCharacter });
-				this.render(false);
+				await this._renderAfter(leapIn(this.actor, { character: this._stonetopCharacter }));
 			});
 
 			// A post-death move's own buttons (move-group.hbs): what its rule costs or spends, and the rolls
@@ -5366,17 +5348,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-possession-custom-remove").on("click", this._onRemoveCustomPossession.bind(this));
 			html.find(".stonetop-possession-custom-add").on("click", this._onAddCustomPossession.bind(this));
 			// The Marshal's personal symbol, displayed: crew +1 Loyalty (max 3). Disabled for the
-			// write so a double click cannot count twice; the render that follows redraws it.
+			// write so a double click cannot count twice; the render that follows redraws it, and
+			// _renderAfter reports the write if it fails (and never rethrows, so the button comes back).
 			html.find(".stonetop-personal-symbol-btn").on("click", async ev => {
 				const btn = ev.currentTarget;
 				if (btn.disabled) return;
 				btn.disabled = true;
-				try {
-					await displayPersonalSymbol(this.actor);
-				} finally {
-					btn.disabled = false;
-					this.render(false);
-				}
+				await this._renderAfter(displayPersonalSymbol(this.actor));
+				btn.disabled = false;
 			});
 			// The sacred pouch's row (sacred-pouch.js): an entry taken out (discarded, inflicted, a power
 			// lost), and the downtime refill. Disabled for the ask, as the symbol's button is.
@@ -5534,8 +5513,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = _followerStructuralPath(el.dataset.ftype, el.dataset.field)
 					?? followerDetailPath(el.dataset.ftype, el.dataset.slug, el.dataset.field);
 				if (!path) return;
-				await this.actor.setFlag(STONETOP_SCOPE, path, el.value.trim());
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, el.value.trim()));
 			});
 			// Armor-source field: a free-type input with a suggestion dropdown (leather,
 			// shield, hides…). Picking a suggestion fires `change`, saved by the handler
@@ -5551,8 +5529,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = followerDetailPath(el.dataset.ftype, el.dataset.slug, "exceptional");
 				if (!path) return;
 				const turnOn = !el.classList.contains("is-selected");
-				await this.actor.setFlag(STONETOP_SCOPE, path, turnOn);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, turnOn));
 			});
 			// Crew tag picker + its custom write-in row: store only the player's chosen tags
 			// plus the write-in. The background-auto tag is the disabled option, so
@@ -5570,8 +5547,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const printed  = html.find(".stonetop-crew-tag-option").toArray().map(el => el.value);
 				const overflow = crewWriteInOverflow(this.actor.getFlag(STONETOP_SCOPE, "crew.tags"), { availableTags: printed });
 				const tags = crewTagsWithWriteIns(listed, boxes, Number.isFinite(limit) ? limit : Infinity, overflow);
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.tags", tags);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.tags", tags));
 			});
 			// Animal-companion trait picker + its custom write-in row: pick up to the type's
 			// pickCount. Same "checked, not disabled" gather as the crew tags; the limit is
@@ -5581,8 +5557,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const traits = html.find(".stonetop-ac-trait-option:checked:not(:disabled)").toArray().map(el => el.value);
 				const custom = html.find(".stonetop-ac-trait-custom").val()?.trim();
 				if (custom) traits.push(custom);
-				await this.actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", traits);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", traits));
 			});
 			// Initiate of Danu trait lines: "pick 1 on each line". Each radio row writes
 			// its choice to initiateDetails.<slug>.rows[rowIdx] — the same object store
@@ -5596,27 +5571,22 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = `initiateDetails.${slug}.rows`;
 				const rows = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, path) ?? {});
 				rows[rowIdx] = el.value;
-				await this.actor.setFlag(STONETOP_SCOPE, path, rows);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, rows));
 			});
 			// Crew instinct / cost pickers (pick one from the playbook list)
 			html.find(".stonetop-crew-instinct-option").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value));
 			});
 			html.find(".stonetop-crew-cost-option").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value));
 			});
 			// Crew instinct / cost write-ins (the insert's blank rows): save the typed value
 			// verbatim; picking a radio above overwrites it, matching onboarding.
 			html.find(".stonetop-crew-instinct-custom").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value.trim());
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value.trim()));
 			});
 			html.find(".stonetop-crew-cost-custom").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value.trim());
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value.trim()));
 			});
 			// Gear checklist: toggle carried, rename, add, remove
 			const readFollowerGear = (ftype, slug) => {
@@ -5630,8 +5600,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path || !list[i]) return;
 				list[i].checked = el.checked;
-				await this.actor.setFlag(STONETOP_SCOPE, path, list);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, list));
 			});
 			html.find(".stonetop-follower-gear-label").on("change", async ev => {
 				const el = ev.currentTarget;
@@ -5647,8 +5616,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { path, list } = readFollowerGear(el.dataset.ftype, el.dataset.slug);
 				if (!path) return;
 				list.push({ label: "", checked: false });
-				await this.actor.setFlag(STONETOP_SCOPE, path, list);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, list));
 			});
 			html.find(".stonetop-follower-gear-remove").on("click", async ev => {
 				const el = ev.currentTarget;
@@ -5656,8 +5624,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path) return;
 				list.splice(i, 1);
-				await this.actor.setFlag(STONETOP_SCOPE, path, list);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, list));
 			});
 
 			// Tapping one of a follower's own moves posts it to chat, spoken with the
@@ -5714,8 +5681,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-follower-tag-remove").on("click", async ev => {
 				if (!this.isEditable) return;
 				const { ftype, slug, tag } = ev.currentTarget.dataset;
-				await removeFollowerCondition(this.actor, ftype || "animal-companion", slug ?? "", tag);
-				this.render(false);
+				await this._renderAfter(removeFollowerCondition(this.actor, ftype || "animal-companion", slug ?? "", tag));
 			});
 			// Outfit a follower (follower-outfit.js), from their card's gear list.
 			html.find(".stonetop-follower-outfit").on("click", ev => {
@@ -5731,8 +5697,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-follower-debility-toggle").on("click", async ev => {
 				if (!this.isEditable) return;
 				const { ftype, slug, tag } = ev.currentTarget.dataset;
-				await toggleFollowerCondition(this.actor, ftype, slug ?? "", tag);
-				this.render(false);
+				await this._renderAfter(toggleFollowerCondition(this.actor, ftype, slug ?? "", tag));
 			});
 			// The tag editor under a follower card's pencil (Updating followers, p.480): remove a
 			// tag, or add one (or several, comma-separated) from the field.
@@ -5803,8 +5768,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0;
-				await this.actor.setFlag(STONETOP_SCOPE, path, current === idx + 1 ? idx : idx + 1);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, current === idx + 1 ? idx : idx + 1));
 			});
 			// Spend Loyalty / Readiness (p.464 / p.469): open a small chooser for the
 			// rulebook's spend options, decrement the track, and post a chat note.
@@ -5858,8 +5822,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.currentTarget.closest(".stonetop-crew-gear-item")?.classList.toggle("is-checked", checked);
 				const gear    = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, "crew.gear") ?? {});
 				gear[slug]    = checked ? (Number(weight) || 1) : 0;
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.gear", gear);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.gear", gear));
 			});
 			// The insert's blank inventory lines (p.144): write an item in (a name and 1 or 2 ◇), or
 			// strike one off, its pips leaving the crew's load with it (crew-write-ins.js).
@@ -5870,8 +5833,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					weight: row?.querySelector(".stonetop-crew-gear-add-weight")?.value,
 				}, foundry.utils.randomID(8));
 				if (!rows) { nameEl?.focus(); return; }
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.writtenGear", rows);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.writtenGear", rows));
 			};
 			html.find(".stonetop-crew-gear-add").on("click", ev => addCrewItem(ev.currentTarget.closest(".stonetop-crew-gear-add-row")));
 			html.find(".stonetop-crew-gear-add-name").on("keydown", ev => {
@@ -5884,8 +5846,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopPropagation();
 				const id = ev.currentTarget.dataset.slug;
 				if (!id) return;
-				await this.actor.update(removeCrewWrittenGearUpdate(this.actor.getFlag(STONETOP_SCOPE, "crew.writtenGear"), id, STONETOP_SCOPE));
-				this.render(false);
+				await this._renderAfter(this.actor.update(removeCrewWrittenGearUpdate(this.actor.getFlag(STONETOP_SCOPE, "crew.writtenGear"), id, STONETOP_SCOPE)));
 			});
 			// Crew supplies pip circles — one set (one ◇ of supplies) per member, stored as an
 			// array of use counts. The array grows to reach whichever set was clicked rather than
@@ -5898,8 +5859,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const arr = Array.isArray(current) ? [...current] : [];
 				while (arr.length <= setIdx) arr.push(0);
 				arr[setIdx] = newVal;
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", arr);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", arr));
 			});
 			// Clamp a stored group-fight pool that now sits over its max. The pool is ONE
 			// member's HP (the abstraction's own rule — see the crew card's note), so the
@@ -5950,9 +5910,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					});
 					if (!ok) return;
 				}
-				await this.actor.update(update);
-				if (person) await releaseCrewPerson(row, { remove: deletePerson });
-				this.render(false);
+				// One promise for both writes, so a failure in either is reported and the sheet repaints.
+				await this._renderAfter((async () => {
+					await this.actor.update(update);
+					if (person) await releaseCrewPerson(row, { remove: deletePerson });
+				})());
 			});
 
 			// Crew roster size — total headcount; never below the number of named
@@ -5975,8 +5937,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					update["flags.stonetop-pwd.crew.memberPortrait"] = memberPortrait.slice(0, anonCount);
 				}
 				clampStoredGroupHp(update);
-				await this.actor.update(update);
-				this.render(false);
+				await this._renderAfter(this.actor.update(update));
 			};
 			html.find(".stonetop-crew-size-step").on("click", ev => {
 				const delta = Number(ev.currentTarget.dataset.delta) || 0;
@@ -6004,8 +5965,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
-				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: current === idx + 1 ? idx : idx + 1 });
-				this.render(false);
+				await this._renderAfter(this.actor.update({ [`flags.stonetop-pwd.${path}`]: current === idx + 1 ? idx : idx + 1 }));
 			});
 			// "Uses ammo" toggle (Damage section, edit mode): opts a ranged follower
 			// into the ◇ low ammo / ◇ all out track. Turning it off clears any marked
@@ -6020,8 +5980,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					const ammoPath = _followerAmmoPath(ftype, slug ?? "");
 					if (ammoPath) update[`flags.stonetop-pwd.${ammoPath}`] = 0;
 				}
-				await this.actor.update(update);
-				this.render(false);
+				await this._renderAfter(this.actor.update(update));
 			});
 			// Follower ammo checks (◇ low ammo, ◇ all out): a cumulative 0→1→2 track, so
 			// checking "all out" implies "low ammo" and clearing "low" resets to full.
@@ -6031,17 +5990,16 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!path) return;
 				const idx    = Number(index);
 				const newVal = ev.currentTarget.checked ? idx + 1 : idx;
-				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: newVal });
-				this.render(false);
+				await this._renderAfter(this.actor.update({ [`flags.stonetop-pwd.${path}`]: newVal }));
 			});
 
 			// Restore the abstracted group-fight pool to full (clears the override).
 			// A data-slug marks a custom group's pool; without one it's the crew's.
 			html.find(".stonetop-group-hp-reset").on("click", async ev => {
 				const slug = ev.currentTarget.dataset.slug;
-				if (slug) await this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: null });
-				else      await this.actor.unsetFlag(STONETOP_SCOPE, "crew.groupHp");
-				this.render(false);
+				await this._renderAfter(slug
+					? this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: null })
+					: this.actor.unsetFlag(STONETOP_SCOPE, "crew.groupHp"));
 			});
 
 			// Custom group roster size (mirrors the crew size stepper): _setCustomGroupSize.
@@ -6247,7 +6205,7 @@ export function createStonetopCharacterSheetClass(Base) {
 							<label>Person</label>
 							<div class="stonetop-field-btns">
 								<input type="text" class="stonetop-individual-person-name" readonly tabindex="-1" placeholder="A new Person is made for them" value="${escHtml(currentPerson?.name ?? "")}">
-								<button type="button" class="stonetop-individual-person-link stonetop-inline-btn"><i class="fas fa-link"></i> Link a Person…</button>
+								<button type="button" class="stonetop-individual-person-link stonetop-inline-btn"><i class="fas fa-link" aria-hidden="true"></i> Link a Person…</button>
 							</div>
 							<input type="hidden" name="ind-person" value="${escHtml(currentPerson?.uuid ?? "")}">
 						</div>
@@ -6261,7 +6219,7 @@ export function createStonetopCharacterSheetClass(Base) {
 							<div class="stonetop-individual-traits-grid">${traitsHtml}</div>
 							<div class="stonetop-trait-custom-row stonetop-field-btns">
 								<input type="text" class="stonetop-trait-custom-input" placeholder="Add a trait of your own…" autocomplete="off">
-								<button type="button" class="stonetop-trait-custom-add stonetop-inline-btn"><i class="fas fa-plus"></i> Add</button>
+								<button type="button" class="stonetop-trait-custom-add stonetop-inline-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
 							</div>
 						</div>
 					</form>`;
@@ -6276,7 +6234,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					// Closing the window is the cancel — the titlebar ✕ already does it.
 					buttons: {
 						save: {
-							icon:  "<i class='fas fa-user-pen'></i>",
+							icon:  "<i class='fas fa-user-pen' aria-hidden='true'></i>",
 							label: "Save",
 							callback: async (dlgHtml) => {
 								// Editing keeps the old name when the field is cleared: a member
@@ -6329,9 +6287,10 @@ export function createStonetopCharacterSheetClass(Base) {
 									if (!individuals[individualIndex]) return;
 									individuals[individualIndex] = { ...individuals[individualIndex], name, tag, traits };
 									if (relinked) individuals[individualIndex].personUuid = personUuid;
-									await this.actor.update({ "flags.stonetop-pwd.crew.individuals": individuals });
-									if (relinked && priorUuid) await replaceCrewPerson(priorUuid, this.actor);
-									this.render(false);
+									await this._renderAfter((async () => {
+										await this.actor.update({ "flags.stonetop-pwd.crew.individuals": individuals });
+										if (relinked && priorUuid) await replaceCrewPerson(priorUuid, this.actor);
+									})());
 									return;
 								}
 								// Promote the targeted anonymous member: append the named
@@ -6367,8 +6326,7 @@ export function createStonetopCharacterSheetClass(Base) {
 								if (memberPortrait.length || carriedFace !== undefined) {
 									update["flags.stonetop-pwd.crew.memberPortrait"] = memberPortrait;
 								}
-								await this.actor.update(update);
-								this.render(false);
+								await this._renderAfter(this.actor.update(update));
 							},
 						},
 					},
@@ -6511,8 +6469,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const updated = ev.currentTarget.checked
 					? [...current, slug]
 					: current.filter(s => s !== slug);
-				await this.actor.setFlag(STONETOP_SCOPE, "invocations.selected", updated);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "invocations.selected", updated));
 			});
 			// Tapping an Invocation's title uses it: the window asks whether to Invoke the Sun
 			// God (+WIS) and whether to empower it, then posts the card and rolls.
@@ -6566,8 +6523,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const itemId = ev.currentTarget.dataset.itemId;
 				const item   = this.actor.items.get(itemId);
 				if (item?.flags?.[STONETOP_SCOPE]?.custom && !canAuthorCustomMoves()) return;
-				await this._stonetopCharacter.setMoveLearned(itemId, ev.currentTarget.checked);
-				this.render(false);
+				await this._renderAfter(this._stonetopCharacter.setMoveLearned(itemId, ev.currentTarget.checked));
 			});
 			html.find(".stonetop-level-pick-check").on("change", async ev => {
 				if (!this.isEditable) return;
@@ -6734,6 +6690,14 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!btn) return;
 				ev.stopPropagation();
 				this._onSeekerMajorOwed().catch(err => console.error("Stonetop | choosing the major arcanum failed", err));
+			}, true);
+
+			// The GM's "Give a major arcanum" (the tab's GM-only row).
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest(".stonetop-seeker-major-grant-btn");
+				if (!btn) return;
+				ev.stopPropagation();
+				this._onGiveSeekerMajor().catch(err => console.error("Stonetop | giving the major arcanum failed", err));
 			}, true);
 
 			html[0].addEventListener("click", ev => {
@@ -7122,8 +7086,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				else target.before(dragSource);
 				const newOrder = [...nav.querySelectorAll(".item[data-tab]")].map(t => t.dataset.tab);
 				this._applyTabOrder(root, newOrder);
-				await this.actor.setFlag(STONETOP_SCOPE, "tabOrder", newOrder);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "tabOrder", newOrder));
 				dragSource = null;
 			});
 
@@ -7894,7 +7857,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// die is the part that's easy to miss in the move's prose.
 				const granted = grantedWeaponForMove(grant.name);
 				const weaponNote = granted
-					? `<p class="stonetop-stat-picker-weapon"><i class="fas fa-dice-d10"></i>
+					? `<p class="stonetop-stat-picker-weapon"><i class="fas fa-dice-d10" aria-hidden="true"></i>
 						Choosing ${_esc(Handlebars.helpers.statLabel(granted.whenStat))} means the
 						<strong>${_esc(granted.meta.name)}</strong> is your weapon: 
 						<strong>${_esc(weaponTraitText(granted.meta))}</strong>, in place of your own damage die.</p>`
@@ -8135,8 +8098,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				buttons.pouchStore = {
 					label: guide.pouchStore.label,
 					callback: async () => {
-						await storeInPouch(this.actor, guide.pouchStore.kind, { moveName: name });
-						this.render(false);
+						await this._renderAfter(storeInPouch(this.actor, guide.pouchStore.kind, { moveName: name }));
 					},
 				};
 			}
@@ -8607,7 +8569,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async _askSeekerMajorArcanum() {
 			const character = this._stonetopCharacter;
-			const { plan, background, offered, major } = await character.settleSeekerMajorOnBackground();
+			const { plan, background, offered, locked, major } = await character.settleSeekerMajorOnBackground();
 			if (plan === "stays") {
 				const name = (await character.getArcanum(major))?.front?.title ?? major;
 				ui.notifications?.info?.(format("stonetop.seekerMajor.stays", { major: name }));
@@ -8615,8 +8577,20 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			if (plan !== "ask" && plan !== "replace") return;
 			const cards = (await Promise.all(offered.map(slug => character.getArcanum(slug)))).filter(Boolean);
-			const pick  = await SeekerMajorArcanumDialog.ask(background, cards);
+			// The world's "any major" switch adds "Choose a different arcanum"; never beside a GM's grant.
+			const other = !locked && getBooleanSetting("seekerAnyMajorArcanum");
+			let pick = await SeekerMajorArcanumDialog.ask(background, cards, { other });
+			if (pick?.other) pick = await this._askOtherSeekerMajor(background);
 			if (pick?.major) await character.chooseSeekerMajor(pick.major, pick.marks);
+		}
+
+		// "Choose a different arcanum" from the Details tab's ask (pickOtherSeekerMajor), then the same
+		// ask for its 1 mark. A GM pressing it sees what a player would; the GM's full list is the
+		// Arcana tab's "Give a major arcanum".
+		async _askOtherSeekerMajor(background) {
+			const slug = await pickOtherSeekerMajor({ background });
+			const card = slug ? await this._stonetopCharacter.getArcanum(slug) : null;
+			return card ? SeekerMajorArcanumDialog.ask(background, [card]) : null;
 		}
 
 		/**
@@ -8629,6 +8603,29 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!(await this._stonetopCharacter.seekerMajorOwed())) return;
 			await this._askSeekerMajorArcanum();
 			this.render(false);
+		}
+
+		/**
+		 * The Arcana tab's GM row: `{ shown, name }`, shown to a GM on a playbook whose backgrounds
+		 * list major arcana, `name` the given card's front title or "".
+		 */
+		async _seekerMajorGrantRow(playbookDoc) {
+			const character = this._stonetopCharacter;
+			if (!game.user?.isGM) return { shown: false, name: "" };
+			// A character still being made has no playbook yet: the one its player's walkthrough is on,
+			// so the GM can give the major while the player's window is open (it redraws on the grant).
+			const playbook = playbookDoc ?? await character.playbookInCreation?.();
+			const shown = (playbook?.backgrounds ?? []).some(bg => bg?.majorArcana?.length);
+			const grant = shown ? (character.seekerMajorGrant?.() ?? "") : "";
+			const name = grant ? normalizePlaybookGlyphs((await character.getArcanum(grant))?.front?.title ?? grant) : "";
+			return { shown, name };
+		}
+
+		/** The GM row's button: give, change or take back this Seeker's starting major. */
+		async _onGiveSeekerMajor() {
+			const character = this._stonetopCharacter;
+			const written = await giveSeekerMajor(character, { background: await character.selectedBackground(), name: this.actor.name });
+			if (written) this.render(false);
 		}
 
 		/**
@@ -8814,8 +8811,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (Number.isFinite(rawPool) && rawPool > memberHpMax) {
 				update[`flags.stonetop-pwd.customFollowers.${slug}.groupHp`] = memberHpMax;
 			}
-			await this.actor.update(update);
-			this.render(false);
+			await this._renderAfter(this.actor.update(update));
 		}
 
 		// The custom group's size box. Blank/non-numeric input reverts to the current size rather than
@@ -9012,7 +9008,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				content,
 				buttons: {
 					learn: {
-						icon:  "<i class='fas fa-book'></i>",
+						icon:  "<i class='fas fa-book' aria-hidden='true'></i>",
 						label: localize("stonetop.specialMoves.levelUp.tickPicker.learn"),
 						callback: async html => {
 							const id = html.find(".stonetop-foreign-move-select").val();
@@ -11296,7 +11292,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!cost) return "";
 			return `<div class="card-buttons stonetop-roll-actions">
 				<button type="button" class="stonetop-spend-stock" data-action="spendStock" data-amount="${cost.amount}" data-move-id="${_esc(item.id ?? item._id ?? "")}">
-					<i class="fas fa-mortar-pestle"></i> Spend ${cost.amount} ${_esc(cost.label)}
+					<i class="fas fa-mortar-pestle" aria-hidden="true"></i> Spend ${cost.amount} ${_esc(cost.label)}
 				</button>
 			</div>`;
 		}
@@ -12148,13 +12144,13 @@ export function createStonetopCharacterSheetClass(Base) {
 						// The affirmative key is declared first and is in the shared left-side list,
 						// so it sits opposite "Just show it".
 						roll: {
-							icon:     '<i class="fas fa-sun"></i>',
+							icon:     '<i class="fas fa-sun" aria-hidden="true"></i>',
 							label:    !canInvoke ? "Use it"
 								: asTenPlus ? game.i18n.localize("stonetop.invocations.tenPlusButton") : "Invoke the Sun God (+WIS)",
 							callback: html => { answer = read(html, canInvoke, true); },
 						},
 						no: {
-							icon:     '<i class="fas fa-comment"></i>',
+							icon:     '<i class="fas fa-comment" aria-hidden="true"></i>',
 							label:    "Just show it",
 							// `used: false` is the load-bearing half of this button. Showing an
 							// Invocation's text is not using it, so it must not take hold of a new one
@@ -13018,7 +13014,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					+ `<p>What does <strong>${subject}</strong> produce?</p>`
 					+ `<input type="text" class="stonetop-hwtn-item stonetop-cf-input" placeholder="an item, some supplies…" style="width:100%"></form>`,
 				buttons: {
-					add: { icon: '<i class="fas fa-sack"></i>', label: "Add to their gear",
+					add: { icon: '<i class="fas fa-sack" aria-hidden="true"></i>', label: "Add to their gear",
 						callback: async html => {
 							const form = html?.[0];
 							const item = String(form?.querySelector(".stonetop-hwtn-item")?.value ?? "").trim();
@@ -13068,7 +13064,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title:   format(`${KEY}.title`, { name: who }),
 				content,
 				buttons: {
-					use: { icon: '<i class="fas fa-box-open"></i>', label: localize(`${KEY}.confirm`),
+					use: { icon: '<i class="fas fa-box-open" aria-hidden="true"></i>', label: localize(`${KEY}.confirm`),
 						callback: html => this._applyUseUp(card, who, html?.[0]) },
 					cancel: { label: localize(`${KEY}.cancel`) },
 				},
@@ -13583,7 +13579,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title:   `Spend ${name || "follower"}'s Loyalty`,
 				content: `<form class="stonetop-spend-form">${lead}${opts}${purse}</form>`,
 				buttons: {
-					spend:  { icon: '<i class="fas fa-hand-holding-heart"></i>', label: presence > 0 ? "Spend 1" : "Spend 1 Loyalty",
+					spend:  { icon: '<i class="fas fa-hand-holding-heart" aria-hidden="true"></i>', label: presence > 0 ? "Spend 1" : "Spend 1 Loyalty",
 						callback: html => this._applySpendLoyalty(path, name, reasons, html, { ftype, slug }) },
 					cancel: { label: "Cancel" },
 				},
@@ -13711,7 +13707,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title:   `Spend ${name || "follower"}'s Readiness`,
 				content: `<form class="stonetop-spend-form">${lead}${opts}${unwilling}${purse}</form>`,
 				buttons: {
-					spend:  { icon: '<i class="fas fa-shield"></i>', label: presence > 0 ? "Spend 1" : "Spend Readiness",
+					spend:  { icon: '<i class="fas fa-shield" aria-hidden="true"></i>', label: presence > 0 ? "Spend 1" : "Spend Readiness",
 						callback: html => this._applySpendReadiness({ rPath, readiness, lPath, loyalty, name, reasons, html, ftype }) },
 					cancel: { label: "Cancel" },
 				},
@@ -13779,7 +13775,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					<div class="form-group stonetop-handoff-row"><label>Character</label>
 						<select class="stonetop-handoff-target">${opts}</select></div>`,
 				buttons: {
-					handoff: { icon: '<i class="fas fa-people-arrows"></i>', label: "Hand off",
+					handoff: { icon: '<i class="fas fa-people-arrows" aria-hidden="true"></i>', label: "Hand off",
 						callback: html => this._handOffFollower(slug, html.find(".stonetop-handoff-target").val()) },
 					cancel:  { label: "Cancel" },
 				},
@@ -14306,7 +14302,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// a real impairment (lost limb, shattered knee) prompts "retire or Make a Plan"; a
 			// purely narrative Death's-Door mark is just carried and never gets the retire framing.
 			const permRow = (w) => `<li class="stonetop-convalesce-permanent-row">
-					<span class="stonetop-convalesce-permanent-text"><i class="fas fa-lock"></i> ${_esc(w.text || "(unnamed injury)")}</span>
+					<span class="stonetop-convalesce-permanent-text"><i class="fas fa-lock" aria-hidden="true"></i> ${_esc(w.text || "(unnamed injury)")}</span>
 					<input type="text" name="plan-${_esc(w.id)}" value="${_esc(w.planNote ?? "")}" placeholder="Make a Plan to adapt (a prosthetic, learn to compensate…)">
 				</li>`;
 			const permBlock = (title, list) => list.length
@@ -14319,7 +14315,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// any interim penalty like "Let Fly at disadvantage until practiced") lives on the
 			// wound's own edit form, so point there rather than duplicating that editor.
 			const permHint = permanent.length
-				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pen"></i> edit on the sheet.</p>`
+				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pencil" aria-hidden="true"></i> edit on the sheet.</p>`
 				: "";
 			const permSection =
 				permBlock("Permanent injury: retire or Make a Plan to adapt:", permanent.filter(w => w.origin !== "deaths-door")) +
@@ -14860,7 +14856,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// single confirm — the GM says it's handled, and the wound stabilizes.
 			const content = `<form class="stonetop-homestead-dialog stonetop-wound-tend-form">
 				<p class="stonetop-homestead-trigger"><em>When you tend to a problematic wound, say how.</em></p>
-				<p class="stonetop-wound-tend-target"><i class="fas fa-droplet"></i> <strong>${_esc(label)}</strong></p>
+				<p class="stonetop-wound-tend-target"><i class="fas fa-droplet" aria-hidden="true"></i> <strong>${_esc(label)}</strong></p>
 				<p class="stonetop-homestead-note">The GM will say it's taken care of, or tell you what's still required. Stabilizing isn't healing — that takes Convalesce.</p>
 			</form>`;
 
@@ -15013,7 +15009,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					content: `<p>${_esc(format("stonetop.newCharacter.outOfPlayContent", { name: this.actor.name }))}</p>`,
 					buttons: [
 						{ key: "mint", label: localize("stonetop.newCharacter.outOfPlayMint"), icon: "fa-user-plus", value: "mint" },
-						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"),   icon: "fa-edit",      value: "edit" },
+						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"),   icon: "fa-pencil",      value: "edit" },
 						{ key: "keep", label: localize("stonetop.newCharacter.confirmKeep"),   icon: "fa-xmark",     value: null },
 					],
 					defaultKey: "keep",
@@ -15037,8 +15033,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					title:   localize("stonetop.newCharacter.confirmTitle"),
 					content: `<p>${_esc(localize("stonetop.newCharacter.confirmContent"))}</p>`,
 					buttons: [
-						{ key: "new",  label: localize("stonetop.newCharacter.confirmNew"),  icon: "fa-undo",  value: "new" },
-						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"), icon: "fa-edit",  value: "edit" },
+						{ key: "new",  label: localize("stonetop.newCharacter.confirmNew"),  icon: "fa-rotate-left",  value: "new" },
+						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"), icon: "fa-pencil",  value: "edit" },
 						{ key: "keep", label: localize("stonetop.newCharacter.confirmKeep"), icon: "fa-xmark", value: null },
 					],
 					defaultKey: "keep",
@@ -15233,6 +15229,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					crewTagBonus: this._crewTagBonusBeyondCreation(),
 					companionTraitBonus: this._companionTraitBonusBeyondCreation(playbookDoc),
 					heldMinorArcana: this._heldMinorArcana(),
+					actor: this.actor,
 					onBack: openPicker,
 					onSave: async (selections, info) => {
 						await this._applyPlaybookSelections(playbookDoc, selections);
@@ -15247,7 +15244,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					// player's local resume snapshot otherwise, which the GM can't read, so
 					// the Welcome roster has no other way to name the in-progress playbook.
 					onProgress: info => {
-						this._setOnboardingState("onboarding", { step: info.step + 1, total: info.total, playbook: playbookDoc.name });
+						// The slug too, so a GM can give a Seeker's major mid-creation (_seekerMajorGrantRow).
+						this._setOnboardingState("onboarding", { step: info.step + 1, total: info.total, playbook: playbookDoc.name, playbookSlug: playbookDoc.system?.slug ?? "" });
 						saveResume(info);
 					},
 					// Every edit (debounced): just the local snapshot — no network — so a
@@ -15255,7 +15253,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					onLiveSave: saveResume,
 					// Closing mid-creation keeps the snapshot so a reload can resume here.
 					onExit: info => {
-						this._setOnboardingState("exited", { playbook: playbookDoc.name });
+						this._setOnboardingState("exited", { playbook: playbookDoc.name, playbookSlug: playbookDoc.system?.slug ?? "" });
 						saveResume(info);
 					},
 				},
@@ -15352,6 +15350,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					crewTagBonus: this._crewTagBonusBeyondCreation(),
 					companionTraitBonus: this._companionTraitBonusBeyondCreation(playbookDoc),
 					heldMinorArcana: this._heldMinorArcana(),
+					actor: this.actor,
 					onSave: async (sel, info) => {
 						await this._applyPlaybookSelections(playbookDoc, sel);
 						saveResume?.({ ...info, selections: sel }, { committed: true });
@@ -15787,7 +15786,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			const oldPlaybook = this.actor.system?.playbook;
 			const newPlaybook = !oldPlaybook?.name || !_isSamePlaybook(oldPlaybook, playbookDoc);
 			if (oldPlaybook?.name && newPlaybook) {
+				// The GM may have given this Seeker's major during this walkthrough, and the grant sits
+				// on the actor with the old playbook's flags. It is the new playbook's, so it outlives
+				// the clear, or the given card is applied unlocked and a background change replaces it.
+				const grant = character.seekerMajorGrant();
 				await character.clearPlaybookData(oldPlaybook.name);
+				const listsMajors = (st.backgrounds ?? []).some(bg => bg?.majorArcana?.length);
+				if (grant && listsMajors) await character.setSeekerMajorGrant(grant);
 			}
 			// Read before anything below changes it: the moves the old background gave go
 			// (settleBackgroundMoves), and the free picks the player didn't pick again go too. The

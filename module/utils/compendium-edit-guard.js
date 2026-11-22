@@ -46,9 +46,9 @@ export function warnCompendiumImmutable(doc) {
 				reference content shipped with the system. It can't be edited here.</p>
 				<p>To make changes, edit the copy in your world's <strong>${tab}</strong> tab.</p>
 				<p>Don't have it in your world yet? Import it first with the <strong>Import</strong> button
-				(<i class="fas fa-download"></i>) in this window's header, then edit that copy.</p>
+				(<i class="fas fa-download" aria-hidden="true"></i>) in this window's header, then edit that copy.</p>
 			</div>`,
-		buttons: { ok: { icon: '<i class="fas fa-check"></i>', label: "Got it" } },
+		buttons: { ok: { icon: '<i class="fas fa-check" aria-hidden="true"></i>', label: "Got it" } },
 		default: "ok",
 		close: () => { _dialogOpen = false; },
 	}, { classes: ["dialog", "stonetop", "stonetop-compendium-immutable-dialog"] }).render(true);

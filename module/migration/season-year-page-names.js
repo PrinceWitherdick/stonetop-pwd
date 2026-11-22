@@ -28,7 +28,7 @@
 
 import { SYSTEM_ID } from "../system-id.js";
 import { cardinalWord, yearLabel } from "../seasons/seasons-chronicle.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 
 /**
  * The ordinal scheme, kept here rather than in the live code: recognising an old name is this
@@ -141,7 +141,7 @@ export async function renameSeasonYearPages(entry) {
  * renamed the journal around it.
  */
 export async function renameAllSeasonYearPages() {
-	if (!game.user?.isGM || !isPrimaryGM()) return { renamed: 0, journals: 0 };
+	if (!isActingPrimaryGM()) return { renamed: 0, journals: 0 };
 	let renamed = 0, journals = 0;
 	for (const entry of game.journal?.contents ?? []) {
 		try {

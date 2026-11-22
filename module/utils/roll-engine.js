@@ -1,4 +1,5 @@
 import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHeroAsterisk.js";
+import { setTooltip } from "./set-tooltip.js";
 import { WOUND_STATUS_LABEL } from "../actors/character/wound-display.js";
 import { normalizeWoundList } from "../actors/character/wound-record.js";
 import { reminderChips, chipLine } from "../actors/character/gear-reminders.js";
@@ -199,7 +200,38 @@ function _resultTableLadder(resultTable, tier) {
 }
 
 // The title row's "?" that reveals a hidden move description, shared by every card that carries one.
-const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" title="Show move description"><i class="fas fa-question-circle"></i></button>`;
+// It is saved into the message's flavor, so wireDescToggle brings an older card's toggle up to date.
+const DESC_TOGGLE_HTML = `<button class="stonetop-roll-card-desc-toggle" type="button" aria-expanded="false" aria-label="Show move description" data-tooltip="Show move description"><i class="fas fa-circle-question" aria-hidden="true"></i></button>`;
+
+/** The toggle's name and tooltip for each state: it says what the next press does. */
+const DESC_TOGGLE_SAYS = { false: "Show move description", true: "Hide move description" };
+
+/**
+ * Wire a rendered card's "?" so it opens and shuts the description, and says which it is.
+ *
+ * The open state lives on the card (`desc-revealed`, which the stylesheet reads); the button only
+ * mirrors it. Its name and tooltip are restated from that class at wire time and on every press, so
+ * a screen reader hears "Hide…" and `aria-expanded="true"` once the description is showing, and a
+ * card saved before the toggle carried either (an older flavor) is brought up to date here. Such a
+ * card also loses the native `title` it was posted with, which would show beside Foundry's tooltip.
+ * tests/utils/roll-desc-toggle.test.js
+ */
+export function wireDescToggle(root) {
+	const toggle = root?.querySelector?.(".stonetop-roll-card-desc-toggle");
+	const card = toggle?.closest(".stonetop-roll-card");
+	if (!toggle || !card) return;
+	toggle.removeAttribute("title");
+	const say = () => {
+		const open = card.classList.contains("desc-revealed");
+		toggle.setAttribute("aria-expanded", String(open));
+		setTooltip(toggle, DESC_TOGGLE_SAYS[open], { name: true });
+	};
+	say();
+	toggle.addEventListener("click", () => {
+		card.classList.toggle("desc-revealed");
+		say();
+	});
+}
 
 // The die-faces readouts live with the card pieces (utils/chat.js); re-exported for the callers that
 // have always taken them from here.
@@ -370,7 +402,7 @@ export function postSeasonsRollPrompt({
 		${conditions}
 		<div class="card-buttons stonetop-card-buttons">
 			<button type="button" class="stonetop-seasons-roll-btn" data-fortunes="${fortunes}" data-mod="${mod}" data-counts-as-miss="${escHtml(countsAsMiss)}" data-alias="${escHtml(alias)}" data-roll-mode="${escHtml(rollMode)}" data-table="${escHtml(table)}"${seasonKey ? ` data-season-key="${escHtml(seasonKey)}"` : ""}>
-				<i class="fas fa-dice-d6"></i> Roll +Fortunes (${sign(fortunes)})${plus}
+				<i class="fas fa-dice-d6" aria-hidden="true"></i> Roll +Fortunes (${sign(fortunes)})${plus}
 			</button>
 		</div>
 	</div>`;
@@ -605,8 +637,8 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", k
 	const descToggleHtml = description ? DESC_TOGGLE_HTML : "";
 	const buttonsHtml = buttons
 		? `<div class="card-buttons stonetop-card-buttons">
-			<button data-action="shiftDown"><i class="fas fa-arrow-down"></i> Shift Down</button>
-			<button data-action="shiftUp"><i class="fas fa-arrow-up"></i> Shift Up</button>
+			<button data-action="shiftDown"><i class="fas fa-arrow-down" aria-hidden="true"></i> Shift Down</button>
+			<button data-action="shiftUp"><i class="fas fa-arrow-up" aria-hidden="true"></i> Shift Up</button>
 		</div>`
 		: "";
 	// A row of the card's OWN controls, deliberately not the `.stonetop-card-buttons` row above.
@@ -1172,7 +1204,7 @@ export async function markXpReceipt(actor, { header, description = "", move, amo
 			resultClass: "success",
 			sectionClass: "stonetop-xp-mark-card",
 			description,
-			actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo XP Gain</button>`,
+			actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo XP Gain</button>`,
 		}),
 		flags: { [XP_MARK_FLAG]: amount },
 	};

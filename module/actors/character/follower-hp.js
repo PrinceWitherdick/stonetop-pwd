@@ -17,7 +17,7 @@ import { followerHpWriteUpdate, linkedFollowerNpc } from "./follower-fate.js";
 import { followerActorFromLink } from "./follower-actors.js";
 import { readableFlags } from "./StonetopFlags.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { format } from "../../utils/i18n.js";
 import { groupPoolCard, loneGroupToken } from "./follower-group-pool.js";
 
@@ -158,7 +158,7 @@ export async function followGroupPoolToken(character, row, value, { moveName = n
  */
 export async function handleFollowerNpcHpQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, npcOf = followerNpcOf } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const asker = queryAsker(data, context, users);
 	const character = data?.characterUuid ? resolve(data.characterUuid) : null;
 	const npc = data?.npcUuid ? resolve(data.npcUuid) : null;

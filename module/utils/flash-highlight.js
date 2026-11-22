@@ -86,6 +86,48 @@ export function flashHighlight(el, { scope = null, className = FLASH_CLASS, dura
 	}, duration));
 }
 
+// The cleanup of each `playClassOnce` still running, so a replay can drop the old one's timer
+// before that timer takes the new play's classes off. WEAK for the same reason as `timers`.
+const plays = new WeakMap();
+
+/**
+ * Put `classes` on `el` for one run of the animation they hang, and take them off at its end: the
+ * element's OWN `animationend` (a child's animation bubbles up and is ignored), or `fallbackMs`
+ * when none comes (a hidden tab). Nothing for a reader who asked for less motion.
+ *
+ * Replaying on an element still wearing the classes restarts the animation from its first frame.
+ *
+ * @param {HTMLElement|null|undefined} el
+ * @param {string[]} classes     The first one is what marks the element as playing.
+ * @param {object}   options
+ * @param {number}   options.fallbackMs  Past the animation's own length.
+ * @returns {boolean} Whether it played.
+ */
+export function playClassOnce(el, classes, { fallbackMs }) {
+	if (!el?.classList || !classes.length || prefersReducedMotion()) return false;
+	plays.get(el)?.();
+	if (el.classList.contains(classes[0])) {
+		el.classList.remove(...classes);
+		// Off and on in one task coalesce into no change; a layout read between them restarts it.
+		void el.offsetWidth;
+	}
+	el.classList.add(...classes);
+	const stop = () => {
+		clearTimeout(timer);
+		el.removeEventListener("animationend", ended);
+		plays.delete(el);
+	};
+	const done = () => {
+		stop();
+		el.classList.remove(...classes);
+	};
+	const ended = event => { if (event.target === el) done(); };
+	const timer = setTimeout(done, fallbackMs);
+	el.addEventListener("animationend", ended);
+	plays.set(el, stop);
+	return true;
+}
+
 /**
  * Walk a light down `rows` and land it on `rows[target]`, slowing as it goes.
  *

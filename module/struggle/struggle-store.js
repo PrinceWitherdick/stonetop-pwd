@@ -1,4 +1,7 @@
 import { SYSTEM_ID } from "../system-id.js";
+import { touchesFlag } from "../utils/touches-flag.js";
+// Re-exported so the struggle's callers (and their mocks) keep one import.
+export { touchesFlag };
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { playsCharacter, whisperFor } from "../utils/playbook-actors.js";
 import { isGmToolkitData, theGmToolkit } from "../actors/gmtoolkit/gm-toolkit-actor.js";
@@ -527,12 +530,6 @@ async function postCard(title, rowsHtml) {
 		"stonetop-homestead-chat-card");
 	// Spoken as the move, not as the GM's assigned toolkit, which would head the card "GM Toolkit".
 	await ChatMessage.create({ content, speaker: { alias: STRUGGLE_MOVE } });
-}
-
-/** Whether an actor update wrote, or removed, one of this feature's flags. */
-export function touchesFlag(changes, flag) {
-	const scoped = changes?.flags?.[SYSTEM_ID];
-	return !!scoped && Object.keys(scoped).some(key => key.replace(/^-=/, "") === flag);
 }
 
 /** Whether an update to the toolkit moved the struggle to a new state (called, shared, ended). */
