@@ -316,6 +316,16 @@ describe("StonetopGmToolkitSheet", () => {
 		expect(buttons.map(b => b.attrs.tabindex)).toEqual(["-1", "-1", "0"]);
 	});
 
+	// Encounters and Expeditions were rail tabs once. A window saved then reopens on the Prep tab at
+	// that view (window-restore.js#_applyTabs reads this), not on Moves.
+	it("maps a window saved on the old Encounters or Expeditions rail tab onto Prep", () => {
+		const sheet = makeSheet();
+		expect(sheet._mapSavedTabs(["expeditions"])).toEqual(["prep", "expeditions"]);
+		expect(sheet._mapSavedTabs(["encounters", "whatever"])).toEqual(["prep", "encounters"]);
+		expect(sheet._mapSavedTabs(["prep", "sites"])).toEqual(["prep", "sites"]);
+		expect(sheet._mapSavedTabs(["threats"])).toEqual(["threats"]);
+	});
+
 	// Foundry's Tabs binds a nav and its panels by `data-group`. Mismatch them and the controller
 	// binds a group nothing answers to: the rail renders, the button highlights, and the body
 	// never activates.

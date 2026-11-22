@@ -87,7 +87,7 @@
 		<span class="stonetop-gm-encounter-count">
 			{{#each groups}}
 			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{this.key}}"
-			      data-tooltip="{{this.tip}}" data-tooltip-direction="UP">{{this.count}}<i class="{{this.icon}}" aria-hidden="true"></i></span>
+			      data-tooltip="{{this.tip}}" data-tooltip-direction="UP"><span class="stonetop-chip-text">{{this.count}}</span><i class="{{this.icon}}" aria-hidden="true"></i></span>
 			{{/each}}
 		</span>
 		{{/if}}
@@ -274,7 +274,7 @@
 			<button type="button" class="stonetop-gm-encounter-used"
 			        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsed"}}{{/if}}"
 			        data-tooltip-direction="UP">
-				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}" aria-hidden="true"></i> {{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsedShort"}}{{/if}}
+				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}" aria-hidden="true"></i> <span class="stonetop-chip-text">{{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsedShort"}}{{/if}}</span>
 			</button>
 		</div>
 	</div>

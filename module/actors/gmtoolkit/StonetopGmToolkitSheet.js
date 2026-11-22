@@ -40,7 +40,7 @@ import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
 import {
-	PREP_TAB_GROUP, PREP_INITIAL_VIEW, PREP_SWITCHER_SELECTOR, PREP_PANES_SELECTOR,
+	PREP_TAB_GROUP, PREP_INITIAL_VIEW, PREP_SWITCHER_SELECTOR, PREP_PANES_SELECTOR, PREP_RAIL_TAB, PREP_VIEWS,
 	prepViewsContext, syncPrepSwitcher, wirePrepSwitcherKeys, wirePrepIntros,
 } from "./gm-prep-views.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
@@ -534,8 +534,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		 * Core's controller has already flipped the `active` classes by the time this runs; what it
 		 * never touches is ARIA, so the switcher's `aria-selected` and roving `tabindex` are put
 		 * back here (gm-prep-views.js). Matched by IDENTITY against the switcher's controller,
-		 * never by the name it switched to: "encounters" was a rail tab once, and a saved
-		 * window from that time is still restored through this same path.
+		 * never by the name it switched to: "encounters" was a rail tab once, and the rail's own
+		 * controller can still be handed that name. The window restore runs this too
+		 * (window-restore.js#_applyTabs passes `triggerCallback`), so a reopened sheet's switcher
+		 * says which view it is on.
 		 *
 		 * Nothing to do for the Sites pane's masonry. A grid in a hidden pane measures zero and
 		 * leaves its packer unset, and the pane being shown is a 0-to-real-width resize, which is
@@ -546,6 +548,16 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			if (tabs && tabs === this._tabs?.[PREP_TAB_GROUP]) {
 				syncPrepSwitcher(this.element?.[0]?.querySelector(PREP_SWITCHER_SELECTOR), active);
 			}
+		}
+
+		/**
+		 * A window saved while Encounters and Expeditions were rail tabs of their own: reopen it on
+		 * the Prep tab, on that view, rather than on Moves with the GM left to find the new button.
+		 * Read by the window restore (window-restore.js#_applyTabs) before it activates anything.
+		 */
+		_mapSavedTabs(tabs) {
+			const [rail] = tabs;
+			return PREP_VIEWS.some(view => view.key === rail) ? [PREP_RAIL_TAB, rail] : tabs;
 		}
 
 		/**

@@ -1473,10 +1473,18 @@ export class GmBundleTab {
 	 * bubbling from a detached node never reaches a root listener -- a flag cleared there would
 	 * stick and mislabel the next drag in from the sidebar. `wireDropTarget` clears it on a drop as
 	 * well.
+	 *
+	 * NEITHER IS GUARANTEED. A node the sheet repaints away mid-drag (another client's write) and
+	 * then let go outside the pane fires no `dragend` in Firefox, and no drop reaches the panel. So
+	 * the NEXT drag to start anywhere in the document clears it too: a capture listener on the
+	 * document runs before the source's own `dragstart`, which is what sets it again when that next
+	 * drag is ours. Added from inside this drag's own dispatch, past the document's capture phase,
+	 * so it waits for the next one; `once`, so at most one is ever pending.
 	 */
 	noteDragSource(node, kind) {
 		this.dragFrom = kind;
 		node?.addEventListener?.("dragend", () => { this.dragFrom = null; }, { once: true });
+		globalThis.document?.addEventListener?.("dragstart", () => { this.dragFrom = null; }, { once: true, capture: true });
 	}
 
 	/**

@@ -722,6 +722,27 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
+	 * The trip ids `openOnTrip` would find right now: an open window's own copy of the log (its draft
+	 * may be ahead of the world, see below), else the setting. For the GM Toolkit's expedition cards,
+	 * whose "On the road" and "Open" must not promise a trip that Run would mint afresh. An empty set
+	 * when the log cannot be read at all (no `game` yet, or the setting unregistered: core's `get`
+	 * throws on that), which reads as "not under way", the answer Run then repairs.
+	 *
+	 * Here and not in the tab, so the tab keeps no second opinion of how a trip is stored.
+	 *
+	 * @returns {Set<string>}
+	 */
+	static loggedTripIds() {
+		try {
+			const open = findOpenApp(w => w.id === "stonetop-expedition");
+			const log = open?.rendered ? open._log() : normalizeLog(getSetting(EXPEDITION_LOG_SETTING));
+			return new Set(log.list.map(entry => entry?.id));
+		} catch {
+			return new Set();
+		}
+	}
+
+	/**
 	 * Open the walkthrough on ONE trip, minting that trip if the log does not hold it.
 	 *
 	 * The join between this window and the GM Toolkit's Expeditions tab, where a trip is prepped

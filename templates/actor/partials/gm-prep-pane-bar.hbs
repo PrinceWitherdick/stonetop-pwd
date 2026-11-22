@@ -39,10 +39,10 @@
 	        aria-expanded="{{#if pane.introOpen}}true{{else}}false{{/if}}" aria-controls="{{pane.id}}-intro"
 	        aria-label="{{localize "stonetop.gmToolkit.prep.aboutView"}}"
 	        data-tooltip="{{localize "stonetop.gmToolkit.prep.aboutView"}}" data-tooltip-direction="UP">
-		<i class="far fa-circle-question" aria-hidden="true"></i>
+		<i class="fas fa-circle-question" aria-hidden="true"></i>
 	</button>
 	{{#unless bare}}
-	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> {{this.label}}</button>
+	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> <span class="stonetop-chip-text">{{this.label}}</span></button>
 	{{/unless}}
 	<p class="stonetop-gm-pane-intro" id="{{pane.id}}-intro"{{#unless pane.introOpen}} hidden{{/unless}}>{{this.intro}}</p>
 </div>

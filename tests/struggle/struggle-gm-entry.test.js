@@ -127,7 +127,7 @@ describe("keeping the buttons current", () => {
 	it("finds the words to rewrite on both screens", () => {
 		for (const rel of ["templates/actor/partials/gm-toolkit-tab-expeditions.hbs", "templates/dialogs/expedition.hbs"]) {
 			const markup = read(rel);
-			expect(markup).toMatch(/<span data-struggle-call-label>\{\{(stonetop\.)?struggle\.label\}\}<\/span>/);
+			expect(markup).toMatch(/<span (class="stonetop-chip-text" )?data-struggle-call-label>\{\{(stonetop\.)?struggle\.label\}\}<\/span>/);
 			expect(markup).toMatch(/data-struggle-call-hint>\{\{(stonetop\.)?struggle\.hint\}\}/);
 		}
 	});

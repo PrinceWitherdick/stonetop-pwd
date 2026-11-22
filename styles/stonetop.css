@@ -14450,7 +14450,9 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 .stonetop-expedition-dialog .stonetop-exp-load-move > span,
 .stonetop-expedition-dialog .stonetop-exp-load-chip .tick,
 .stonetop-people-gallery .stonetop-people-count,
-.stonetop-arcanum-edit .stonetop-arc-chip-label {
+.stonetop-arcanum-edit .stonetop-arc-chip-label,
+.stonetop-gm-prep-view-label,
+.stonetop-gm-encounter-deploy-label {
 	text-box: trim-both cap alphabetic;
 	padding-top: var(--st-trim-top);
 	padding-bottom: var(--st-trim-bottom);
@@ -47024,11 +47026,16 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* The count. A soft pill, washed rather than outlined, and SLATE-FILLED on the active segment so
    the number under the reader's eye is the loudest thing in the strip. Tabular figures, so a
-   count going from 9 to 10 widens the pill and not the gap around it. */
+   count going from 9 to 10 widens the pill and not the gap around it.
+
+   A text-only chip, so it trims ITSELF to the digits' cap band and pads the trimmed height back
+   with the two tokens (tests/styles/chip-centring.test.js): centring the 1.6 line box put the
+   figures wherever Signika's ascent rounded to. A block, never flex, or the trim is ignored. */
 .stonetop-gm-prep-view-count {
 	flex: 0 0 auto;
+	display: inline-block;
 	min-width: 1.7em;
-	padding: 0 6px;
+	padding: var(--st-trim-top) 6px var(--st-trim-bottom);
 	border-radius: 999px;
 	background: rgb(var(--st-ink-rgb) / 0.08);
 	color: var(--st-text-secondary);
@@ -47038,11 +47045,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-weight: 600;
 	line-height: 1.6;
 	text-align: center;
+	text-box: trim-both cap alphabetic;
 }
 
+/* The primary family's fill WITH its own ink, never a hand-picked white: the palettes re-point
+   the pair together, and a white written here stays white on High Contrast's light slate. */
 .stonetop-gm-prep-view.active .stonetop-gm-prep-view-count {
-	background: var(--st-accent-fill);
-	color: #fff;
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
 }
 
 /* Nothing in that view yet. Dimmed, not hidden: "0" is the answer to the question the pill asks,
@@ -48689,6 +48699,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	transition: background-color 0.15s, color 0.15s, border-color 0.15s;
 }
 
+/* The base dashed bar drops its "+" a pixel (`.stonetop-prep-add-btn > i`). This button's label is
+   a trimmed `.stonetop-chip-text`, which is centred on its capitals, so the drop now puts the
+   glyph 1.6px under the words (centre audit, 1x/1.25x/1.5x, all three sheet faces): taken off. */
+.stonetop-prep-add-btn.stonetop-gm-pane-add > i {
+	top: 0;
+}
+
 .stonetop-prep-add-btn.stonetop-gm-pane-add:hover {
 	border-color: var(--st-slate-hover-border);
 	background: var(--st-slate-hover-bg);
@@ -48825,21 +48842,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-weight: 700;
 	line-height: 1.25;
 	color: var(--st-heading-ink);
-	text-decoration: underline transparent;
-	text-decoration-thickness: 1px;
-	text-underline-offset: 3px;
 	/* A name longer than its cap ends in an ellipsis rather than mid-letter. Browsers draw this
 	   on a text input only while it is not being edited, which is exactly when it is wanted. */
 	text-overflow: ellipsis;
 	cursor: text;
 }
 
+/* Hover is a faint well, never an underline: text that does something is told by its weight
+   (the name is already bold), and the system draws no underline as a hover cue. */
 .stonetop-gm-encounter-name:hover {
-	text-decoration-color: rgb(var(--st-ink-rgb) / 0.35);
+	background: rgb(var(--st-ink-rgb) / 0.04);
 }
 
 .stonetop-gm-encounter-name:focus {
-	text-decoration-color: transparent;
 	background: rgb(var(--st-paper-rgb) / 0.6);
 	box-shadow: 0 0 0 2px var(--st-quiet-ink);
 }
@@ -48913,9 +48928,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	white-space: nowrap;
 }
 
+/* A whole-pixel glyph, like every chip icon (see `.stonetop-follower-dead-badge i`): Font Awesome
+   rounds its own metrics, so a fractional size wanders about the pill's centre. The label beside
+   it is a `.stonetop-chip-text`, which trims to its capitals. */
 .stonetop-gm-encounter-tally > i,
 .stonetop-gm-expedition-road > i {
-	font-size: 0.95em;
+	font-size: round(1em, 1px);
 	line-height: 1;
 	color: var(--st-text-muted);
 }
@@ -48932,7 +48950,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-timeline-kind-expedition);
 }
 
-/* THE FIELD IS AS WIDE AS ITS WORDS, so its hover underline answers the pointer on the name and
+/* THE FIELD IS AS WIDE AS ITS WORDS, so its hover well answers the pointer on the name and
    not on the empty stretch of row beside it, and the peek can take that stretch instead. The
    pills are then pushed right by an auto margin on the NAME's right, which takes whatever slack
    the peek (when there is one, it grows first) leaves. On the right of the name rather than on
@@ -48996,6 +49014,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    a fixed 22px square and a glyph that took the UI font size grew past it and drifted off centre
    at the larger roots. */
 .stonetop-gm-encounter-toggle {
+	/* Core paints a shadow on every button, and the shared icon-button rule above clears it only on
+	   hover, so the bare caret has to clear it at rest itself. */
+	box-shadow: none;
 	color: var(--st-text-muted);
 }
 
@@ -49146,8 +49167,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-notes-edit.stonetop-gm-encounter-notes-add:hover {
 	background: transparent;
 	color: var(--st-text);
-	text-decoration: underline;
-	text-underline-offset: 3px;
 }
 
 /* --- One kind of gathered thing: an eyebrow line, then its rows ----------------------------
@@ -49332,8 +49351,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* The name and its picture: a button rather than an anchor (see the template), so every scrap of
    core's button chrome has to come off before it reads as a name in a list. It is the DRAG HANDLE
    too, which is why the thumbnail is inside it. Sized to its contents (`justify-self: start`), so
-   the hover underline and the grab answer the name and not the blank run beside it; the name
-   itself ellipsizes inside. */
+   the grab answers the name and not the blank run beside it; the name itself ellipsizes inside.
+   Its hover is the ROW's wash, never an underline on the name: the system draws no underline as a
+   hover cue, and a bolder name would widen the column every name in the card is laid on. */
 .stonetop-gm-encounter-entry-open {
 	grid-column: 1;
 	grid-row: 1;
@@ -49364,12 +49384,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-entry-open:hover {
 	background: transparent;
 	box-shadow: none;
-}
-
-.stonetop-gm-encounter-entry-open:hover .stonetop-gm-encounter-entry-name {
-	text-decoration: underline;
-	text-decoration-color: rgb(var(--st-ink-rgb) / 0.4);
-	text-underline-offset: 3px;
 }
 
 .stonetop-gm-encounter-entry-open:active {
@@ -49418,11 +49432,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* THE NOTE, AS TEXT. Transparent, borderless, italic and muted, so a row reads "Crinwin swarm —
-   12 of them, half in the reeds" and not "Crinwin swarm [input]". A dotted underline arrives as
-   the row is hovered, a solid one in the slate with full upright ink once it has the caret; the
-   placeholder ("Add a note…") is drawn only then too, so an untouched row is a name and nothing
-   else. The underline is a bottom BORDER, not text-decoration, because it has to show under an
-   empty field. */
+   12 of them, half in the reeds" and not "Crinwin swarm [input]". Hovering the row draws the
+   placeholder ("Add a note…") and nothing else, never a dotted line: the system draws no
+   underline as a hover cue. Once it has the caret it takes a solid slate rule with full upright
+   ink. The rule is a bottom BORDER, not text-decoration, because it has to show under an empty
+   field; it sits transparent at rest so the focus rule moves nothing. */
 /* Placed by column, because the markup has the cross BEFORE the note (the template says why). */
 .stonetop-gm-encounter-entry-note {
 	grid-column: 2;
@@ -49434,7 +49448,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin: 0;
 	padding: 2px 2px 1px;
 	border: 0;
-	border-bottom: 1px dotted transparent;
+	border-bottom: 1px solid transparent;
 	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
@@ -49452,10 +49466,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-entry-note::placeholder {
 	color: transparent;
 	font-style: italic;
-}
-
-.stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note {
-	border-bottom-color: rgb(var(--st-ink-rgb) / 0.3);
 }
 
 .stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note::placeholder,
@@ -49525,7 +49535,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* A ROW WITH NO NOTE STAYS ONE LINE. Wrapped under the name, an empty note is a blank line
 	   under every map and table that nobody wrote anything about, and a narrow card of them was
 	   half air. So while the note is empty and not being typed in, it sits on the name's own line,
-	   in the second column (its hover underline and "Add a note…" are still the way in), and the
+	   in the second column (its "Add a note…", drawn while the row is hovered, is still the way in), and the
 	   name takes the first, capped at 40% as on a wide card. Once it has the caret it drops to its
 	   own line like any other note, so what is typed has the card's width; it moves on focus
 	   rather than on the first keystroke, so the field never jumps under a word being typed. */
@@ -49869,7 +49879,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-gm-fold-eyebrow > .stonetop-section-note {
-	padding: 0 7px;
+	/* A text-only chip: trims itself to the digits' capitals and pads the height back with the two
+	   tokens (tests/styles/chip-centring.test.js). A block, never flex, or the trim is ignored. */
+	display: inline-block;
+	padding: var(--st-trim-top) 7px var(--st-trim-bottom);
+	text-box: trim-both cap alphabetic;
 	border-radius: 999px;
 	background: rgb(var(--st-ink-rgb) / 0.07);
 	font-family: var(--font-stonetop);

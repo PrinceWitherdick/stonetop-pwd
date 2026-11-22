@@ -30,9 +30,9 @@
 	{{#if accepts.length}}
 	<ul class="stonetop-gm-prep-empty-kinds" aria-hidden="true">
 		{{#each accepts}}
-		<li data-tooltip="{{this.label}}" data-tooltip-direction="UP"><i class="{{this.icon}}"></i></li>
+		<li data-tooltip="{{this.label}}" data-tooltip-direction="UP"><i class="{{this.icon}}" aria-hidden="true"></i></li>
 		{{/each}}
 	</ul>
 	{{/if}}
-	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add stonetop-gm-pane-add--primary {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> {{this.label}}</button>
+	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add stonetop-gm-pane-add--primary {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> <span class="stonetop-chip-text">{{this.label}}</span></button>
 </div>

@@ -39,18 +39,18 @@
 		{{!-- ON THE ROAD: this card is bound to a trip in the walkthrough's log, so Run will
 		      reopen that trip rather than start one. Said on the shut row, before the pills,
 		      because "which of these is under way" is the question a column of expeditions is
-		      scanned for. Off `tripId`, the same field that turns the Run button's words; not on a
-		      filed card, whose trip is over. --}}
-		{{#if tripId}}{{#unless used}}
+		      scanned for. Off `onTheRoad` (a `tripId` the walkthrough's log still holds), the same
+		      flag that turns the Run button's words; not on a filed card, whose trip is over. --}}
+		{{#if this.onTheRoad}}{{#unless used}}
 		<span class="stonetop-gm-expedition-road" data-tooltip="{{localize "stonetop.gmToolkit.expeditions.onTheRoadTip"}}" data-tooltip-direction="UP">
-			<i class="fas fa-person-hiking" aria-hidden="true"></i> {{localize "stonetop.gmToolkit.expeditions.onTheRoad"}}
+			<i class="fas fa-person-hiking" aria-hidden="true"></i> <span class="stonetop-chip-text">{{localize "stonetop.gmToolkit.expeditions.onTheRoad"}}</span>
 		</span>
 		{{/unless}}{{/if}}
 		{{#if groups.length}}
 		<span class="stonetop-gm-encounter-count">
 			{{#each groups}}
 			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{this.key}}"
-			      data-tooltip="{{this.tip}}" data-tooltip-direction="UP">{{this.count}}<i class="{{this.icon}}" aria-hidden="true"></i></span>
+			      data-tooltip="{{this.tip}}" data-tooltip-direction="UP"><span class="stonetop-chip-text">{{this.count}}</span><i class="{{this.icon}}" aria-hidden="true"></i></span>
 			{{/each}}
 		</span>
 		{{/if}}
@@ -134,18 +134,19 @@
 		      IT SAYS "OPEN" ONCE THE CARD IS BOUND. A trip minted by the first press keeps
 		      everything the GM then writes into the walkthrough, and the second press reaches that
 		      same trip — so a button still offering to start one would be lying about what it is
-		      about to do. `tripId` is what turns it, and it is set by the run itself
-		      (gm-expeditions-tab.js), never by hand. --}}
+		      about to do. `onTheRoad` is what turns it: a `tripId` set by the run itself
+		      (gm-expeditions-tab.js), never by hand, AND still in the walkthrough's log. A card whose
+		      trip was deleted from that log reads "Run" again, because the next press starts afresh. --}}
 		<div class="stonetop-gm-card-foot">
 			<button type="button" class="stonetop-gm-encounter-used"
 			        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsed"}}{{/if}}"
 			        data-tooltip-direction="UP">
-				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}" aria-hidden="true"></i> {{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsedShort"}}{{/if}}
+				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}" aria-hidden="true"></i> <span class="stonetop-chip-text">{{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsedShort"}}{{/if}}</span>
 			</button>
 			<button type="button" class="stonetop-gm-expedition-run"
-			        data-tooltip="{{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopenTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.runTip"}}{{/if}}"
+			        data-tooltip="{{#if this.onTheRoad}}{{localize "stonetop.gmToolkit.expeditions.reopenTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.runTip"}}{{/if}}"
 			        data-tooltip-direction="UP">
-				<i class="fas fa-person-hiking" aria-hidden="true"></i> {{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}
+				<i class="fas fa-person-hiking" aria-hidden="true"></i> <span class="stonetop-chip-text">{{#if this.onTheRoad}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}</span>
 			</button>
 		</div>
 	</div>

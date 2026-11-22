@@ -271,6 +271,12 @@ describe("the Encounters tab: wiring", () => {
 			.toContain("{{/if}}");
 	});
 
+	// Core paints a shadow on every button and the shared icon-button rule clears it only on hover,
+	// so the bare caret clears it at rest itself (lost once, when the caret's rule was rewritten).
+	it("draws the caret as a bare glyph, with core's button shadow off at rest", () => {
+		expect(declarations(CSS, ".stonetop-gm-encounter-toggle")).toMatch(/box-shadow:\s*none/);
+	});
+
 	// A row's thumbnail is an <img> INSIDE the draggable name button, so it carries the
 	// `draggable="false"` opt-out every portrait in the system wears: without it Gecko hands over
 	// the picture instead of the document. Every <img> the panel draws, not just the first.
@@ -1046,6 +1052,21 @@ describe("the Encounters tab: the pane around the cards", () => {
 		for (const fn of grip.handlers.dragend ?? []) fn({});
 		expect(host._encounters.dragFrom).toBe(null);
 
+		// And when that dragend never comes (Firefox, a source repainted away mid-drag and let go off
+		// the pane), the next drag to start anywhere clears it, before the next source sets its own.
+		const docListeners = [];
+		const realDoc = globalThis.document;
+		globalThis.document = { addEventListener: (type, fn, opts) => docListeners.push({ type, fn, opts }) };
+		try {
+			host._encounters.noteDragSource(fakeEl({ cls: ["stonetop-gm-encounter-grip"] }), "card");
+		} finally {
+			globalThis.document = realDoc;
+		}
+		const next = docListeners.find(l => l.type === "dragstart");
+		expect(next?.opts).toEqual({ once: true, capture: true });
+		next.fn({});
+		expect(host._encounters.dragFrom).toBe(null);
+
 		// One of our own rows: lands IN a card, but over bare pane it lands nowhere.
 		host._encounters.noteDragSource(grip, "entry");
 		await root.panel.dragoverEvent(dt(), head);
@@ -1242,7 +1263,7 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 	// glyph itself is hidden from a screen reader precisely because the tooltip carries it.
 	it("wires each badge to a tooltip and hides the glyph from the reader", () => {
 		expect(CARD_MARKUP).toMatch(/class="stonetop-gm-encounter-tally[^"]*"[\s\S]{0,120}data-tooltip="\{\{this\.tip\}\}"/);
-		expect(CARD_MARKUP).toMatch(/\{\{this\.count\}\}<i class="\{\{this\.icon\}\}" aria-hidden="true">/);
+		expect(CARD_MARKUP).toMatch(/<span class="stonetop-chip-text">\{\{this\.count\}\}<\/span><i class="\{\{this\.icon\}\}" aria-hidden="true">/);
 	});
 
 	// ONE GROUPING, READ TWICE: the badges on the shut head and the cards in the open body are the
@@ -1313,10 +1334,12 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		// Core paints an inset ring on every input whatever its border says.
 		expect(note).toMatch(/box-shadow:\s*none/);
 		expect(note).toMatch(/font-style:\s*italic/);
-		expect(note).toMatch(/border-bottom:\s*1px dotted transparent/);
+		// The focus rule's slot, held at rest so the caret arriving moves nothing. Never dotted, and
+		// never lit by a hover: the system draws no underline as a hover cue (STYLEGUIDE.md, States).
+		expect(note).toMatch(/border-bottom:\s*1px solid transparent/);
 		expect(declarations(CSS, ".stonetop-gm-encounter-entry-note::placeholder")).toMatch(/color:\s*transparent/);
-		expect(declarations(CSS, ".stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note"))
-			.toMatch(/border-bottom-color:/);
+		expect(declarations(CSS, ".stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note") ?? "")
+			.not.toMatch(/border/);
 		const focus = declarations(CSS, ".stonetop-gm-encounter-entry-note:focus");
 		expect(focus).toMatch(/border-bottom:\s*1px solid var\(--st-quiet-ink\)/);
 		expect(focus).toMatch(/font-style:\s*normal/);

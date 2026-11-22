@@ -300,6 +300,11 @@ Variants that exist for a reason:
 - **Follower card**: opaque paper with a tinted header band and `--st-radius-lg`; beasts,
   livestock and custom followers add a 3px left edge.
 - **Nested cards** (GM Toolkit entries): rule only, no fill. A third box deep gets no wash.
+- **Prep card** (the GM Toolkit's encounter and expedition cards, siblings of the site cards):
+  warm paper from `--st-prep-card-paper` to `--st-prep-card-paper-lo`, a `--st-prep-card-line`
+  border and header rule, `--st-prep-card-shadow` (`-hover` under the pointer), and an inset
+  accent edge from `--st-bundle-edge` (green once the card is filed as done). The dark pages
+  re-point the four `--st-prep-card-*` tokens; never write the paper as a literal.
 - **Threat / site / hazard cards and love letters**: their own parchment (`--tc-paper`, `--tc-ink`,
   `--tc-rule`) because they are props, not sheet furniture. Their accent arrives inline as
   `--threat-accent-raw` and the stylesheet derives `--threat-accent` from it.
@@ -443,6 +448,7 @@ The glyph is `fa-pencil`.
 | Hover, on a slate thing | `--st-btn-primary-bg-hover` |
 | Hover, on a pickable surface | `--st-slate-hover-bg` (+ `--st-slate-hover-border`) |
 | Hover, on a paper button or row | `--st-on-dark-hover` / `--st-on-dark-raised` fallbacks, or a 6% ink wash |
+| Hover, on text that does something | Nothing new on the words: text you can press or that has hover help is **bold** at rest, and the row or field under it may take a faint wash. Never an underline (solid or dotted) or a dotted border as the cue. |
 | Selected (one of a set: tab, filter, segment) | `.is-active` — slate fill, `--st-btn-primary-text` |
 | Chosen (an option you have taken) | `.is-selected` / `.is-checked` — the green family, or a slate border |
 | Disabled control or option | `opacity: 0.4`, and `cursor: not-allowed` on a button; a disabled primary also drops its slate fill. A control that is locked but must still read keeps `opacity: 1`. |
@@ -720,8 +726,19 @@ delete an entry when it is done.
     where a class string is handed to a Foundry API (header controls, context menus), which is
     core's own spelling.
 
+**GM Toolkit**
+
+13. **The GM Toolkit's Prep switcher** (`.stonetop-gm-prep-switcher`, Encounters / Expeditions /
+    Sites) is its own segmented skin, not `.stonetop-segmented-picker`: it is a core tab group
+    with a count pill and a glyph per segment, and its selected segment is a slate hover wash
+    with an inset rule rather than the primary fill. Folding it into the shared picker means
+    giving that picker an icon and count slot, and a look to judge on screen.
+14. **The Prep pane bar's New button** (`.stonetop-gm-pane-add`) restates a slate outline on top
+    of `.stonetop-prep-add-btn` rather than wearing the Inline skin, because the dashed base class
+    is the hook its handlers match. Its empty-state form (`--primary`) restates the primary fill.
+
 **Naming**
 
-13. **Legacy prefixes** — `cm-`, `wd-`, `ct-`, `asm-`, `st-treasure-`, and BEM
+15. **Legacy prefixes** — `cm-`, `wd-`, `ct-`, `asm-`, `st-treasure-`, and BEM
     `threat-card__edge` style names in the threat, site, hazard, monster-builder and wound-builder
     blocks. Renaming them touches templates, JS and tests for no visible change.

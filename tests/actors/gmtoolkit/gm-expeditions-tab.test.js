@@ -24,7 +24,7 @@ vi.mock("../../../module/book2-art/travel-map-art.js", () => ({
 	resolveTravelMap:   () => Promise.resolve(null),
 }));
 
-const { withGmExpeditionsTab, normalizeExpedition, EXPEDITIONS_TAB } =
+const { withGmExpeditionsTab, normalizeExpedition, markTripsOnTheRoad, EXPEDITIONS_TAB } =
 	await import("../../../module/actors/gmtoolkit/gm-expeditions-tab.js");
 const { ENCOUNTERS_TAB, withGmEncountersTab } =
 	await import("../../../module/actors/gmtoolkit/gm-encounters-tab.js");
@@ -199,7 +199,7 @@ describe("the Expeditions tab: wiring", () => {
 	// ON THE ROAD: a card bound to a trip says so on its shut row, before the pills, off the same
 	// `tripId` that turns Run into "Open the walkthrough" -- and not once the card is filed.
 	it("says a bound, live card is on the road", () => {
-		expect(PANEL_MARKUP).toMatch(/\{\{#if tripId\}\}\{\{#unless used\}\}\s*<span class="stonetop-gm-expedition-road"/);
+		expect(PANEL_MARKUP).toMatch(/\{\{#if this\.onTheRoad\}\}\{\{#unless used\}\}\s*<span class="stonetop-gm-expedition-road"/);
 		const head = PANEL_MARKUP.slice(PANEL_MARKUP.indexOf("stonetop-gm-encounter-head"), PANEL_MARKUP.indexOf("stonetop-gm-encounter-body"));
 		expect(head.indexOf("stonetop-gm-expedition-road")).toBeGreaterThan(-1);
 		expect(head.indexOf("stonetop-gm-expedition-road")).toBeLessThan(head.indexOf("stonetop-gm-encounter-count"));
@@ -438,7 +438,8 @@ describe("the Expeditions tab: running one", () => {
 	// lying about it.
 	it("turns from starting a trip into reopening one", () => {
 		expect(CARD_MARKUP).toMatch(/stonetop-gm-expedition-run/);
-		expect(CARD_MARKUP).toMatch(/\{\{#if tripId\}\}[\s\S]*?expeditions\.reopen"[\s\S]*?\{\{else\}\}[\s\S]*?expeditions\.run"/);
+		expect(CARD_MARKUP).toMatch(/\{\{#if this\.onTheRoad\}\}[\s\S]*?expeditions\.reopen"[\s\S]*?\{\{else\}\}[\s\S]*?expeditions\.run"/);
+		expect(CARD_MARKUP).not.toMatch(/\{\{#if tripId\}\}/);
 		// It shares the foot with the complete toggle, and the body is a flex COLUMN — so the row
 		// is what keeps them side by side rather than stacked.
 		expect(CARD_MARKUP).toContain("stonetop-gm-card-foot");
@@ -451,6 +452,22 @@ describe("the Expeditions tab: running one", () => {
 	// The walkthrough's own log stays where it is. What it records is what happened at the table,
 	// which is a different thing from what was gathered beforehand — and a second store for it
 	// here would be two records of one trip.
+	// A STALE `tripId` is normal (the GM deleted the trip from the walkthrough's log), and Run then
+	// mints a fresh trip at step 0. So "On the road" and "Open" follow the LOG, not the field.
+	it("says a card is on the road only while the log still holds its trip", () => {
+		const published = {
+			active:    [{ id: "a", tripId: "t1" }, { id: "b", tripId: "gone" }, { id: "c", tripId: "" }],
+			completed: [{ id: "d", tripId: "t1" }],
+		};
+		markTripsOnTheRoad(published, new Set(["t1"]));
+		expect(published.active.map(c => c.onTheRoad)).toEqual([true, false, false]);
+		expect(published.completed[0].onTheRoad).toBe(true);
+		// A log that cannot be read (no game yet) is an empty one: every card says Run.
+		const unread = { active: [{ id: "a", tripId: "t1" }], completed: [] };
+		markTripsOnTheRoad(unread);
+		expect(unread.active[0].onTheRoad).toBe(false);
+	});
+
 	it("leaves the walkthrough's own log in the world setting", () => {
 		const DIALOG_JS = read("module/dialogs/ExpeditionDialog.js");
 		expect(read("module/utils/expedition-log-core.js")).toContain('export const EXPEDITION_LOG_SETTING = "expeditionAnswers";');
@@ -461,8 +478,8 @@ describe("the Expeditions tab: running one", () => {
 		// GM had just typed, whose write was still on its way when Run was pressed.
 		expect(DIALOG_JS).toMatch(/open\._switchExpedition\(tripId\)/);
 		expect(DIALOG_JS).not.toMatch(/open\._logDraft = null/);
-		// And the tab reaches that log ONLY through `openOnTrip`: no settings read of its own, and
-		// no second opinion about the shape a trip is stored in.
+		// And the tab reaches that log ONLY through the dialog (`openOnTrip`, `loggedTripIds`): no
+		// settings read of its own, and no second opinion about the shape a trip is stored in.
 		const TAB_JS = read("module/actors/gmtoolkit/gm-expeditions-tab.js");
 		expect([...TAB_JS.matchAll(/^import .*?from "([^"]+)";$/gm)].map(m => m[1]))
 			.toEqual(["./gm-bundle-tab.js", "../../dialogs/ExpeditionDialog.js"]);

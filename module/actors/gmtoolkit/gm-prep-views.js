@@ -37,6 +37,9 @@ import { localize, format } from "../../utils/i18n.js";
 /** Where the switcher's group sits in the sheet's `_tabs`. See the note above on why it is fixed. */
 export const PREP_TAB_GROUP = 1;
 
+/** The rail tab the three views sit under (gm-toolkit.hbs). */
+export const PREP_RAIL_TAB = "prep";
+
 /** The `data-group` the switcher and its three panes share. */
 export const PREP_GROUP = "prep";
 
