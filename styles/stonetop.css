@@ -47861,13 +47861,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* Every square transparent icon button on this sheet: the two tool rows, the encounter's own
-   disclosure caret, and the cross on a collected row. One rule, so the shape, the reset and the
-   hover ground cannot drift apart between two tabs of the same sheet; the two outside a tool row
-   keep only their own size and ink below, which is all they actually differ by. */
+   disclosure caret, the cross on a collected row, and the Prep pane bar's round "?". One rule, so
+   the shape, the reset and the hover ground cannot drift apart between two tabs of the same sheet;
+   the ones outside a tool row keep only their own size, shape and ink below, which is all they
+   actually differ by. */
 .stonetop-gm-wonder-tools > button,
 .stonetop-gm-encounter-tools > button,
 .stonetop-gm-encounter-toggle,
-.stonetop-gm-encounter-entry-remove {
+.stonetop-gm-encounter-entry-remove,
+.stonetop-gm-pane-help {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -47886,7 +47888,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-wonder-tools > button:hover,
 .stonetop-gm-encounter-tools > button:hover,
 .stonetop-gm-encounter-toggle:hover,
-.stonetop-gm-encounter-entry-remove:hover {
+.stonetop-gm-encounter-entry-remove:hover,
+.stonetop-gm-pane-help:hover {
 	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 }
@@ -48633,32 +48636,21 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* THE "?": a quiet round 22px button, in the lead's own muted ink, that answers "what is this
-   view for?" with the full intro. It states its whole look, as everything in this block does,
-   because core gives a <button> a border, a fill and a min-height of its own. */
+   view for?" with the full intro. The sheet's icon-button rule gives it the 22px shape, the reset
+   and the hover ground; here is only what differs, plus the two resets core's <button> needs that
+   the tool rows' buttons get from their own row (a min-height and a margin). */
 .stonetop-gm-pane-help {
-	flex: 0 0 auto;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
 	min-height: 0;
 	margin: 0;
-	padding: 0;
-	border: 0;
 	border-radius: 50%;
-	background: transparent;
 	box-shadow: none;
 	font-size: var(--st-fs-sm);
-	line-height: 1;
 	color: var(--st-text-muted);
-	cursor: pointer;
 }
 
 .stonetop-gm-pane-help:hover,
 .stonetop-gm-pane-help[aria-expanded="true"] {
 	background: var(--st-slate-hover-bg);
-	box-shadow: none;
 	color: var(--st-heading-ink);
 }
 
@@ -48804,8 +48796,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* --- The list and the card ------------------------------------------------------------------ */
-.stonetop-gm-encounter-list,
-.stonetop-gm-encounter-entries {
+.stonetop-gm-encounter-list {
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -49151,10 +49142,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	min-width: 0;
 }
 
-.stonetop-gm-encounter-notes-block {
-	margin-bottom: 4px;
-}
-
 .stonetop-gm-encounter-body > .stonetop-gm-encounter-dropzone {
 	margin-top: 4px;
 }
@@ -49168,6 +49155,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    prose clear of the pencil parked in the corner. */
 .stonetop-gm-encounter-notes-block {
 	position: relative;
+	margin-bottom: 4px;
 }
 
 .stonetop-gm-encounter-notes {
@@ -49398,6 +49386,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* The thumbnail's side, grown with the reader's sheet font so a picture never sits smaller than
 	   the name beside it at the larger sizes. Read by the narrow layout's indent too. */
 	--st-entry-thumb: calc(28px * var(--stonetop-font-scale, 1));
+	list-style: none;
+	margin: 0;
+	padding: 0;
 	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: subgrid;

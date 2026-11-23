@@ -219,7 +219,7 @@ export function walkedPath(path, reached) {
 	const count = Math.trunc(Number(reached));
 	if (!path?.legs?.length || !Array.isArray(path.reach) || !Number.isFinite(count)) return null;
 	const reachedLegs = clampInt(count, 0, path.reach.length - 1);
-	const legs = path.legs.slice(0, drawnLegs(path.reach, reachedLegs));
+	const legs = path.legs.slice(0, path.reach[reachedLegs]);
 	const at = legs.length ? legs.at(-1).to : path.legs[0].from;
 	return {
 		d: legs.length ? routeCurve(legs) : "",

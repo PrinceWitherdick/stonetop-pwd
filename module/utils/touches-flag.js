@@ -5,7 +5,7 @@ import { SYSTEM_ID } from "../system-id.js";
 
 /** Whether an update object (any level of `changes`) sets or removes `key`. */
 export function touchesKey(scoped, key) {
-	return !!scoped && Object.keys(scoped).some(k => k.replace(/^-=/, "") === key);
+	return typeof scoped === "object" && scoped !== null && (key in scoped || `-=${key}` in scoped);
 }
 
 /** Whether an actor update wrote, or removed, one of this system's top-level flags. */

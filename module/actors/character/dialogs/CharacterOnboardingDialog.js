@@ -51,7 +51,7 @@ const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
 // are no card yet.
 function finishedWorldArcana(items, major) {
 	return [...(items ?? [])].filter(item => {
-		const flags = item?.flags?.stonetop ?? {};
+		const flags = item?.flags?.[ITEM_FLAG_SCOPE] ?? {};
 		return isFinishedWorldArcanum(item) && !!flags.slug
 			&& isMajorArcanumItem({ slug: flags.slug, major: flags.major }) === major;
 	});
@@ -3791,12 +3791,20 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			_refreshAnimalCompanionKind();
 			_refreshNextButton();
 		});
-		// The "more options than your companion can have" line (the step's `overCount`), kept in step
-		// as picks are unticked, since these handlers don't re-render.
-		const _refreshCompanionOver = (picked, limit) => {
+		// The count, the locks and the "more options than your companion can have" line (the step's
+		// `overCount`), kept in step as picks change, since these handlers don't re-render. One paint
+		// for the ticks and the write-in, as the crew's above.
+		const acPickEls = {
+			count:  html.find(".stonetop-onboarding-ac-trait-count"),
+			boxes:  html.find("[name='onboard-ac-trait']"),
+			custom: html.find(".onboard-ac-trait-custom"),
+		};
+		const _paintCompanionPicks = (picked, limit) => {
 			const over = Math.max(0, picked - limit);
 			html.find(".stonetop-onboarding-ac-over").prop("hidden", !over);
 			html.find(".stonetop-onboarding-ac-over-count").text(over);
+			paintPickLimit(acPickEls, picked, limit);
+			_refreshNextButton();
 		};
 		html.find("[name='onboard-ac-trait']").on("change", ev => {
 			const trait   = ev.currentTarget.value;
@@ -3808,14 +3816,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			this._selections.animalCompanion.traits = sel.traits;
 			ev.currentTarget.closest(".stonetop-onboarding-tag-option")
 				?.classList.toggle("is-selected", ev.currentTarget.checked);
-			const picked = sel.traits.length;
-			_refreshCompanionOver(picked, limit);
-			paintPickLimit({
-				count:  html.find(".stonetop-onboarding-ac-trait-count"),
-				boxes:  html.find("[name='onboard-ac-trait']"),
-				custom: html.find(".onboard-ac-trait-custom"),
-			}, picked, limit);
-			_refreshNextButton();
+			_paintCompanionPicks(sel.traits.length, limit);
 		});
 		// Custom trait write-in: the value isn't one of the listed options, so it spends
 		// one pick like any checkbox. Re-derive the traits array as [listed picks] + this
@@ -3828,10 +3829,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const traits   = this._selections.animalCompanion.traits.filter(t => known.has(t));
 			if (value && traits.length < limit) traits.push(value);
 			this._selections.animalCompanion.traits = traits;
-			html.find(".stonetop-onboarding-ac-trait-count").text(traits.length);
-			_refreshCompanionOver(traits.length, limit);
-			html.find("[name='onboard-ac-trait']:not(:checked)").prop("disabled", traits.length >= limit);
-			_refreshNextButton();
+			_paintCompanionPicks(traits.length, limit);
 		});
 		bindPair("onboard-ac-instinct", ".onboard-ac-instinct-custom", v => this._selections.animalCompanion.instinct = v);
 		bindPair("onboard-ac-cost", ".onboard-ac-cost-custom", v => this._selections.animalCompanion.cost = v);

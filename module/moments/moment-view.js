@@ -5,20 +5,15 @@
 
 import { clipText } from "../utils/strings.js";
 
-/** How long each kind holds fully visible, in ms, between its entrance and its fade. */
-export const MOMENT_HOLD_MS = Object.freeze({
-	fight: 1200,
-	setOut: 1600,
-	home: 1600,
-	arrive: 1400,
-});
-
-/** Per kind: its icon, whether the screen dims behind the band, and whether it is the small band. */
+/**
+ * Per kind: its icon, whether the screen dims behind the band, whether it is the small band, and
+ * how long it holds fully visible, in ms, between its entrance and its fade.
+ */
 export const MOMENT_KINDS = Object.freeze({
-	fight: Object.freeze({ icon: "fa-swords", veil: true, small: false }),
-	setOut: Object.freeze({ icon: "fa-person-hiking", veil: false, small: false }),
-	home: Object.freeze({ icon: "fa-house-chimney", veil: false, small: false }),
-	arrive: Object.freeze({ icon: "fa-signs-post", veil: false, small: true }),
+	fight: Object.freeze({ icon: "fa-swords", veil: true, small: false, holdMs: 1200 }),
+	setOut: Object.freeze({ icon: "fa-person-hiking", veil: false, small: false, holdMs: 1600 }),
+	home: Object.freeze({ icon: "fa-house-chimney", veil: false, small: false, holdMs: 1600 }),
+	arrive: Object.freeze({ icon: "fa-signs-post", veil: false, small: true, holdMs: 1400 }),
 });
 
 /** The longest title or sub a payload may carry. A socket is open to anyone, so this is a cap, not a style. */
@@ -41,7 +36,7 @@ function clip(value) {
 export function momentView(payload, i18n = globalThis.game?.i18n) {
 	const kind = payload?.kind;
 	if (typeof kind !== "string" || !Object.hasOwn(MOMENT_KINDS, kind)) return null;
-	const { icon, veil, small } = MOMENT_KINDS[kind];
+	const { icon, veil, small, holdMs } = MOMENT_KINDS[kind];
 	const title = clip(payload.title) || clip(i18n?.localize?.(`stonetop.moments.${kind}.title`));
-	return { kind, icon, veil, small, title, sub: clip(payload.sub), holdMs: MOMENT_HOLD_MS[kind] };
+	return { kind, icon, veil, small, title, sub: clip(payload.sub), holdMs };
 }

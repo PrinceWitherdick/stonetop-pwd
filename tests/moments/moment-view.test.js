@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { momentView, MOMENT_KINDS, MOMENT_HOLD_MS, MOMENT_TEXT_MAX } from "../../module/moments/moment-view.js";
+import { momentView, MOMENT_KINDS, MOMENT_TEXT_MAX } from "../../module/moments/moment-view.js";
 
 // What a table moment shows (module/moments/moment-view.js). Every word comes from en.json or the
 // payload, and a payload off the socket is capped, since anyone signed in can send one.
@@ -12,7 +12,7 @@ describe("momentView", () => {
 		["arrive", "fa-signs-post", false, true, 1400, "The party arrives"],
 	])("shows a %s moment with its icon, veil, size, hold and fallback title", (kind, icon, veil, small, hold, title) => {
 		expect(momentView({ kind })).toEqual({ kind, icon, veil, small, title, sub: "", holdMs: hold });
-		expect(MOMENT_HOLD_MS[kind]).toBe(hold);
+		expect(MOMENT_KINDS[kind].holdMs).toBe(hold);
 	});
 
 	it("knows exactly the four kinds", () => {

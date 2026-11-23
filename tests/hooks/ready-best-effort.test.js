@@ -72,7 +72,9 @@ describe("onReady's step isolation", () => {
 	});
 
 	it("catches the un-awaited resumes rather than leaving their rejections unhandled", () => {
-		expect(body).toMatch(/IntroductionsDialog\.resumeRunningSession\(\)\)\s*\.catch\(/);
-		expect(body).toContain("reopenOpenBookReaders().catch(");
+		// bestEffort never rejects, so a resume wrapped in it cannot leave an unhandled rejection.
+		expect(body).toContain(`bestEffort("reopening walkthroughs", reopenOpenWalkthroughs)`);
+		expect(body).toContain(`bestEffort("resuming the Introductions", () => IntroductionsDialog.resumeRunningSession())`);
+		expect(body).toContain(`bestEffort("rulebook reader resume", reopenOpenBookReaders)`);
 	});
 });

@@ -195,9 +195,9 @@ describe("Travel and Back a leg", () => {
 describe("the party mark after a step", () => {
 	it("draws no party for a trip still being planned", () => {
 		const d = dialog(trip(0));
-		expect(d._partyReached(trip(0), journeyRoute(JOURNEY))).toBeNull();
-		expect(d._partyReached(trip(0, { setOut: { season: "summer", year: 1 } }), journeyRoute(JOURNEY))).toBe(0);
-		expect(d._partyReached(trip(1), journeyRoute(JOURNEY))).toBe(1);
+		expect(d._partyReached(journeyRoute(JOURNEY), trip(0))).toBeNull();
+		expect(d._partyReached(journeyRoute(JOURNEY), trip(0, { setOut: { season: "summer", year: 1 } }))).toBe(0);
+		expect(d._partyReached(journeyRoute(JOURNEY), trip(1))).toBe(1);
 	});
 
 	it("tells the players' share the new count only while it shows this trip's way", async () => {

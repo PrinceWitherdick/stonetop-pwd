@@ -253,9 +253,8 @@ export function sharedRoutePlace(payload) {
  * share, or with every leg travelled. Never from the trip log, which players are not shown.
  */
 export function sharedNextStop(payload) {
-	const reached = payload?.progress?.reached;
-	if (!Number.isInteger(reached) || reached < 0) return null;
-	return sharedStopName(payload, reached + 1);
+	const travelled = sharedProgress(payload?.progress);
+	return travelled ? sharedStopName(payload, travelled.reached + 1) : null;
 }
 
 /**

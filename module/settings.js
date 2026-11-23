@@ -3437,7 +3437,7 @@ export function setSheetSize(actorId, { width, height } = {}) {
 	// client store and this is called off a debounce on every resize frame.
 	if (next.width === current.width && next.height === current.height) return;
 
-	const map = globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetSizes") ?? {};
+	const map = getObjectSetting("sheetSizes");
 	return game.settings.set(SYSTEM_ID, "sheetSizes", { ...map, [actorId]: next });
 }
 
@@ -3453,7 +3453,7 @@ function getSectionList(key, actorId) {
 function setSectionList(key, actorId, sections) {
 	if (!actorId) return;
 	const next = Array.from(new Set(sections ?? [])).sort();
-	const map  = globalThis.game?.settings?.get?.(SYSTEM_ID, key) ?? {};
+	const map  = getObjectSetting(key);
 	const prev = Array.isArray(map[actorId]) ? [...map[actorId]].sort() : [];
 	if (next.join("|") === prev.join("|")) return; // avoid redundant writes
 	return game.settings.set(SYSTEM_ID, key, { ...map, [actorId]: next });
@@ -3552,7 +3552,7 @@ export function getSidebarCollapsed(actorId) {
 export function setSidebarCollapsed(actorId, collapsed) {
 	if (!actorId) return;
 	const next = !!collapsed;
-	const map  = globalThis.game?.settings?.get?.(SYSTEM_ID, "characterSidebarCollapsed") ?? {};
+	const map  = getObjectSetting("characterSidebarCollapsed");
 	if (next === !!map[actorId]) return; // avoid redundant writes
 	return game.settings.set(SYSTEM_ID, "characterSidebarCollapsed", { ...map, [actorId]: next });
 }

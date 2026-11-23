@@ -94,12 +94,9 @@ export function moveExpeditionParty() {
 	const plan = scene ? sceneRoutePlan(scene) : null;
 	const from = _partyReached;
 	const ticker = globalThis.canvas?.app?.ticker;
-	if (!plan?.party || !_party || _party.destroyed || from === null || from === plan.reached
-		|| !ticker || prefersReducedMotion()) {
-		refreshExpeditionRoute(plan);
-		return false;
-	}
-	const points = partyWalkPoints(plan, from, plan.reached);
+	const walkable = plan?.party && _party && !_party.destroyed && from !== null && from !== plan.reached
+		&& ticker && !prefersReducedMotion();
+	const points = walkable ? partyWalkPoints(plan, from, plan.reached) : [];
 	if (points.length < 2) {
 		refreshExpeditionRoute(plan);
 		return false;

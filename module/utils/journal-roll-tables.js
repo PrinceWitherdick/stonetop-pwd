@@ -2,6 +2,7 @@ import { resolveEntry, isStonetopJournalEntry } from "./journal-spiral-bullets.j
 import { stonetopChatCard, rollFormulaChip, rollResultNumber } from "./chat.js";
 import { multiDieFaces } from "./roll-engine.js";
 import { isInJournalEditor } from "./journal-editor-guard.js";
+import { setTooltip } from "./set-tooltip.js";
 
 // Add a rollable die control to the left of the "Roll" header of the random
 // tables baked into this system's journals (the gazetteer generator's
@@ -219,8 +220,7 @@ export function applyJournalRollTables(app, html) {
 		btn.setAttribute("tabindex", "0");
 		// The formula is read from the journal's own table, so it is text, not HTML; and the die is
 		// the button's only content, so the same words are its spoken name.
-		btn.dataset.tooltipText = `Roll ${formula} on this table`;
-		btn.setAttribute("aria-label", `Roll ${formula} on this table`);
+		setTooltip(btn, `Roll ${formula} on this table`, { text: true, name: true });
 		btn.innerHTML = '<i class="fas fa-dice-d6" aria-hidden="true"></i>';
 		th.prepend(btn);
 

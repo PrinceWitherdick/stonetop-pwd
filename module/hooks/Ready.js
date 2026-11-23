@@ -210,6 +210,14 @@ const _SYSTEM_MACROS = [
 // rest moved left (see _SYSTEM_MACROS), for the same reason.
 const _HOTBAR_LAYOUT_VERSION = 3;
 
+/**
+ * A startup sweep gated once per version (migration/once-per-version.js) that the load does not
+ * depend on (utils/best-effort.js): `label` names it in the console when it fails, `key` is its gate.
+ */
+function sweepOnce(label, key, work) {
+	return bestEffort(label, () => oncePerVersion(key, work));
+}
+
 export async function onReady() {
 	// Before the migrations below: characters made from here on start stamped by the arcana count
 	// settle, and that settle's own writes stay off the timeline (migration/arcana-audit-1104.js).
@@ -280,7 +288,7 @@ export async function onReady() {
 		// run being safe, not the whole Items sidebar being filtered on every load of every session
 		// to find the nothing that is left. `_preCreate` is what keeps a slugless card from being
 		// made at all now, so this is legacy repair and has a last world to run in.
-		await bestEffort("arcanum slug sweep", () => oncePerVersion("arcanumSlugs", _stampMissingArcanumSlugs));
+		await sweepOnce("arcanum slug sweep", "arcanumSlugs", _stampMissingArcanumSlugs);
 		// Bring the moves, treasures and gear characters already hold (and the Items sidebar's) up to
 		// the pack: fill what it has gained, and correct a value it has since changed or dropped where
 		// the copy still holds exactly what an older release shipped (migration/move-refresh.js). Per
@@ -288,79 +296,79 @@ export async function onReady() {
 		// FIRST of the move sweeps: the replacing-move stamp below reads `replaces` and the grant
 		// repair reads `grantsPossession` off the held copy. The grandfathers after it still see each
 		// copy's original release, which the refresh keeps aside (made-under.js) before it writes.
-		await bestEffort("refreshing held moves", () => oncePerVersion("moveRefresh", refreshHeldMoves));
+		await sweepOnce("refreshing held moves", "moveRefresh", refreshHeldMoves);
 		// The same for the Book II improvement cards a steading holds (migration/improvement-refresh.js):
 		// a dropped card is a copy, brought up to the shipped card while it is still one a release
 		// shipped. The GM is whispered which, and which were already built.
-		await bestEffort("refreshing steading improvement cards", () => oncePerVersion("improvementRefresh", refreshSteadingImprovements));
+		await sweepOnce("refreshing steading improvement cards", "improvementRefresh", refreshSteadingImprovements);
 		// And the monsters seeded into the Actors sidebar (migration/bestiary-refresh.js), which Deploy
 		// and the monster browser prefer to the pack: a stat-block field or a move still holding what
 		// an older pack shipped is brought up to the pack; a GM's own edit is left.
-		await bestEffort("refreshing seeded monsters", () => oncePerVersion("bestiaryRefresh", refreshSeededMonsters));
+		await sweepOnce("refreshing seeded monsters", "bestiaryRefresh", refreshSeededMonsters);
 		// And a large or huge monster's prototype token, still the 1x1 every stat block used to ship
 		// with (migration/monster-token-size.js): 2x2 and 3x3. Tokens already on a scene are left.
 		// Once per WORLD: a 1x1 a GM sets after it is theirs.
-		await bestEffort("sizing monster tokens", () => oncePerVersion(MONSTER_TOKEN_SIZE_SWEEP, sizeMonsterTokens));
+		await sweepOnce("sizing monster tokens", MONSTER_TOKEN_SIZE_SWEEP, sizeMonsterTokens);
 		// And the follower cards made from the system's own lists (migration/follower-refresh.js): the
 		// good dog's herder default and two summons' notes, wherever a card still holds the old value.
-		await bestEffort("refreshing catalog followers", () => oncePerVersion("followerRefresh", refreshCatalogFollowers));
+		await sweepOnce("refreshing catalog followers", "followerRefresh", refreshCatalogFollowers);
 		// And a chosen instinct still worded as an older playbook offered it (migration/instinct-refresh.js):
 		// the Blessed's Delight and Reverence, corrected to Book I's text.
-		await bestEffort("refreshing instincts", () => oncePerVersion("instinctRefresh", refreshInstincts));
+		await sweepOnce("refreshing instincts", "instinctRefresh", refreshInstincts);
 		// A custom follower's old "Party follower" switch meant both travelling with the party and
 		// following it as a whole (p.464); now two switches, so one switched on gets both
 		// (migration/follower-whole-party.js). Once per WORLD, like the creation-finished stamp below.
-		await bestEffort("splitting the followers' party switch", () => oncePerVersion(FOLLOWER_WHOLE_PARTY_SWEEP, splitFollowerWholeParty));
+		await sweepOnce("splitting the followers' party switch", FOLLOWER_WHOLE_PARTY_SWEEP, splitFollowerWholeParty);
 		// Link the tokens a one-body follower's NPC already has on the map, the card's HP kept, so HP written
 		// to the NPC reaches them (migration/link-follower-tokens.js).
-		await bestEffort("linking followers' tokens", () => oncePerVersion(LINK_FOLLOWER_TOKENS_SWEEP, linkFollowerTokens));
+		await sweepOnce("linking followers' tokens", LINK_FOLLOWER_TOKENS_SWEEP, linkFollowerTokens);
 		// Keep a crossbow a character already carries on the sheet now that Weapons of War grants only
 		// the five weapons it names (migration/weapons-of-war-grandfather.js). GATED: it reads the
 		// outfit catalog and then every character's inventory flags, and it is legacy repair — the
 		// narrowed grant is what ships, so a world swept once has nothing left to find.
-		await bestEffort("Weapons of War grandfathering", () => oncePerVersion("weaponsOfWarGrandfather", grandfatherWeaponsOfWar));
+		await sweepOnce("Weapons of War grandfathering", "weaponsOfWarGrandfather", grandfatherWeaponsOfWar);
 		// Stamp the replacing moves taken before anything recorded the move they retired, so the
 		// original's absence still reads as met (migration/retired-move-grandfather.js). GATED: legacy
 		// repair, and it only ever reaches copies made under a release that never stamped.
-		await bestEffort("replacing-move grandfathering", () => oncePerVersion("retiredMoveGrandfather", grandfatherRetiredMoves));
+		await sweepOnce("replacing-move grandfathering", "retiredMoveGrandfather", grandfatherRetiredMoves);
 		// Keep "The Hero" for a Would-Be Hero who was one by OWNING a starred move, before crossing off
 		// waited for its first use (migration/would-be-hero-grandfather.js). GATED: legacy repair, and it
 		// only ever reaches moves made under a release that crossed off on ownership.
-		await bestEffort("Would-Be Hero grandfathering", () => oncePerVersion("wouldBeHeroGrandfather", grandfatherWouldBeHeroes));
+		await sweepOnce("Would-Be Hero grandfathering", "wouldBeHeroGrandfather", grandfatherWouldBeHeroes);
 		// Stamp the characters made before `creationFinished` existed as finished, so a stale progress
 		// flag does not read as half built (migration/creation-finished-grandfather.js). Once per WORLD:
 		// the work itself skips any world that has a stamp for it.
-		await bestEffort("creation-finished grandfathering", () => oncePerVersion(CREATION_FINISHED_SWEEP, grandfatherCreationFinished));
+		await sweepOnce("creation-finished grandfathering", CREATION_FINISHED_SWEEP, grandfatherCreationFinished);
 		// Stamp a Heavy already down and fighting on at 0 HP on Unstoppable, which the old rule read without
 		// the in-battle stamp the drop now lays (migration/unstoppable-fighting-grandfather.js). Once per WORLD,
 		// for the same reason.
-		await bestEffort("Unstoppable fighting-on grandfathering", () => oncePerVersion(UNSTOPPABLE_FIGHTING_SWEEP, grandfatherUnstoppableFighting));
+		await sweepOnce("Unstoppable fighting-on grandfathering", UNSTOPPABLE_FIGHTING_SWEEP, grandfatherUnstoppableFighting);
 		// Take a marked arcana Consequence's max HP and armor back out of a hand-set one typed as exactly it, now that
 		// the sheet counts it (migration/consequence-boon-hp.js). Once per WORLD, for the same reason.
-		await bestEffort("Consequence max HP settling", () => oncePerVersion(CONSEQUENCE_BOON_HP_SWEEP, settleConsequenceBoonHp));
+		await sweepOnce("Consequence max HP settling", CONSEQUENCE_BOON_HP_SWEEP, settleConsequenceBoonHp);
 		// Bring special-possession gear made before its grant was corrected up to the grant (the
 		// Tannery cuirass made as a stacking modifier; see migration/possession-grant-repair.js).
 		// Per VERSION, because a grant only changes with a release: each new version is one more
 		// chance for a grant to have moved, and between releases there is nothing to find.
-		await bestEffort("special-possession gear repair", () => oncePerVersion("possessionGrantRepair", repairAllPossessionGrants));
+		await sweepOnce("special-possession gear repair", "possessionGrantRepair", repairAllPossessionGrants);
 		// Tick the rest of the unlock circles on a Seeker's mastered card that the old run-count
 		// grant left at one (migration/mastered-arcanum-circles.js). GATED: legacy repair, and a
 		// world swept once has nothing left to find.
-		await bestEffort("mastered arcanum repair", () => oncePerVersion("masteredArcanumCircles", repairMasteredArcanumCircles));
+		await sweepOnce("mastered arcanum repair", "masteredArcanumCircles", repairMasteredArcanumCircles);
 		// Move prayer-bead pips ticked before the beads' track became Bolster's Preparation onto the Bolster
 		// track (migration/prayer-bead-preparation.js). GATED: legacy repair; once moved, the old key is gone.
-		await bestEffort("prayer bead Preparation move", () => oncePerVersion("prayerBeadPreparation", adoptAllPrayerBeadPips));
+		await sweepOnce("prayer bead Preparation move", "prayerBeadPreparation", adoptAllPrayerBeadPips);
 		// Move marks on arcana whose printed boxes have moved (the beautiful scroll's four move
 		// boxes; migration/tulpa-move-boxes.js). Per VERSION: each character records that it has
 		// been settled in the same write that settles it, so a repeat, a sweep that dies part-way
 		// or a player's own client settling first all leave nothing to do twice.
-		await bestEffort("arcanum box layout settle", () => oncePerVersion("arcanumBoxLayouts", settleAllArcanumBoxLayouts));
+		await sweepOnce("arcanum box layout settle", "arcanumBoxLayouts", settleAllArcanumBoxLayouts);
 		// Bring the counts on three minor arcana up to their corrected tracks (the mummified hand's
 		// three crystals, the blade's Blaze and the Silver Branch starting ticked) and a card's
 		// back-item uses under one key, in one write per character (migration/arcana-audit-1104.js).
 		// Per VERSION, safe to repeat: each character records the counts in the same write, and a
 		// moved key leaves nothing under the old one.
-		await bestEffort("arcana count settle", () => oncePerVersion(ARCANA_AUDIT_1104_SWEEP, settleAllArcanaAudit1104));
+		await sweepOnce("arcana count settle", ARCANA_AUDIT_1104_SWEEP, settleAllArcanaAudit1104);
 
 		// Point player tokens back at the characters they stand for. An unlinked PC token carries
 		// a private copy of its character, and the two drift because a roll writes to the sheet's
@@ -383,11 +391,11 @@ export async function onReady() {
 		// Take out the blank Dangers entries the page sheet wrote until 43ca5442, one after every
 		// real entry on each save (see migration/blank-dangers.js). Once per version: a full walk
 		// of every journal page, and nothing writes them any more.
-		await bestEffort("blank Dangers entry cleanup", () => oncePerVersion("blankDangers", clearAllBlankDangers));
+		await sweepOnce("blank Dangers entry cleanup", "blankDangers", clearAllBlankDangers);
 		// Take the "Marked D on the village map." line out of the Places of Interest pages seeded
 		// while they still opened with it (see migration/place-map-line.js). Once per version:
 		// nothing writes it any more.
-		await bestEffort("Places of Interest map-line cleanup", () => oncePerVersion("placeMapLine", clearAllPlaceMapLines));
+		await sweepOnce("Places of Interest map-line cleanup", "placeMapLine", clearAllPlaceMapLines);
 		await bestEffort("Residents/Neighbors → NPC conversion", migrateAllSteadingPeople);
 		// Give already-linked Residents of Stonetop a "Stonetop" Home if theirs is blank
 		// (new residents get this at creation). One-time, idempotent, GM-only.
@@ -421,14 +429,14 @@ export async function onReady() {
 		// next time the design moves — and it does, because the stamp trails the new version. What
 		// it stops is walking every Note on every Scene, a third time after the two landmark passes
 		// above, on every load in between.
-		await bestEffort("GM-prep map-pin refit", () => oncePerVersion("gmPrepPins", refitGmPrepPins));
+		await sweepOnce("GM-prep map-pin refit", "gmPrepPins", refitGmPrepPins);
 		// And put the GM's already-placed sites onto the table's maps, for the world that gained
 		// its poster Scenes AFTER it wrote its sites up — an ordinary order to do things in, since
 		// pinning a site on the walkthrough's map needs no Scene at all. Nothing else does this:
 		// the Scene pin was only ever written by a placement, so those sites went on saying
 		// "already on The Vicinity" over a table map that had never heard of them.
-		await bestEffort("site map-pin reconcile", () => oncePerVersion("sitePins",
-			() => reconcileSitePins(getStonetopSteadingActor()?.typedActor ?? null)));
+		await sweepOnce("site map-pin reconcile", "sitePins",
+			() => reconcileSitePins(getStonetopSteadingActor()?.typedActor ?? null));
 		// Put the named places back on the poster maps, whose printing carries no labels at all,
 		// and bring pins already down up to the current design. Every load, and
 		// silent when they already agree: the only other thing that writes a poster-map Scene is
@@ -865,14 +873,11 @@ export async function onReady() {
 	// After the resume, the GM running the table gets the Introductions back if a session is
 	// still marked live (its tab was closed without closing the window), so it can be carried on
 	// or ended. After, so it joins the resumed copy rather than racing it.
-	const resumeWalkthroughs = () => reopenOpenWalkthroughs()
-		.catch(err => console.error("Stonetop | reopening walkthroughs failed", err))
-		.then(() => IntroductionsDialog.resumeRunningSession())
-		.catch(err => console.error("Stonetop | resuming the Introductions failed", err));
+	const resumeWalkthroughs = () => bestEffort("reopening walkthroughs", reopenOpenWalkthroughs)
+		.then(() => bestEffort("resuming the Introductions", () => IntroductionsDialog.resumeRunningSession()));
 	let welcomeDialog = null;
 	if (game.user.isGM && !pastWelcomeGuide()) {
-		hookOrTimeout("renderWelcomeDialog", 2500).then(resumeWalkthroughs)
-			.catch(err => console.error("Stonetop | resuming walkthroughs failed", err));
+		void bestEffort("resuming walkthroughs", () => hookOrTimeout("renderWelcomeDialog", 2500).then(resumeWalkthroughs));
 		welcomeDialog = _openGmWelcomeGuide();
 	} else {
 		resumeWalkthroughs();
@@ -884,7 +889,7 @@ export async function onReady() {
 	// than sequenced behind the Welcome guide the way the walkthroughs are: a book is reference
 	// the reader parked beside their sheet, so it belongs UNDER whatever opens after it rather
 	// than needing to land on top.
-	reopenOpenBookReaders().catch(err => console.error("Stonetop | rulebook reader resume failed", err));
+	void bestEffort("rulebook reader resume", reopenOpenBookReaders);
 
 	// A player logging in / reloading mid-introductions: rejoin the running session by
 	// opening the dialog whenever the GM has it open (following read-only until it's their

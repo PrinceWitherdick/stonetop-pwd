@@ -11,7 +11,7 @@ import { partyFollowersOf } from "../actors/character/follower-roster.js";
 import { sign, rollSeasonsCard, pbtaDiceFormula } from "../utils/roll-engine.js";
 import { normalizeRollMode, wireModePicker } from "./RollDialog.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
-import { getSetting, isFightTabEnabled, setWorldSetting } from "../settings.js";
+import { getObjectSetting, getSetting, isFightTabEnabled, setWorldSetting } from "../settings.js";
 import { capitalizeFirst, escHtml, htmlToPlainText, joinNames } from "../utils/strings.js";
 import { portraitOrNone, documentPortraitFrame } from "../utils/portrait-frame.js";
 import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.js";
@@ -111,7 +111,7 @@ import { periodLabel } from "../seasons/current-season.js";
 import { sendMoment } from "../moments/moment-broadcast.js";
 import { loadGatedClause, overLoadGate } from "../actors/character/load-gates.js";
 import {
-	clearRouteOnScene, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
+	clearRouteOnScene, routeJourneyTouched, sceneRouteCheck, sceneRouteRefusal,
 	sceneJourney, sceneShowsJourney, setSceneRouteProgress, showRouteOnScene,
 } from "../utils/scene-route.js";
 
@@ -726,21 +726,17 @@ export class ExpeditionDialog extends StepperDialog {
 	 * The trip ids `openOnTrip` would find right now: an open window's own copy of the log (its draft
 	 * may be ahead of the world, see below), else the setting. For the GM Toolkit's expedition cards,
 	 * whose "On the road" and "Open" must not promise a trip that Run would mint afresh. An empty set
-	 * when the log cannot be read at all (no `game` yet, or the setting unregistered: core's `get`
-	 * throws on that), which reads as "not under way", the answer Run then repairs.
+	 * when the log cannot be read at all (no `game` yet, or the setting unregistered: getObjectSetting
+	 * reads either as {}), which reads as "not under way", the answer Run then repairs.
 	 *
 	 * Here and not in the tab, so the tab keeps no second opinion of how a trip is stored.
 	 *
 	 * @returns {Set<string>}
 	 */
 	static loggedTripIds() {
-		try {
-			const open = findOpenApp(w => w.id === "stonetop-expedition");
-			const log = open?.rendered ? open._log() : normalizeLog(getSetting(EXPEDITION_LOG_SETTING));
-			return new Set(log.list.map(entry => entry?.id));
-		} catch {
-			return new Set();
-		}
+		const open = findOpenApp(w => w.id === "stonetop-expedition");
+		const log = open?.rendered ? open._log() : normalizeLog(getObjectSetting(EXPEDITION_LOG_SETTING));
+		return new Set(log.list.map(entry => entry?.id));
 	}
 
 	/**
@@ -2753,7 +2749,7 @@ export class ExpeditionDialog extends StepperDialog {
 		const art = files.get(tier)
 			? await resolveTravelMap(travelMap(tier), present).catch(() => null)
 			: null;
-		const reached = this._partyReached(this._currentExpedition(), route);
+		const reached = this._partyReached(route);
 		const map = this._mapLayer(tier, art, { routes, route, start, origin, destination, stops, reached });
 		// The picture the PANEL is showing, remembered for the one control that needs to write onto
 		// it: putting a site down is a click on a map, and the handler has only the DOM to go on
@@ -3063,7 +3059,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// message names the map alone rather than inventing one.
 		// A scene the players are NOT on keeps its hands off theirs, and the notice says they are
 		// elsewhere (audit ruling E14): a line drawn where nobody at the table can see it is news.
-		const where = await showRouteOnScene(scene, pick, { spare: this._spareTableScene(scene), progress: this._partyReached(this._currentExpedition(), route) });
+		const where = await showRouteOnScene(scene, pick, { spare: this._spareTableScene(scene), progress: this._partyReached(route) });
 		ui.notifications?.info((where
 			? format("stonetop.expedition.route.placed", { place: where, map: check.tierName })
 			: format("stonetop.expedition.route.placedDrawn", { map: check.tierName }))
@@ -3131,7 +3127,7 @@ export class ExpeditionDialog extends StepperDialog {
 		else await target.view?.();
 		const where = await showRouteOnScene(target, pick, {
 			spare: withTable ? null : this._spareTableScene(target),
-			progress: this._partyReached(this._currentExpedition(), route),
+			progress: this._partyReached(route),
 		});
 		// SAYING THE CANVAS MOVED, and not only where the line went. A scene switch is the loudest
 		// thing this button can do and the one the GM did not ask for in so many words, so the
@@ -3283,7 +3279,7 @@ export class ExpeditionDialog extends StepperDialog {
 			trip, tier, art,
 			requirements: asked.requirements ? sharedRequirementLines(trip?.chart, shownRoute) : null,
 			// A share made mid-journey shows the party mark at once.
-			progress: { reached: this._partyReached(trip, shownRoute) },
+			progress: { reached: this._partyReached(shownRoute, trip) },
 		});
 		if (!payload) return;
 		// The setting and the card are two documents, neither waiting on the other.
@@ -3994,9 +3990,10 @@ export class ExpeditionDialog extends StepperDialog {
 			["updateScene", Hooks.on("updateScene", (scene, changes) => {
 				// Only our own flag, and only on the scene in front of this reader: a scene is
 				// written to constantly, and a re-render of the whole walkthrough on each of those
-				// would cost a browse and an image decode for nothing.
+				// would cost a browse and an image decode for nothing. The route only: a Travel
+				// step's progress write cannot change whether this scene shows the way.
 				if (scene?.id !== globalThis.canvas?.scene?.id) return;
-				if (!routeFlagTouched(changes)) return;
+				if (!routeJourneyTouched(changes)) return;
 				this._sceneChanged();
 			})],
 		];
@@ -4773,11 +4770,11 @@ export class ExpeditionDialog extends StepperDialog {
 	_roadContext(route = this._journeyRoute()) {
 		const key = "stonetop.expedition.road";
 		const trip = this._currentExpedition();
-		const { reached, total, started, arrived } = tripProgress(trip, route);
-		const base = { heading: localize(`${key}.heading`), canEdit: !!game.user?.isGM, hasRoute: total > 0, started, arrived };
+		const { reached, total, arrived } = tripProgress(trip, route);
+		const base = { heading: localize(`${key}.heading`), canEdit: !!game.user?.isGM, hasRoute: total > 0 };
 		if (!total) {
 			return {
-				...base, legs: [],
+				...base,
 				where:          localize(`${key}.noRoute`),
 				plot:           localize(`${key}.plot`),
 				routeStepIndex: this._steps.findIndex(s => s.key === "journey"),
@@ -4863,7 +4860,7 @@ export class ExpeditionDialog extends StepperDialog {
 	 * planned (not set out, nothing travelled) has no party on the road. One rule for the GM's maps
 	 * and the share, so the two pictures agree.
 	 */
-	_partyReached(trip, route) {
+	_partyReached(route, trip = this._currentExpedition()) {
 		const { reached, total } = tripProgress(trip, route);
 		if (!total || (!reached && !trip?.setOut?.season)) return null;
 		return reached;
@@ -4872,18 +4869,26 @@ export class ExpeditionDialog extends StepperDialog {
 	/**
 	 * After a travel step: the players' share learns the new count (only while it shows this trip's
 	 * way), the scenes in play learn it, and every open map window redraws, which walks its party
-	 * mark (TravelMapWindow.sync). Three independent writes, sent together. A failure here never
-	 * fails the travel, which is saved by now.
+	 * mark (TravelMapWindow.sync). The scenes and the share are written together. A failure here
+	 * never fails the travel, which is saved by now.
+	 *
+	 * The maps redraw once: a share that was written echoes back through the setting's onChange to
+	 * `_sharedRouteChanged`, which redraws them, so they are redrawn here only when it was not.
 	 */
 	async _progressChanged(trip, route) {
-		const reached = this._partyReached(trip, route);
-		const share = async () => {
-			if (this._routeShownToPlayers(trip, route)) await shareRouteProgress({ reached });
+		const reached = this._partyReached(route, trip);
+		const shareThenRedraw = async () => {
+			let echoed = false;
+			try {
+				echoed = this._routeShownToPlayers(trip, route) && await shareRouteProgress({ reached });
+			} catch (err) {
+				warn("could not tell the players how far the party has got", err);
+			}
+			if (!echoed) await this._refreshMapWindows().catch(err => warn("couldn't redraw a travel map window", err));
 		};
 		await Promise.all([
-			share().catch(err => warn("could not tell the players how far the party has got", err)),
-			this._sceneProgress(trip, route).catch(err => warn("could not move the party on the scene", err)),
-			this._refreshMapWindows().catch(err => warn("couldn't redraw a travel map window", err)),
+			shareThenRedraw(),
+			this._sceneProgress(trip, reached).catch(err => warn("could not move the party on the scene", err)),
 		]);
 	}
 
@@ -4892,8 +4897,7 @@ export class ExpeditionDialog extends StepperDialog {
 	 * trip's way learns the count, and every client's overlay walks the mark there. A scene showing
 	 * some other way is left alone.
 	 */
-	async _sceneProgress(trip, route) {
-		const reached = this._partyReached(trip, route);
+	async _sceneProgress(trip, reached) {
 		const scenes = new Map();
 		for (const scene of [globalThis.canvas?.scene, this._tableScene()]) {
 			if (scene?.id && sceneShowsJourney(scene, trip?.journey)) scenes.set(scene.id, scene);
