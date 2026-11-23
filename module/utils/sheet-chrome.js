@@ -5,6 +5,7 @@
 // so those are parameters rather than two copies of the logic.
 
 import { isInCompendium, warnCompendiumImmutable } from "./compendium-edit-guard.js";
+import { setTooltip } from "./set-tooltip.js";
 
 /**
  * Drop the header portrait if its image fails to load, flagging the header so
@@ -222,7 +223,7 @@ export function injectHeaderToggle(sheet, noun, { editLabel, lockLabel, onChange
 	const says = locked
 		? "Read-only: import to your world to edit"
 		: (sheet._editMode ? (lockLabel ?? `Lock ${noun}`) : (editLabel ?? `Edit ${noun}`));
-	label.setAttribute("data-tooltip-text", says);
+	setTooltip(label, says, { text: true });
 
 	const checkbox = document.createElement("input");
 	checkbox.type = "checkbox";
