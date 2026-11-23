@@ -5,7 +5,8 @@ import { HIDDEN_HIDES, readCss, splitSelectorList } from "../fakes/css.js";
 // flex or grid element that JS hides by the attribute stays on screen. That shipped broken one class
 // at a time until the stylesheet carried some seventy re-hides of its own. Now one rule near the top
 // does it for anything wearing a `stonetop-` class: `!important` so no `display` rule beats it, and
-// `:where()` so the one element that keeps its space while hidden can still win on purpose.
+// `:where()` so it weighs no more than `[hidden]` itself. Nothing out-weighs it on purpose any more:
+// an element that keeps its space while out of use wears a state class instead (the third case).
 
 const CSS = readCss();
 const RULES = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, prelude, body]) => ({
@@ -30,9 +31,24 @@ describe("the hidden attribute on our elements", () => {
 		expect(redundant).toEqual([]);
 	});
 
-	it("keeps the timeline colour reset's space when hidden, by out-weighing the rule on purpose", () => {
-		const rule = RULES.find(r => r.selectors.includes(".stonetop-timeline-colours-reset[hidden]"));
-		expect(rule?.body).toMatch(/display:\s*inline-flex !important/);
-		expect(rule?.body).toMatch(/visibility:\s*hidden/);
+	// `hidden` means gone. The timeline's colour reset used to keep its space while hidden by
+	// out-weighing the rule above with a class-named `display: inline-flex !important`, the one
+	// place the attribute meant something else. It wears `.is-idle` now, and nothing may answer a
+	// `[hidden]` with a `display` again: an element that has to keep its space is out of use, not
+	// hidden, and says so with a state class.
+	it("is never out-weighed: no `[hidden]` rule shows what the attribute hides", () => {
+		const named = RULES.flatMap(r => r.selectors).filter(sel => /\[hidden\]/.test(sel));
+		expect(named.length, "the scan found no `[hidden]` rule at all").toBeGreaterThan(3);
+		const shown = RULES
+			.filter(r => /(?:^|;)\s*display:(?!\s*none\b)[^;]+/.test(r.body))
+			.flatMap(r => r.selectors)
+			.filter(sel => /\[hidden\]/.test(sel.replace(/:not\([^()]*\[hidden\][^()]*\)/g, "")));
+		expect(shown).toEqual([]);
+	});
+
+	it("keeps the timeline colour reset's space while idle with a state class, not the attribute", () => {
+		const rule = RULES.find(r => r.selectors.includes(".stonetop-timeline-colours-reset.is-idle"));
+		expect(rule, "the idle reset's rule is gone or renamed").toBeTruthy();
+		expect(rule.body).toMatch(/^visibility:\s*hidden;?$/);
 	});
 });

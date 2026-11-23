@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readCss } from "../fakes/css.js";
+import { declarations, readCss } from "../fakes/css.js";
 
 // FOUR VALUES THAT HAVE A TOKEN, AND MUST BE WRITTEN AS IT (STYLEGUIDE.md, "Tokens first").
 //
@@ -24,7 +24,7 @@ import { readCss } from "../fakes/css.js";
 // A SECOND PASS, the same day, took the guide's own recommendations for what the first had only
 // listed, and the blocks from "a slate edge" down hold those: slate borders and slate washes on
 // their tokens, pop-overs on one named rung, a focus ring in a colour the dark pages can see, one
-// opacity for a disabled control, and the three quick durations down to two.
+// opacity for a disabled control, and the three quick durations down to two (now two tokens).
 //
 // WHAT MAY STAY A LITERAL is listed by exact selector, with the reason. Never by pattern.
 
@@ -167,10 +167,50 @@ describe("a disabled control", () => {
 });
 
 describe("a quick transition", () => {
-	it("is 0.15s or 0.12s, written in seconds", () => {
-		const odd = ALL.flatMap(([sel, body]) => values(body, "transition(?:-duration)?")
-			.filter(v => /\b\d+ms\b/.test(v.replace(/var\([^()]*\)/g, "")) && !/\b(?:250|200)ms\b/.test(v) || /(?<![\d.])0?\.1s\b/.test(v))
-			.map(v => `${sel} { transition: ${v} }`));
+	// The 1.8.5 style pass folded 120ms and 0.1s into 0.12s by hand, some fifty rules of it, and the
+	// two durations left are now --st-duration-sm (0.12s) and --st-duration (0.15s). A literal of
+	// either is a rule that will not follow when the pair is next tuned; a third quick spelling is
+	// the drift coming back. A duration that is deliberately different (0.18s, 0.25s, 250ms) is not
+	// one of these and is left alone.
+	const QUICK = /(?<![\w.-])0?\.1[25]s\b/;
+	// Rules being reworked in a parallel change as this guard landed (the GM Toolkit's Prep pane
+	// and character creation's card selection), left as literals so the two merge cleanly. Delete
+	// each once its rule reads the token.
+	const PENDING = new Set([
+		".stonetop-prep-add-btn",
+		".stonetop-prep-add-btn.stonetop-gm-pane-add",
+		".stonetop-gm-prep-switcher .stonetop-gm-prep-view",
+		".stonetop-onboarding-card",
+		".stonetop-onboarding-appearance-option",
+		".stonetop-onboarding-origin-label",
+		".stonetop-onboarding-tag-option",
+		".stonetop-onboarding-bg-option",
+		".stonetop-onboarding-arcana-option",
+		".stonetop-onboarding-lore-pick",
+	]);
+	const transitions = ALL.flatMap(([sel, body]) => values(body, "transition(?:-duration)?").map(v => [sel, v]));
+
+	it("is written in seconds, as one of the two quick durations or a deliberate one", () => {
+		const odd = transitions
+			.filter(([, v]) => /\b\d+ms\b/.test(v.replace(/var\([^()]*\)/g, "")) && !/\b(?:250|200)ms\b/.test(v) || /(?<![\d.])0?\.1s\b/.test(v))
+			.map(([sel, v]) => `${sel} { transition: ${v} }`);
 		expect(odd).toEqual([]);
+	});
+
+	it("reads --st-duration-sm or --st-duration, not 0.12s or 0.15s", () => {
+		const literal = transitions.filter(([sel, v]) => QUICK.test(v) && !PENDING.has(sel));
+		expect(literal.map(([sel, v]) => `${sel} { transition: ${v} }`)).toEqual([]);
+		expect(transitions.filter(([, v]) => /var\(--st-duration(?:-sm)?\)/.test(v)).length,
+			"the scan found no transition on the tokens").toBeGreaterThan(150);
+	});
+
+	it("lists no pending rule that has stopped matching a literal", () => {
+		const found = new Set(transitions.filter(([, v]) => QUICK.test(v)).map(([sel]) => sel));
+		expect([...PENDING].filter(sel => !found.has(sel))).toEqual([]);
+	});
+
+	it("holds the pair on :root, in seconds", () => {
+		expect(declarations(CSS, ":root")).toMatch(/--st-duration-sm:\s*0\.12s;/);
+		expect(declarations(CSS, ":root")).toMatch(/--st-duration:\s*0\.15s;/);
 	});
 });

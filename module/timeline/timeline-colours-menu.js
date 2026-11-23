@@ -29,6 +29,24 @@ import {
 import { kindChip } from "./timeline-view.js";
 import { getTimelineKindColours, setTimelineKindColours } from "../settings.js";
 
+/**
+ * A row's Default button with nothing to put back: invisible but keeping its grid cell, so the
+ * picker beside it never moves. Not `hidden`, which means gone (the stylesheet's one `[hidden]`
+ * rule). `aria-hidden` and `tabindex` keep it out of the accessibility tree and the tab order as
+ * `hidden` did, on top of the `visibility: hidden` the class gives; timeline.hbs draws the same
+ * three for the first paint.
+ */
+export function setResetIdle(reset, idle) {
+	reset.classList.toggle("is-idle", idle);
+	if (idle) {
+		reset.setAttribute("aria-hidden", "true");
+		reset.setAttribute("tabindex", "-1");
+	} else {
+		reset.removeAttribute("aria-hidden");
+		reset.removeAttribute("tabindex");
+	}
+}
+
 export class TimelineColoursDraft {
 	constructor() {
 		/** The picks made in the menu and not yet saved, `{kind: "#rrggbb" | null}` (null = Default). */
@@ -109,7 +127,7 @@ export class TimelineColoursDraft {
 		const paint = this._paint(row.dataset.kind, world);
 		row.style.setProperty("--tl-kind", paint.colour);
 		const reset = row.querySelector(".stonetop-timeline-colours-reset");
-		if (reset) reset.hidden = !paint.repainted;
+		if (reset) setResetIdle(reset, !paint.repainted);
 		const note = row.querySelector(".stonetop-timeline-colours-note");
 		if (note) note.hidden = !paint.nudged;
 		if (syncPicker) {
