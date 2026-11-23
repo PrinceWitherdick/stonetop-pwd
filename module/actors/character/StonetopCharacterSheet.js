@@ -2773,6 +2773,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				// in `tooltip`, so it isn't duplicated onto the view model.
 				const planProgress = w.planProgress ?? { done: 0, total: 0 };
 				const tip = [];
+				// The skull before the text is aria-hidden with no tooltip of its own (one would hide
+				// this one on hover), so the tooltip says what it marks.
+				if (w.origin === "deaths-door") tip.push("Death's Door mark");
 				if (w.text)            tip.push(w.text);
 				if (w.requirementNote) tip.push(`Needs: ${w.requirementNote}`);
 				if (w.planNote || planProgress.total) {
