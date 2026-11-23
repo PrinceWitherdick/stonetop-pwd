@@ -8640,8 +8640,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// so the GM can give the major while the player's window is open (it redraws on the grant).
 			const playbook = playbookDoc ?? await character.playbookInCreation?.();
 			const shown = (playbook?.backgrounds ?? []).some(bg => bg?.majorArcana?.length);
+			// A grant whose card is gone reads as none here too, as it does to the offer: the bare slug
+			// of a deleted card is no name (`liveSeekerMajorGrant`; this row is GM-only).
 			const grant = shown ? (character.seekerMajorGrant?.() ?? "") : "";
-			const name = grant ? normalizePlaybookGlyphs((await character.getArcanum(grant))?.front?.title ?? grant) : "";
+			const card = grant ? await character.getArcanum(grant) : null;
+			const name = card ? normalizePlaybookGlyphs(card.front?.title ?? grant) : "";
 			return { shown, name };
 		}
 

@@ -4845,7 +4845,7 @@ export class StonetopCharacter {
 	async settleSeekerMajorOnBackground() {
 		const state      = this.seekerCreationState();
 		const background = await this.selectedBackground();
-		const { offered, locked } = this.seekerMajorOffer(background);
+		const { offered, locked } = await this._liveSeekerMajorOffer(background);
 		const held       = !!state.major && this._arcana.ownedSlugs.has(state.major);
 		const asGranted  = held && await this._seekerCardAsGranted(state.major, "major", state);
 		const plan       = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted, locked });
@@ -4878,15 +4878,34 @@ export class StonetopCharacter {
 	 * background's list plus, with the world's "any major" switch on, the creation major already held.
 	 * A creation major no longer held is left out, so a deleted card is not offered back as a 4th.
 	 */
-	seekerMajorOffer(background) {
+	seekerMajorOffer(background, { grant = this.seekerMajorGrant() } = {}) {
 		const state = this.seekerCreationState();
 		const major = state.major && this._arcana.ownedSlugs.has(state.major) ? state.major : "";
 		return seekerOfferedMajors({
 			listed: background?.majorArcana ?? [],
-			grant:  this.seekerMajorGrant(),
+			grant,
 			open:   getBooleanSetting("seekerAnyMajorArcanum"),
 			major,
 		});
+	}
+
+	// A grant whose card no longer resolves (the GM deleted that world arcanum) counts as no grant:
+	// left in, it would owe a card no dialog can show, and a "replace" plan would release the held
+	// major before the empty ask (seeker-major-grant.test.js, "a deleted grant").
+	async _liveSeekerMajorOffer(background) {
+		return this.seekerMajorOffer(background, { grant: await this.liveSeekerMajorGrant() });
+	}
+
+	/**
+	 * The GM's grant, or "" when its card is gone. Only a GM's client can tell: world arcana resolve
+	 * through `game.items`, which holds only the items this user may see, so on a player's client a
+	 * card hidden from them looks deleted. There the grant stands, and still locks the offer
+	 * (seeker-major-grant.test.js, "a card hidden from the player").
+	 */
+	async liveSeekerMajorGrant() {
+		const grant = this.seekerMajorGrant();
+		if (!grant || !globalThis.game?.user?.isGM) return grant;
+		return await this.getArcanum(grant) ? grant : "";
 	}
 
 	/**
@@ -4897,7 +4916,7 @@ export class StonetopCharacter {
 		if (!this.backgroundState().slug) return false;
 		const background = this._selectedBackground(playbookData === undefined ? await this.playbook() : playbookData);
 		if (!(background?.majorArcana ?? []).length && !this.seekerMajorGrant()) return false;
-		const { offered, locked } = this.seekerMajorOffer(background);
+		const { offered, locked } = await this._liveSeekerMajorOffer(background);
 		const leads = this._arcana.leadSlugs;
 		const owned = [...this._arcana.ownedSlugs].filter(s => !leads.has(s));
 		return seekerMajorOwed({ offered, owned, major: this.seekerCreationState().major, locked });

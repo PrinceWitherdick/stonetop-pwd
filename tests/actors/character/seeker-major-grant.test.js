@@ -213,6 +213,35 @@ describe("the GM gives a Seeker a major arcanum", () => {
 		expect(await char.seekerMajorOwed()).toBe(false);
 	});
 
+	it("a deleted grant counts as none: nothing is owed, and the held major is not released", async () => {
+		const { actor, char, sheet, finish } = seeker();
+		await finish();
+		await char.setSeekerMajorGrant("deleted-orb");
+		const ask = vi.spyOn(SeekerMajorArcanumDialog, "ask");
+		expect(await char.seekerMajorOwed()).toBe(false);
+		expect((await char.settleSeekerMajorOnBackground()).plan).toBe("keep");
+		await sheet._askSeekerMajorArcanum();
+		expect(ask).not.toHaveBeenCalled();
+		expect(has(actor, "owned", "hectumel-codex")).toBe(true);
+		expect(arcana(actor, "major")).toBe("hectumel-codex");
+		// The GM's row names no card for it, rather than the bare slug.
+		expect((await sheet._seekerMajorGrantRow(playbookDoc("the-seeker"))).name).toBe("");
+	});
+
+	// World arcana resolve through game.items, which holds only what this user may see, so on a
+	// player's client a card hidden from them cannot be told from a deleted one. The grant stands.
+	it("a card hidden from the player still locks the offer on their client", async () => {
+		const { char, finish } = seeker();
+		await finish();
+		await char.setSeekerMajorGrant("hidden-orb");
+		asUser(false);
+		expect(await char.liveSeekerMajorGrant()).toBe("hidden-orb");
+		const { offered, locked } = await char._liveSeekerMajorOffer(await char.selectedBackground());
+		expect([offered, locked]).toEqual([["hidden-orb"], true]);
+		asUser(true);
+		expect(await char.liveSeekerMajorGrant()).toBe("");
+	});
+
 	it("clearing the grant removes the flag and keeps the card held", async () => {
 		const { actor, char, finish } = seeker();
 		await finish();

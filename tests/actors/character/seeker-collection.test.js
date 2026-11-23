@@ -530,6 +530,15 @@ describe("onboarding's major step with a major given or picked off the list", ()
 		expect(d._isStepComplete("seekerArcana")).toBe(false);
 	});
 
+	// The GM deleted the granted world arcanum while the walkthrough was open: no card to show, so the
+	// grant counts as none and the background's list comes back, rather than an empty, locked step.
+	it("a grant whose card is gone offers the background's three again", async () => {
+		const d = dialog({ grant: "deleted-orb" });
+		const data = await d._seekerArcanaChoiceData();
+		expect(slugs(data).sort()).toEqual(["hectumel-codex", "red-scepter", "staff-of-the-lidless-orb"]);
+		expect(data.majorLocked).toBe(false);
+	});
+
 	it("taking the grant back offers the background's three again", async () => {
 		const d = dialog({ grant: "mindgem" });
 		await d._seekerArcanaChoiceData();

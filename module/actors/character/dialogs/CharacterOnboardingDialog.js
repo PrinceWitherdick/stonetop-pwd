@@ -1045,12 +1045,22 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		return String(this._seekerActor?.typedActor?.seekerMajorGrant?.() ?? "");
 	}
 
+	// The grant, unless the loaded arcana have no such card (the GM deleted that world arcanum). These
+	// steps can only offer cards they can show, and a grant of one they cannot would list nothing and
+	// lock "Choose a different arcanum" away (seeker-collection.test.js, "a grant whose card is gone").
+	// Before the arcana load, the grant stands.
+	_liveSeekerMajorGrant() {
+		const grant = this._seekerMajorGrant();
+		if (!grant || !this._arcanaCache) return grant;
+		return this._arcanaCache.major.some(option => option.slug === grant) ? grant : "";
+	}
+
 	// The majors the background step and the Major Arcanum step offer (seekerOfferedMajors): the
 	// grant alone, or the background's list, keeping an off-list pick while the world's switch is on.
 	_seekerMajorOffer(background = this._selectedBackground()) {
 		return seekerOfferedMajors({
 			listed: background?.majorArcana ?? [],
-			grant:  this._seekerMajorGrant(),
+			grant:  this._liveSeekerMajorGrant(),
 			open:   getBooleanSetting("seekerAnyMajorArcanum"),
 			major:  this._selections.arcana.major,
 		});
