@@ -213,8 +213,8 @@ export function groupSizeWindow({ name, organization, sizes, usual, fromSheet = 
 					<input type="radio" name="${COUNT_FIELD}" value="${n}"${n === usual ? " checked" : ""}>
 					<span>${n}</span>
 				</label>`;
-	const scale = (value, checked) => `<label class="stonetop-fight-group-size-scale">
-				<input type="radio" name="${SCALE_FIELD}" value="${value}"${checked ? " checked" : ""}>
+	const scale = (value, checked) => `<label class="stonetop-camp-check stonetop-fight-group-size-scale">
+				<input type="radio" class="stonetop-camp-radio" name="${SCALE_FIELD}" value="${value}"${checked ? " checked" : ""}>
 				<span>${say(`scale.${value}`)}</span>
 			</label>`;
 	const lead = [say(`body.${organization}`, { name }), fromSheet ? say("usual", { count: usual }) : ""].filter(Boolean).join(" ");

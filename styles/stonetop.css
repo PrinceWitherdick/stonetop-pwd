@@ -5053,11 +5053,14 @@ input.stonetop-name-field {
    core glyphs render on top of our SVG-skinned background as artifacts. Kill the pseudos
    so only our background shows. `.stonetop-check`, the shared skin, is drawn in DialogV2 windows
    too (`.application`, not `.app`: a confirm's opt-in ticks, Reset Inventory's who-to-clear list),
-   where core's orange glyph sat over the box and below the middle of its label. */
+   where core's orange glyph sat over the box and below the middle of its label. The camp's round
+   radio is drawn in one too ("how many?"'s two scales, fight/group-size.js). */
 .stonetop-picklist-check::before,
 .stonetop-picklist-check::after,
 .stonetop-check::before,
-.stonetop-check::after {
+.stonetop-check::after,
+.stonetop-camp-radio::before,
+.stonetop-camp-radio::after {
 	content: none !important;
 }
 
@@ -7505,7 +7508,13 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 }
 
 /* "Crinwin: how many?" (fight/group-size.js): how many as a strip of sizes and a box for any other,
-   the scale where it applies, and two footer buttons, the count's own words and "Just one". */
+   the scale where it applies, and two footer buttons, the count's own words and "Just one".
+   A DialogV2 sets no width and shrink-to-fits against the viewport, so its sentences opened as one
+   line each, ~850px wide. The cap is `.stonetop-ask`'s measure, scaled the same way; that class is
+   not worn because it stacks the footer a row per answer, and these two short labels sit side by side. */
+.application.dialog.stonetop-fight-group-size-app {
+	max-width: calc(26rem * var(--stonetop-font-scale, 1));
+}
 .stonetop-fight-group-size p { margin: 0 0 6px; }
 .stonetop-fight-group-size .stonetop-fight-group-size-hint {
 	color: var(--st-text-secondary);
@@ -7547,18 +7556,16 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	height: var(--group-size-control);
 	text-align: center;
 }
-/* The two scales (separate tokens, or one group token), one per line. */
+/* The two scales (separate tokens, or one group token), one per line. Each is the shared first-line
+   radio row (.stonetop-camp-check + .stonetop-camp-radio): in the capped window the group one wraps,
+   and its radio stays on the first line instead of hanging between the two. Spaced by the gap. */
 .stonetop-fight-group-size-scales {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
 	margin: 0 0 6px;
 }
-.stonetop-fight-group-size-scale {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
+.stonetop-fight-group-size-scales .stonetop-fight-group-size-scale { margin: 0; }
 
 /* "Who does this hit?" (module/fight/fight-targets.js): a roller fighting more than one ticks who a blow
    lands on. One opponent per line, the hint under them in the quieter ink. */
