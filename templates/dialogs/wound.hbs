@@ -13,7 +13,7 @@
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
 					<button type="button" class="stonetop-guide-toc-btn wd-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
 						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
@@ -27,11 +27,11 @@
 			      identify the wound stay visible from the panels that don't hold them
 			      (updated in JS; no re-render, so fields keep focus). --}}
 			<div class="stonetop-guide-banner wd-banner">
-				<i class="fas {{active.icon}} stonetop-guide-banner-icon wd-banner-icon"></i>
+				<i class="fas {{active.icon}} stonetop-guide-banner-icon wd-banner-icon" aria-hidden="true"></i>
 				<div class="stonetop-guide-banner-info">
 					<div class="stonetop-guide-banner-title wd-banner-title">{{active.title}}</div>
 					<div class="wd-statline">
-						<i class="fas {{summary.glyph}} wd-summary-glyph"></i>
+						<i class="fas {{summary.glyph}} wd-summary-glyph" aria-hidden="true"></i>
 						<span class="wd-summary-name">{{summary.name}}</span>
 						<span class="wd-summary-status">{{summary.status}}</span>
 					</div>
@@ -72,7 +72,7 @@
 
 				{{#if isNew}}
 				<div class="wd-notice">
-					<i class="fas fa-circle-info"></i>
+					<i class="fas fa-circle-info" aria-hidden="true"></i>
 					<span>A problematic wound always involves taking damage, and often a marked debility: apply those on the sheet as the fiction warrants.</span>
 				</div>
 				{{/if}}
@@ -134,11 +134,11 @@
 						<li class="wd-req stonetop-field-btns">
 							<label class="checkbox"><input type="checkbox" class="stonetop-check wd-req-done"{{#if done}} checked{{/if}}></label>
 							<input type="text" class="wd-req-text" value="{{this.text}}" placeholder="e.g. months of practice">
-							<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark"></i></button>
+							<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 						</li>
 						{{/each}}
 					</ul>
-					<button type="button" class="wd-req-add"><i class="fas fa-plus"></i> Add requirement</button>
+					<button type="button" class="wd-req-add"><i class="fas fa-plus" aria-hidden="true"></i> Add requirement</button>
 				</div>
 
 				{{!-- Cloned per row by the dialog; kept here so the markup lives with the rest. --}}
@@ -146,7 +146,7 @@
 					<li class="wd-req stonetop-field-btns">
 						<label class="checkbox"><input type="checkbox" class="stonetop-check wd-req-done"></label>
 						<input type="text" class="wd-req-text" placeholder="e.g. months of practice">
-						<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark"></i></button>
+						<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 					</li>
 				</template>
 			</section>
@@ -157,7 +157,7 @@
 
 	<div class="stonetop-guide-nav wd-footer">
 		<span class="wd-footer-actions">
-			<button type="button" class="wd-save stonetop-guide-btn--primary"><i class="fas fa-droplet"></i> {{this.saveLabel}}</button>
+			<button type="button" class="wd-save stonetop-guide-btn--primary"><i class="fas fa-droplet" aria-hidden="true"></i> {{this.saveLabel}}</button>
 			<button type="button" class="wd-cancel">Cancel</button>
 		</span>
 		<span class="wd-footer-nav">

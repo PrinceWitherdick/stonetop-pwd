@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beats, declarations, readCss, specificity, splitSelectorList } from "../fakes/css.js";
+import { beats, declarations, hiddenHides, readCss, specificity, splitSelectorList } from "../fakes/css.js";
 
 /**
  * Overrides that are outranked by the rule they were written to beat.
@@ -14,7 +14,7 @@ import { beats, declarations, readCss, specificity, splitSelectorList } from "..
  *   - A bare `.x-remove:hover` under a `.x-btns button:hover` that carries an element and therefore
  *     outranks it. The red never lands and the trash icon greys like its neighbours.
  *   - An author `display` on a panel that JS hides with the `hidden` ATTRIBUTE. Author beats UA
- *     whatever the specificity, so `[hidden]` does nothing until the sheet says so itself.
+ *     whatever the specificity, so `[hidden]` does nothing until the stylesheet says so itself.
  *   - A chat card notice's heading, painted in the generic `.cell__subtitle` grey the card sets
  *     ~800 lines further down at the same weight. The accent still reached the notice's left-hand
  *     rule, so the block rendered with a coloured edge and a grey title and read as intentional.
@@ -134,22 +134,15 @@ describe("the improvement builder's remove buttons keep their red", () => {
 
 describe("a panel hidden by the attribute is actually hidden", () => {
 	// `_toggleEmpty` sets `panel.hidden`. The UA's `[hidden] { display: none }` loses to ANY author
-	// `display` whatever the specificity, so without a rule of our own the empty panel goes on
-	// covering a board that now has people on it. The stylesheet already says this out loud in four
-	// other places; this is the one that did not.
+	// `display` whatever the specificity, so without the stylesheet's own `hidden` rule the empty
+	// panel goes on covering a board that now has people on it.
 	const PANEL = "stonetop-relmap-empty";
 
 	it("declares a display the attribute would have to beat (guards the assertion below)", () => {
 		expect(declarations(CSS, `.${PANEL}`), "the empty panel's rule is gone or renamed").toMatch(/display:/);
 	});
 
-	it("says [hidden] outright rather than leaving it to the UA sheet", () => {
-		const rule = RULES.find(r => r.selector === `.${PANEL}[hidden]`);
-		expect(rule, `.${PANEL}[hidden] is missing; the panel will not hide`).toBeTruthy();
-		expect(rule.props).toContain("display");
-
-		const shown = rivalsFor("display", [PANEL]).filter(r => !r.selector.includes("[hidden]"));
-		const dead = shown.filter(r => beats(r.spec, rule.spec));
-		expect(dead.map(r => r.selector), "these out-specify the [hidden] rule").toEqual([]);
+	it("is hidden by the stylesheet's own [hidden] rule", () => {
+		expect(hiddenHides(CSS, PANEL)).toBe(true);
 	});
 });

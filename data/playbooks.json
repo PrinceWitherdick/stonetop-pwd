@@ -3608,7 +3608,7 @@
         },
         {
           "slug": "shield",
-          "label": "<strong>Shield</strong> (+1 armor, +1 Readiness on 7+ to Defend)",
+          "label": "<strong>Shield</strong> (+1 armor, +1 Readiness on a 7+ to Defend)",
           "weight": 2,
           "armorBonus": 1
         },
@@ -4994,7 +4994,7 @@
       {
         "slug": "driven",
         "label": "Driven",
-        "description": "<p>You once led a simple life, but something happened. Something changed you, burdened you with terrible purpose. What was it? Choose 1.</p><p>You always have the option to Burn Brightly; you can spend 2 XP after you roll to add +1, even if you don't have enough XP to level.</p>",
+        "description": "<p>You once led a simple life, but something happened. Something changed you, burdened you with terrible purpose. What was it? Choose 1.</p><p>You always have the option of Burning Brightly; you can spend 2 XP after you roll to add +1, even if you don't have enough XP to level.</p>",
         "choices": {
           "label": "What was it?",
           "count": [

@@ -107,7 +107,7 @@ export const countBookArtRebuilds = () => countRebuilds(plannedBookArtRebuilds, 
  */
 export const countPeopleArtRebuilds = () => countRebuilds(plannedPeopleArtRebuilds, "people art");
 
-const SPINNER = '<i class="fas fa-spinner fa-spin"></i>';
+const SPINNER = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
 
 /**
  * Drive the rebuild from a button, which is how two of the three entry points reach it (the chat

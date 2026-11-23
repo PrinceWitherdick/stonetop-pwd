@@ -24,8 +24,8 @@
 						<span class="steading-list-name">{{this.name}}</span>
 						<button type="button" class="steading-list-delete"
 						        data-list="resources" data-index="{{@index}}"
-						        title="Remove" tabindex="-1">
-							<i class="fas fa-times"></i>
+						        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 					</li>
 					{{/if}}
@@ -33,7 +33,7 @@
 				</ul>
 				{{#if stonetop.canEdit}}
 				<button type="button" class="steading-list-add" data-list="resources">
-					<i class="fas fa-plus"></i> Add Resource
+					<i class="fas fa-plus" aria-hidden="true"></i> Add Resource
 				</button>
 				{{/if}}
 			</div>
@@ -49,8 +49,8 @@
 						<span class="steading-list-name">{{this.name}}</span>
 						<button type="button" class="steading-list-delete"
 						        data-list="fortifications" data-index="{{@index}}"
-						        title="Remove" tabindex="-1">
-							<i class="fas fa-times"></i>
+						        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 					</li>
 					{{/if}}
@@ -58,7 +58,7 @@
 				</ul>
 				{{#if stonetop.canEdit}}
 				<button type="button" class="steading-list-add" data-list="fortifications">
-					<i class="fas fa-plus"></i> Add Fortification
+					<i class="fas fa-plus" aria-hidden="true"></i> Add Fortification
 				</button>
 				{{/if}}
 			</div>
@@ -73,21 +73,25 @@
 					{{#if name}}
 					{{!-- An asset out on requisition reads struck through, and its tooltip names
 					      where it went (a character, an expedition, or both). Clicking the name
-					      brings it home: see _onReturnAsset in StonetopSteadingSheet.js. --}}
+					      brings it home: see _onReturnAsset in StonetopSteadingSheet.js.
+
+					      `-text`, never a plain data-tooltip: the line carries an expedition's title or a
+					      character's name, both typed by players, and core draws a plain data-tooltip as
+					      HTML. Guarded by tests/actors/steading/steading-assets-taken.test.js. --}}
 					<li class="steading-list-item{{#if takenBy}} is-taken{{/if}}">
 						<span class="steading-list-bullet" aria-hidden="true"></span>
 						{{#if takenBy}}
 						<span class="steading-list-name steading-asset-name steading-asset-taken"
 						      data-index="{{@index}}"
-						      data-tooltip="{{this.takenTooltip}}"
+						      data-tooltip-text="{{this.takenTooltip}}"
 						      data-tooltip-direction="UP">{{this.name}}</span>
 						{{else}}
 						<span class="steading-list-name steading-asset-name">{{this.name}}</span>
 						{{/if}}
 						<button type="button" class="steading-list-delete"
 						        data-list="assets" data-index="{{@index}}"
-						        title="Remove" tabindex="-1">
-							<i class="fas fa-times"></i>
+						        data-tooltip="Remove" aria-label="Remove" tabindex="-1">
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 					</li>
 					{{/if}}
@@ -95,7 +99,7 @@
 				</ul>
 				{{#if stonetop.canEdit}}
 				<button type="button" class="steading-list-add" data-list="assets">
-					<i class="fas fa-plus"></i> Add Asset
+					<i class="fas fa-plus" aria-hidden="true"></i> Add Asset
 				</button>
 				{{/if}}
 
@@ -163,7 +167,7 @@
 					{{#each stonetop.places}}
 					<div class="steading-place-item" data-letter="{{this.letter}}">
 						<span class="steading-place-letter{{#if name}} steading-place-drag{{/if}}"
-						      {{#if name}}draggable="true" title="Drag onto a scene to drop a map note"{{/if}}>{{this.letter}}</span>
+						      {{#if name}}draggable="true" data-tooltip="Drag onto a scene to drop a map note"{{/if}}>{{this.letter}}</span>
 						<input type="text" class="steading-place-name"
 						       data-index="{{@index}}"
 						       value="{{this.name}}" placeholder="—" {{#unless @root.stonetop.edit.places}}disabled{{/unless}}>

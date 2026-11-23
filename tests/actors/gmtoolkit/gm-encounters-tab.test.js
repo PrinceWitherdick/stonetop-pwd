@@ -15,7 +15,7 @@ import {
 	STONETOP_ENCOUNTER_DRAG_TYPE,
 	deployAndFight,
 } from "../../../module/actors/gmtoolkit/gm-encounters-tab.js";
-import { clusterPoint } from "../../../module/utils/token-drop.js";
+import { isPlaceholderArt, bundleEntryImage } from "../../../module/actors/gmtoolkit/gm-bundle-tab.js";
 import { fakeEl, makeListHost, fakeRoot as sheetRoot } from "../../fakes/dom.js";
 
 // The GM Toolkit's Encounters tab: named bundles of whatever a GM gathered for a session or a
@@ -36,6 +36,7 @@ import { fakeEl, makeListHost, fakeRoot as sheetRoot } from "../../fakes/dom.js"
 const CSS         = readCss();
 const STONETOP_JS = read("stonetop.js");
 const SHEET_HBS   = read("templates/actor/gm-toolkit.hbs");
+const PREP_HBS    = read("templates/actor/partials/gm-toolkit-tab-prep.hbs");
 const TAB_HBS     = read("templates/actor/partials/gm-toolkit-tab-encounters.hbs");
 const CARD_HBS    = read("templates/actor/partials/gm-encounter-card.hbs");
 const SHEET_JS    = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
@@ -141,39 +142,58 @@ beforeEach(() => {
 afterEach(() => {
 	delete globalThis.canvas;
 	delete globalThis.Actor;
+	// A fight one test set up must not be "already going on" in the next.
+	if (global.game) delete global.game.combats;
 });
 
 /* ══ wiring ═══════════════════════════════════════════════════════════════════ */
 
 describe("the Encounters tab: wiring", () => {
 	// Each of these is a silent failure on its own, exactly as for the tabs beside it.
-	it("is registered, mounted, and has a rail button", () => {
+	// A VIEW of the Prep tab now, not a rail tab: mounted by the Prep panel rather than by the
+	// sheet, and reached by the switcher's segment rather than by a rail button of its own. A rail
+	// button left behind would point at a panel the rail's group no longer has.
+	it("is registered, mounted in the Prep tab, and has a switcher segment rather than a rail button", () => {
 		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-tab-encounters"');
-		expect(SHEET_HBS).toContain('{{> "stonetop.gm-toolkit-tab-encounters"}}');
-		expect(SHEET_HBS).toMatch(/\{\{>\s*"stonetop\.tab-rail-item"\s+tab="encounters"/);
+		expect(strip(PREP_HBS)).toContain('{{> "stonetop.gm-toolkit-tab-encounters"}}');
+		expect(SHEET_HBS).not.toContain('{{> "stonetop.gm-toolkit-tab-encounters"}}');
+		expect(SHEET_HBS).not.toMatch(/\{\{>\s*"stonetop\.tab-rail-item"\s+tab="encounters"/);
+		expect(read("module/actors/gmtoolkit/gm-prep-views.js")).toMatch(/key: "encounters"/);
 	});
 
-	it("binds to the same tab group as the rest of the sheet", () => {
-		expect(TAB_HBS).toMatch(/<div class="tab encounters\b[^"]*"[^>]*data-group="primary"/);
+	// The Prep tab's own group, which is what its switcher's controller shows and hides. On the
+	// rail's group it would be one more rail panel the rail has no button for — and the rail's
+	// controller would hide it whenever the Prep tab itself was showing.
+	it("binds to the Prep tab's view group, not the rail's", () => {
+		expect(TAB_HBS).toMatch(/<div class="tab encounters\b[^"]*"[^>]*data-group="prep"/);
 		expect(TAB_HBS).toContain('data-tab="encounters"');
+		expect(TAB_HBS).not.toMatch(/data-group="primary"/);
+		expect(TAB_HBS).toMatch(/role="tabpanel"/);
 	});
 
-	// The user asked for it beside the other prep tabs. The rail's order is the source order of
-	// these partial calls, and the body's is a second list that has to agree: a mismatch is
-	// invisible, because the panels are shown one at a time.
-	it("sits between Threats and Expeditions, in the rail and in the body", () => {
-		// The PANEL order. The rail carries one more entry after these eight — the shared
+	// The rail's order is the source order of these partial calls, and the body's is a second
+	// list that has to agree: a mismatch is invisible, because the panels are shown one at a time.
+	// Encounters sits inside Prep, which sits straight after Threats — the other half of "what is
+	// waiting out there" — and Encounters is the first of its views.
+	it("sits inside the Prep tab, between Threats and Wonder, as the first view", () => {
+		// The PANEL order. The rail carries one more entry after these six — the shared
 		// Preferences tab, whose panel comes from "stonetop.tab-preferences" rather than from a
 		// gm-toolkit-tab partial, so it is absent from the body list this regex builds.
-		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
+		const order = ["homefront", "moves", "threats", "prep", "wonder", "loop"];
 		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual([...order, "preferences"]);
 		expect([...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1])).toEqual(order);
+		expect([...strip(PREP_HBS).matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1]))
+			.toEqual(["encounters", "expeditions", "sites"]);
 	});
 
 	// A data-tab with no row in the icon table gets a mask with no image, which resolves to FULL
-	// coverage: a solid block where the glyph belongs, and nothing logged.
-	it("earns a rail glyph from the icon table, and the file it names exists", () => {
-		expect(CSS).toMatch(/\.stonetop-tab-rail \.item\[data-tab="encounters"\]\s*\{\s*--st-tab-icon:/);
+	// coverage: a solid block where the glyph belongs, and nothing logged. The stack is worn twice
+	// now — by the Prep rail button and by this view's switcher segment — and the rail's table no
+	// longer carries a row for a key no rail renders.
+	it("earns its stack glyph on the switcher segment and the Prep rail button, and the file exists", () => {
+		expect(CSS).toMatch(/\.stonetop-gm-prep-view\[data-tab="encounters"\]\s*\{\s*--st-prep-icon:\s*url\('[^']*prep-stack\.svg'\)/);
+		expect(CSS).toMatch(/\.stonetop-tab-rail \.item\[data-tab="prep"\]\s*\{\s*--st-tab-icon:\s*url\('[^']*prep-stack\.svg'\)/);
+		expect(CSS).not.toMatch(/\.stonetop-tab-rail \.item\[data-tab="encounters"\]/);
 		expect(repoFileExists("assets/icons/tabs/prep-stack.svg")).toBe(true);
 	});
 
@@ -192,16 +212,21 @@ describe("the Encounters tab: wiring", () => {
 		expect(game.i18n.localize("stonetop.gmToolkit.tabs.encounters")).toBe("Encounters");
 	});
 
-	it("gets its panel gutter from the shared tab-padding rule", () => {
-		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .sheet-body > .tab")).toMatch(/padding:/);
+	// The gutter comes from the Prep panel it sits in, which takes the frame's shared tab padding;
+	// the pane itself is flush, or its cards would sit twice as far in as the Threats tab's.
+	it("gets its panel gutter from the Prep tab around it, and adds none of its own", () => {
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .sheet-body > .tab")).toMatch(/padding: 0 12px 12px/);
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab")).toMatch(/padding: 0;/);
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab")).toMatch(/display: none/);
+		expect(declarations(CSS, ".stonetop-gm-toolkit-sheet .stonetop-gm-prep-panes > .tab.active")).toMatch(/display: block/);
 	});
 
 	// The pencil is `position: absolute` against its section, and this panel only BECOMES that
 	// section's containing block by joining the shared `:is()`. Left out, the pencil floats
 	// against whatever positioned ancestor is next up the frame, with nothing logged.
 	it("is the positioning context its corner pencil floats in", () => {
-		expect(CSS).toMatch(/\.sheet-body > :is\(\.tab\.threats, \.tab\.encounters, \.tab\.expeditions\)\s*\{\s*position: relative/);
-		expect(TAB_HBS).toContain('class="tab encounters steading-edit-section"');
+		expect(CSS).toMatch(/\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\)\s*\{\s*position: relative/);
+		expect(TAB_HBS).toMatch(/class="tab encounters steading-edit-section[{"]/);
 	});
 
 	// Every field here is written by hand to `system.encounters`. A `name` on any of them would
@@ -247,11 +272,23 @@ describe("the Encounters tab: wiring", () => {
 			.toContain("{{/if}}");
 	});
 
-	// There is no <img> on this tab, so the `draggable="false"` opt-out every portrait in the
-	// system carries has nothing to apply to. Pinned so that adding one without it is a failure
-	// rather than a Gecko drag that hands over the image instead of the document.
-	it("has no portrait, which is why nothing here carries the image drag opt-out", () => {
-		expect(PANEL_MARKUP).not.toMatch(/<img/);
+	// Core paints a shadow on every button and the shared icon-button rule clears it only on hover,
+	// so the bare caret clears it at rest itself (lost once, when the caret's rule was rewritten).
+	it("draws the caret as a bare glyph, with core's button shadow off at rest", () => {
+		expect(declarations(CSS, ".stonetop-gm-encounter-toggle")).toMatch(/box-shadow:\s*none/);
+	});
+
+	// A row's thumbnail is an <img> INSIDE the draggable name button, so it carries the
+	// `draggable="false"` opt-out every portrait in the system wears: without it Gecko hands over
+	// the picture instead of the document. Every <img> the panel draws, not just the first.
+	it("puts the drag opt-out on every picture it draws", () => {
+		const imgs = PANEL_MARKUP.match(/<img\b[^>]*>/g) ?? [];
+		expect(imgs.length, "the row thumbnail went missing").toBeGreaterThan(0);
+		for (const img of imgs) {
+			expect(img).toContain('draggable="false"');
+			// Decoration beside the name it illustrates, so it says nothing to a screen reader.
+			expect(img).toContain('alt=""');
+		}
 	});
 
 	it("is composed into the sheet, and flushed before every paint and every close", () => {
@@ -716,6 +753,340 @@ describe("the Encounters tab: the caret over a keyboard reorder", () => {
 	});
 });
 
+/* ══ thumbnails ═══════════════════════════════════════════════════════════════ */
+
+// A row wears its document's own picture beside its name, and a stock placeholder is NOT a
+// picture: a column of identical mystery-men looks like information and is not, so every stand-in
+// this world can hand over falls back to the kind-glyph medallion.
+describe("the Encounters tab: a row's thumbnail", () => {
+	afterEach(() => {
+		delete globalThis.CONFIG?.RollTable;
+	});
+
+	it("treats core's whole generic glyph set, and no picture at all, as no art", () => {
+		for (const src of ["icons/svg/mystery-man.svg", "/icons/svg/item-bag.svg", "icons/svg/d20-grey.svg",
+			"icons/svg/dice-target.svg", "", "   ", null, undefined, 42]) {
+			expect(isPlaceholderArt(src), String(src)).toBe(true);
+		}
+	});
+
+	it("treats this system's stand-ins as no art: the people silhouette and a creature-type mark", () => {
+		expect(isPlaceholderArt("systems/stonetop-pwd/assets/icons/people/default_profile.svg")).toBe(true);
+		expect(isPlaceholderArt("systems/stonetop-pwd/assets/icons/bestiary/corrupted.svg")).toBe(true);
+	});
+
+	it("follows the document class's own default icon, read when it is asked", () => {
+		globalThis.CONFIG = { ...(globalThis.CONFIG ?? {}), RollTable: { documentClass: { DEFAULT_ICON: "modules/x/table.webp" } } };
+		expect(isPlaceholderArt("modules/x/table.webp", "RollTable")).toBe(true);
+		expect(isPlaceholderArt("modules/x/table.webp", "Actor")).toBe(false);
+	});
+
+	it("keeps a picture somebody chose", () => {
+		for (const src of ["worlds/w/art/hagr.webp", "systems/stonetop-pwd/assets/arcana/torc.webp", "https://x.test/a.png"]) {
+			expect(isPlaceholderArt(src), src).toBe(false);
+		}
+	});
+
+	it("reads a Scene's small thumb and never its full background", () => {
+		expect(bundleEntryImage({ thumb: "worlds/w/thumbs/ford.webp", img: "worlds/w/maps/ford-4k.webp" }, "Scene"))
+			.toBe("worlds/w/thumbs/ford.webp");
+		expect(bundleEntryImage({ background: { src: "worlds/w/maps/ford-4k.webp" } }, "Scene")).toBe("");
+		expect(bundleEntryImage({ img: "worlds/w/art/hagr.webp" }, "Actor")).toBe("worlds/w/art/hagr.webp");
+		expect(bundleEntryImage({ img: "icons/svg/mystery-man.svg" }, "Actor")).toBe("");
+		expect(bundleEntryImage({ name: "A page" }, "JournalEntryPage")).toBe("");
+		expect(bundleEntryImage(null, "Actor")).toBe("");
+	});
+
+	// Off the SYNC path, so a pack index entry (which carries `img`, and `thumb` for a scene) is
+	// enough: no pack load per row per render for a picture either.
+	it("publishes the picture on the resolved row, from an index entry as from a document", async () => {
+		globalThis.fromUuidSync = vi.fn(uuid => ({
+			"Compendium.p.bestiary.Actor.a": { name: "Hagr", img: "systems/stonetop-pwd/art/hagr.webp", pack: "p.bestiary" },
+			"Scene.s":                       { name: "Ford", thumb: "worlds/w/thumbs/ford.webp" },
+			"Actor.m":                       { name: "Nobody", img: "icons/svg/mystery-man.svg" },
+		}[uuid] ?? null));
+		const rows = await Promise.all([
+			{ id: "1", uuid: "Compendium.p.bestiary.Actor.a", type: "Actor", name: "Hagr" },
+			{ id: "2", uuid: "Scene.s", type: "Scene", name: "Ford" },
+			{ id: "3", uuid: "Actor.m", type: "Actor", name: "Nobody" },
+			{ id: "4", uuid: "Actor.gone", type: "Actor", name: "Gone" },
+		].map(resolveEncounterEntry));
+		expect(rows.map(r => r.img)).toEqual(["systems/stonetop-pwd/art/hagr.webp", "worlds/w/thumbs/ford.webp", "", ""]);
+		expect(rows[3].unresolved).toBe(true);
+		expect(globalThis.fromUuid).not.toHaveBeenCalledWith("Scene.s");
+	});
+
+	// The template's three branches: a broken link for a row whose target is gone, the picture
+	// when there is one, else the kind's glyph in a medallion. The picture rides INSIDE the name
+	// button, so it is part of what is grabbed and clicked.
+	it("draws the picture, the medallion or the broken link inside the name button", () => {
+		const btn = CARD_MARKUP.slice(CARD_MARKUP.indexOf('class="stonetop-gm-encounter-entry-open"'));
+		const inner = btn.slice(0, btn.indexOf("</button>"));
+		expect(inner).toMatch(/\{\{#if unresolved\}\}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph"[^>]*><i class="fas fa-link-slash" aria-hidden="true"><\/i><\/span>\{\{else if img\}\}<img class="stonetop-gm-entry-thumb" src="\{\{this\.img\}\}"/);
+		expect(inner).toMatch(/\{\{else\}\}<span class="stonetop-gm-entry-thumb stonetop-gm-entry-thumb--glyph"[^>]*><i class="\{\{this\.icon\}\}" aria-hidden="true"><\/i><\/span>\{\{\/if\}\}/);
+		const thumb = declarations(CSS, ".stonetop-gm-entry-thumb");
+		expect(thumb).toMatch(/object-fit:\s*cover/);
+		expect(thumb).toMatch(/width:\s*var\(--st-entry-thumb, 28px\)/);
+		// Grows with the reader's sheet font, so a picture never sits smaller than its name.
+		expect(declarations(CSS, ".stonetop-gm-encounter-entries")).toMatch(/--st-entry-thumb:\s*calc\(28px \* var\(--stonetop-font-scale, 1\)\)/);
+		expect(declarations(CSS, ".stonetop-gm-entry-thumb--glyph")).toMatch(/border-radius:\s*50%/);
+	});
+
+	// The row stores no picture: a cached path would go stale the moment the art changed.
+	it("stores no picture on the row itself", () => {
+		expect(Object.keys(normalizeEntry({ uuid: "Actor.a", type: "Actor", name: "A", img: "x.webp" }))).not.toContain("img");
+	});
+});
+
+/* ══ the pane: its bar, its empty state, the card's head and a drag over it ═══════════════ */
+
+describe("the Encounters tab: the pane around the cards", () => {
+	const PANE_BAR = strip(read("templates/actor/partials/gm-prep-pane-bar.hbs"));
+	const EMPTY    = strip(read("templates/actor/partials/gm-prep-empty.hbs"));
+
+	// One muted line, a "?" that opens the full intro under it, and "New encounter" at the right:
+	// the add button moved up from the foot of the list, still wearing the handler's hook.
+	it("opens on a one-line bar, the old intro behind its \"?\"", () => {
+		expect(TAB_MARKUP).not.toContain("steading-threats-intro");
+		expect(TAB_MARKUP).toMatch(/\{\{> "stonetop\.gm-prep-pane-bar" kind="stonetop-gm-encounter"[^}]*lead=\(localize "stonetop\.gmToolkit\.encounters\.lead"\)[^}]*intro=\(localize "stonetop\.gmToolkit\.encounters\.intro"\)/);
+		expect(TAB_MARKUP).not.toContain("stonetop.gm-prep-add-bar");
+		expect(TAB_MARKUP).toContain("pane=stonetop.prep.panes.encounters");
+		// The lead is words and nothing else now: no tooltip a keyboard could never open, no help
+		// cursor promising one.
+		expect(PANE_BAR).toMatch(/<p class="stonetop-gm-pane-lead">\{\{this\.lead\}\}<\/p>/);
+		const lead = declarations(CSS, ".stonetop-gm-pane-lead");
+		expect(lead).toMatch(/white-space:\s*nowrap/);
+		expect(lead).toMatch(/text-overflow:\s*ellipsis/);
+		expect(lead).not.toMatch(/cursor:\s*help/);
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
+		expect(en.encounters.add).toBe("New encounter");
+		expect(en.expeditions.add).toBe("New expedition");
+		expect(en.sites.add).toBe("New site");
+		for (const block of ["encounters", "expeditions", "sites"]) {
+			expect(en[block].lead, `${block}.lead`).toBeTruthy();
+			expect(en[block].intro.length, `${block}.intro is the long form`).toBeGreaterThan(en[block].lead.length);
+		}
+	});
+
+	// A compact slate outline, not the full-width dashed strip the Threats tab's bars keep: two
+	// classes' weight over the shared base, every core control default stated away.
+	it("draws the bar's button compact, over the shared add-bar class, without moving Threats", () => {
+		const btn = declarations(CSS, ".stonetop-prep-add-btn.stonetop-gm-pane-add");
+		for (const re of [/width:\s*auto/, /height:\s*auto/, /border:\s*1px solid var\(--st-quiet-ink\)/,
+			/background:\s*transparent/, /box-shadow:\s*none/, /flex:\s*0 0 auto/]) {
+			expect(btn).toMatch(re);
+		}
+		expect(CSS).toMatch(/\.stonetop-prep-add-btn\s*\{[^}]*border:\s*1px dashed/);
+		expect(strip(read("templates/actor/partials/gm-toolkit-tab-threats.hbs"))).not.toContain("stonetop-gm-pane-add");
+	});
+
+	// The pencil comes AFTER the bar's button, in a notch the bar keeps at its right end, on the
+	// button's centre line (read off an anchor so it holds at every text size).
+	it("puts the pane's pencil to the right of the bar's button, on its centre line", () => {
+		// The notch, for every browser: not inside either @supports block.
+		expect(CSS).toMatch(/\n\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\) \.stonetop-gm-pane-bar\s*\{\s*padding-right:\s*2\dpx;/);
+		expect(CSS).toMatch(/\n\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\) > \.steading-section-edit-toggle\s*\{[^}]*right:\s*\dpx;/);
+		const supports = CSS.slice(CSS.indexOf("@supports (anchor-name: --a)"));
+		expect(supports).toMatch(/\.tab\.encounters\s+\.stonetop-gm-pane-bar > \.stonetop-gm-pane-add\s*\{\s*anchor-name:\s*--st-gm-encounters-add;/);
+		expect(supports).toMatch(/\.tab\.expeditions\s+\.stonetop-gm-pane-bar > \.stonetop-gm-pane-add\s*\{\s*anchor-name:\s*--st-gm-expeditions-add;/);
+		// Each pane's pencil reads its OWN pane's anchor for its height, with a fallback for a bare bar.
+		expect(supports).toMatch(/\.tab\.encounters > \.steading-section-edit-toggle\s*\{[^}]*top:\s*anchor\(--st-gm-encounters-add center, \d+px\)/);
+		expect(supports).toMatch(/\.tab\.expeditions > \.steading-section-edit-toggle\s*\{[^}]*top:\s*anchor\(--st-gm-expeditions-add center, \d+px\)/);
+		// Nothing places it left of the button any more.
+		expect(CSS).not.toMatch(/anchor\(--st-gm-(encounters|expeditions)-add left/);
+	});
+
+	// The full intro is a disclosure every reader can reach: a real button with aria-expanded and
+	// aria-controls over a paragraph that is `hidden` until asked for, open where it was left.
+	it("opens the full intro from a real button, for the keyboard and a screen reader too", () => {
+		expect(PANE_BAR).toMatch(/<button type="button" class="stonetop-gm-pane-help" data-prep-intro="\{\{pane\.key\}\}"/);
+		expect(PANE_BAR).toContain('aria-expanded="{{#if pane.introOpen}}true{{else}}false{{/if}}" aria-controls="{{pane.id}}-intro"');
+		expect(PANE_BAR).toContain('aria-label="{{localize "stonetop.gmToolkit.prep.aboutView"}}"');
+		expect(PANE_BAR).toMatch(/<p class="stonetop-gm-pane-intro" id="\{\{pane\.id\}\}-intro"\{\{#unless pane\.introOpen\}\} hidden\{\{\/unless\}\}>\{\{this\.intro\}\}<\/p>/);
+		// No re-hide of its own: the one `[hidden]` rule near the top covers it
+		// (tests/styles/hidden-hides.test.js).
+		expect(CSS).not.toContain(".stonetop-gm-pane-intro[hidden]");
+		expect(CSS).toMatch(/:is\([^)]*\.stonetop-gm-pane-help[^)]*\):focus-visible/);
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
+		expect(en.prep.aboutView).toBeTruthy();
+	});
+
+	// A view that has never held anything: a centred block with the view's glyph, a heading, the
+	// sentence, the kinds it takes, and the add button made primary; the bar above it goes `bare`.
+	it("gives an untouched view a centred empty state, and drops the bar's own button", () => {
+		expect(TAB_MARKUP).toContain("bare=(not (or stonetop.encounters.active.length stonetop.encounters.completed.length))");
+		expect(PANE_BAR).toMatch(/\{\{#unless bare\}\}\s*<button/);
+		expect(EMPTY).toMatch(/<h3 class="stonetop-gm-prep-empty-title">\{\{this\.title\}\}<\/h3>/);
+		expect(EMPTY).toMatch(/<ul class="stonetop-gm-prep-empty-kinds" aria-hidden="true">/);
+		expect(EMPTY).toContain("stonetop-gm-pane-add--primary");
+		expect(TAB_MARKUP).toContain('title=(localize "stonetop.gmToolkit.encounters.emptyTitle")');
+		expect(TAB_MARKUP).toContain("accepts=stonetop.encounters.accepts");
+		for (const view of ["encounters", "expeditions", "sites"]) {
+			expect(declarations(CSS, `.stonetop-gm-prep-empty--${view}`)).toMatch(/--st-prep-icon:\s*url\(/);
+		}
+		expect(declarations(CSS, ".stonetop-gm-prep-empty")).toMatch(/text-align:\s*center/);
+	});
+
+	// The kinds row is built from the table the drop filter and the pills read, so it cannot name
+	// a kind the pane refuses; `unknown` is how a row is counted, not something to drag in.
+	it("publishes the kinds a view takes, from the tally table, without unknown", async () => {
+		const { host } = makeHost([]);
+		const context = { stonetop: {} };
+		await host._addGmEncountersContext(context);
+		const accepts = context.stonetop.encounters.accepts;
+		expect(accepts.map(k => k.key)).toEqual(ENCOUNTER_TALLY_KINDS.map(k => k.key).filter(k => k !== "unknown"));
+		for (const kind of accepts) {
+			expect(kind.icon).toMatch(/^fas fa-/);
+			expect(kind.label).not.toMatch(/^stonetop\./);
+		}
+	});
+
+	// The rest of a shut card's head is the caret too: a click on the note's first line or the
+	// pills opens the card, in place. The name box and the grip keep their own gestures.
+	it("opens a card from anywhere on its bare head, but not from the name or the grip", async () => {
+		const { host, actor, updates } = makeHost([{ id: "e1", name: "C", entries: [] }]);
+		const root = fakeRoot();
+		host._activateGmEncountersListeners(root);
+		const li = fakeEl({ cls: ["stonetop-gm-encounter", "is-collapsed"], parent: root.panel, dataset: { encounterId: "e1" } });
+		const head = fakeEl({ cls: ["stonetop-gm-encounter-head"], parent: li });
+		const grip = fakeEl({ cls: ["stonetop-gm-encounter-grip"], parent: head });
+		const name = fakeEl({ cls: ["stonetop-gm-encounter-name"], parent: head });
+		const peek = fakeEl({ cls: ["stonetop-gm-encounter-peek"], parent: head });
+		const toggle = fakeEl({ cls: ["stonetop-gm-encounter-toggle"], parent: head });
+
+		await root.emit("click", name);
+		await root.emit("click", grip);
+		expect(li.classes).toContain("is-collapsed");
+
+		await root.emit("click", peek);
+		expect(li.classes).not.toContain("is-collapsed");
+		expect(toggle.attrs["aria-expanded"]).toBe("true");
+		expect(host._encounterOpen.has("e1")).toBe(true);
+		await root.emit("click", head);
+		expect(li.classes).toContain("is-collapsed");
+		expect(updates).toEqual([]);
+		expect(listOf(actor)).toHaveLength(1);
+	});
+
+	// A click also ends a drag-select. Copying a line out of a shut card's peek must not fly the
+	// card open under the selection; a click with nothing selected still opens it.
+	it("leaves a card shut when the click on its head finished a text selection", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [] }]);
+		const root = fakeRoot();
+		host._activateGmEncountersListeners(root);
+		const li = fakeEl({ cls: ["stonetop-gm-encounter", "is-collapsed"], parent: root.panel, dataset: { encounterId: "e1" } });
+		const head = fakeEl({ cls: ["stonetop-gm-encounter-head"], parent: li });
+		const peek = fakeEl({ cls: ["stonetop-gm-encounter-peek"], parent: head });
+		fakeEl({ cls: ["stonetop-gm-encounter-toggle"], parent: head });
+		const text = { parent: peek };
+		const was = globalThis.document;
+		globalThis.document = { getSelection: () => ({ isCollapsed: false, anchorNode: text, focusNode: text, toString: () => "the reeds" }) };
+		try {
+			await root.emit("click", peek);
+			expect(li.classes).toContain("is-collapsed");
+			// A selection somewhere else on the page is not this head's business.
+			const elsewhere = {};
+			globalThis.document = { getSelection: () => ({ isCollapsed: false, anchorNode: elsewhere, focusNode: elsewhere, toString: () => "x" }) };
+			await root.emit("click", peek);
+			expect(li.classes).not.toContain("is-collapsed");
+		} finally {
+			globalThis.document = was;
+		}
+	});
+
+	// `:hover` does not follow a drag, so the card under the pointer is marked by hand as the drag
+	// moves, and unmarked when it leaves the pane or lands.
+	it("lights the one card a drag is over, and clears it on the drop", async () => {
+		const { host } = makeHost([{ id: "e1", name: "A", entries: [] }, { id: "e2", name: "B", entries: [] }]);
+		const root = fakeRoot({ panelClasses: ["tab", "encounters"] });
+		host._activateGmEncountersListeners(root);
+		const a = fakeEl({ cls: ["stonetop-gm-encounter"], parent: root.panel, dataset: { encounterId: "e1" } });
+		const b = fakeEl({ cls: ["stonetop-gm-encounter"], parent: root.panel, dataset: { encounterId: "e2" } });
+		const inB = fakeEl({ cls: ["stonetop-gm-encounter-dropzone"], parent: b });
+		const dt = { types: ["text/plain"], effectAllowed: "copy", dropEffect: "", getData: () => "" };
+
+		await root.panel.dragoverEvent(dt, a);
+		expect(a.classes).toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt, inB);
+		expect(a.classes).not.toContain("is-drop-target");
+		expect(b.classes).toContain("is-drop-target");
+		await root.panel.dropEvent(dt, inB);
+		expect(b.classes).not.toContain("is-drop-target");
+		// In the system's drop colour, the gold every drop zone's outline is drawn in, not the
+		// card's own accent: a lit card must not read as the card's edge, or as another cue.
+		expect(declarations(CSS, ".stonetop-gm-encounter.is-drop-target")).toMatch(/border-color:\s*var\(--stonetop-improvement-accent\)/);
+	});
+
+	// ONE CUE AT A TIME. Over a card the card lights and the pane does not; over bare pane a
+	// document from outside lights the pane (it will start a new card); a card dragged by its grip
+	// lights neither, because it only reorders, and neither does one of our own rows over bare
+	// pane, which `onDrop` ignores.
+	it("lights the pane only when a drop will start a new card", async () => {
+		const { host } = makeHost([{ id: "e1", name: "A", entries: [] }]);
+		const root = fakeRoot();
+		host._activateGmEncountersListeners(root);
+		const card = fakeEl({ cls: ["stonetop-gm-encounter"], parent: root.panel, dataset: { encounterId: "e1" } });
+		const head = fakeEl({ cls: ["stonetop-gm-encounter-head"], parent: card });
+		const grip = fakeEl({ cls: ["stonetop-gm-encounter-grip"], parent: head });
+		const bare = fakeEl({ cls: ["stonetop-gm-encounter-list"], parent: root.panel });
+		const dt = () => ({ types: ["text/plain"], effectAllowed: "copy", dropEffect: "", getData: () => "", setData() {} });
+
+		// From the sidebar: over bare pane, the pane; over a card, the card and not the pane.
+		await root.panel.dragoverEvent(dt(), bare);
+		expect(root.panel.classes).toContain("is-drop-new");
+		expect(card.classes).not.toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt(), head);
+		expect(root.panel.classes).not.toContain("is-drop-new");
+		expect(card.classes).toContain("is-drop-target");
+		await root.panel.dropEvent(dt(), head);
+		expect(card.classes).not.toContain("is-drop-target");
+		expect(root.panel.classes).not.toContain("is-drop-new");
+
+		// A card by its grip: neither cue, over the card or off it.
+		host._encounters.noteDragSource(grip, "card");
+		await root.panel.dragoverEvent(dt(), head);
+		expect(card.classes).not.toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt(), bare);
+		expect(root.panel.classes).not.toContain("is-drop-new");
+		// The source's own dragend clears it, even with the source already out of the page.
+		for (const fn of grip.handlers.dragend ?? []) fn({});
+		expect(host._encounters.dragFrom).toBe(null);
+
+		// And when that dragend never comes (Firefox, a source repainted away mid-drag and let go off
+		// the pane), the next drag to start anywhere clears it, before the next source sets its own.
+		const docListeners = [];
+		const realDoc = globalThis.document;
+		globalThis.document = { addEventListener: (type, fn, opts) => docListeners.push({ type, fn, opts }) };
+		try {
+			host._encounters.noteDragSource(fakeEl({ cls: ["stonetop-gm-encounter-grip"] }), "card");
+		} finally {
+			globalThis.document = realDoc;
+		}
+		const next = docListeners.find(l => l.type === "dragstart");
+		expect(next?.opts).toEqual({ once: true, capture: true });
+		next.fn({});
+		expect(host._encounters.dragFrom).toBe(null);
+
+		// One of our own rows: lands IN a card, but over bare pane it lands nowhere.
+		host._encounters.noteDragSource(grip, "entry");
+		await root.panel.dragoverEvent(dt(), head);
+		expect(card.classes).toContain("is-drop-target");
+		await root.panel.dragoverEvent(dt(), bare);
+		expect(card.classes).not.toContain("is-drop-target");
+		expect(root.panel.classes).not.toContain("is-drop-new");
+		await root.panel.dropEvent(dt(), bare);
+		expect(host._encounters.dragFrom).toBe(null);
+
+		// A drag that carries no text (a file) is not one the zone takes, and lights nothing.
+		await root.panel.dragoverEvent({ types: ["Files"] }, bare);
+		expect(root.panel.classes).not.toContain("is-drop-new");
+
+		// The CSS half: the system's pane outline is suppressed unless the drop starts a new card.
+		expect(declarations(CSS, ".stonetop-gm-prep-panes > .tab.stonetop-card-drag-over:not(.is-drop-new)"))
+			.toMatch(/outline-color:\s*transparent/);
+	});
+});
+
 describe("the Encounters tab: resolving what a row points at", () => {
 	it("renders a deleted target under its cached name, still in its slot", async () => {
 		globalThis.fromUuidSync = vi.fn(() => null);
@@ -892,7 +1263,7 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 	// glyph itself is hidden from a screen reader precisely because the tooltip carries it.
 	it("wires each badge to a tooltip and hides the glyph from the reader", () => {
 		expect(CARD_MARKUP).toMatch(/class="stonetop-gm-encounter-tally[^"]*"[\s\S]{0,120}data-tooltip="\{\{this\.tip\}\}"/);
-		expect(CARD_MARKUP).toMatch(/\{\{this\.count\}\}<i class="\{\{this\.icon\}\}" aria-hidden="true">/);
+		expect(CARD_MARKUP).toMatch(/<span class="stonetop-chip-text">\{\{this\.count\}\}<\/span><i class="\{\{this\.icon\}\}" aria-hidden="true">/);
 	});
 
 	// ONE GROUPING, READ TWICE: the badges on the shut head and the cards in the open body are the
@@ -936,7 +1307,55 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		// And the CSS no longer describes two columns that are not emitted.
 		expect(CSS).not.toContain(".stonetop-gm-encounter-entry-icon");
 		expect(CSS).not.toContain(".stonetop-gm-encounter-entry-kind");
-		expect(declarations(CSS, ".stonetop-gm-encounter-entry")).toMatch(/grid-template-columns:\s*1fr auto/);
+		// ONE LINE when the card is wide: [picture + name] [note] [cross]. The columns are declared
+		// ONCE, on the card's body, and the group's <section>, its <ul> and each row are subgrids of
+		// them, so every note IN THE CARD starts on one x -- not one x per group, which zig-zagged
+		// down an open card from Monsters to Arcana to Journals.
+		expect(declarations(CSS, ".stonetop-gm-encounter-body"))
+			.toMatch(/grid-template-columns:\s*fit-content\(40%\) minmax\(0, 1fr\) auto/);
+		for (const sel of [".stonetop-gm-entry-card", ".stonetop-gm-encounter-entries", ".stonetop-gm-encounter-entry"]) {
+			expect(declarations(CSS, sel), sel).toMatch(/grid-template-columns:\s*subgrid/);
+		}
+		// Nothing below the body declares columns of its own (outside the no-subgrid fallback).
+		expect(declarations(CSS, ".stonetop-gm-encounter-entries")).not.toMatch(/fit-content/);
+		// Everything else in the body spans the three columns.
+		expect(declarations(CSS, ".stonetop-gm-encounter-body > *")).toMatch(/grid-column:\s*1 \/ -1/);
+		// NARROW (by the card's width, not the window's): the note wraps under the name.
+		expect(declarations(CSS, ".stonetop-gm-encounter-body")).toMatch(/container-type:\s*inline-size/);
+		expect(CSS).toMatch(/@container \(max-width: 520px\)\s*\{[\s\S]*?\.stonetop-gm-encounter-entry-note\s*\{[^}]*grid-row:\s*2/);
+	});
+
+	// The note READS AS TEXT: no box, no ring, no fill, italic and muted; a dotted line on row
+	// hover, a solid slate one with upright ink on focus, and a placeholder only then.
+	it("draws the row's note as text, not as a field", () => {
+		const note = declarations(CSS, ".stonetop-gm-encounter-entry-note");
+		expect(note).toMatch(/border:\s*0/);
+		expect(note).toMatch(/background:\s*transparent/);
+		// Core paints an inset ring on every input whatever its border says.
+		expect(note).toMatch(/box-shadow:\s*none/);
+		expect(note).toMatch(/font-style:\s*italic/);
+		// The focus rule's slot, held at rest so the caret arriving moves nothing. Never dotted, and
+		// never lit by a hover: the system draws no underline as a hover cue (STYLEGUIDE.md, States).
+		expect(note).toMatch(/border-bottom:\s*1px solid transparent/);
+		expect(declarations(CSS, ".stonetop-gm-encounter-entry-note::placeholder")).toMatch(/color:\s*transparent/);
+		expect(declarations(CSS, ".stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-note") ?? "")
+			.not.toMatch(/border/);
+		const focus = declarations(CSS, ".stonetop-gm-encounter-entry-note:focus");
+		expect(focus).toMatch(/border-bottom:\s*1px solid var\(--st-quiet-ink\)/);
+		expect(focus).toMatch(/font-style:\s*normal/);
+		// The short placeholder, in both blocks the card reads.
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
+		expect(en.encounters.entryNotePlaceholder).toBe("Add a note…");
+		expect(en.expeditions.entryNotePlaceholder).toBe("Add a note…");
+	});
+
+	// The cross is drawn only for the row being reached into, and by opacity, so it keeps its grid
+	// cell and stays reachable by Tab, whose focus then reveals it.
+	it("shows a row's cross only on hover or focus, without taking it out of the tab order", () => {
+		expect(declarations(CSS, ".stonetop-gm-encounter-entry-remove")).toMatch(/opacity:\s*0/);
+		const shown = declarations(CSS, ".stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-remove");
+		expect(shown).toMatch(/opacity:\s*1/);
+		expect(CSS).toContain(".stonetop-gm-encounter-entry:focus-within .stonetop-gm-encounter-entry-remove");
 	});
 
 	// In the encounter's own head it was a dragon glyph two buttons from the trash, on a row that
@@ -956,9 +1375,24 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		// Drawn ONCE, so a card of five kinds does not carry five of them. Matched on the class
 		// ATTRIBUTE, because the glyph's own class has this one as a prefix.
 		expect(CARD_MARKUP.match(/class="stonetop-gm-encounter-deploy"/g)).toHaveLength(1);
-		// LEFT OF THE COUNT, which stays at the far end so a column of cards reads down its edge.
-		expect(head.indexOf("stonetop-gm-encounter-deploy"))
-			.toBeLessThan(head.indexOf("stonetop-gm-entry-card-count"));
+		// AT THE END OF THE EYEBROW: glyph, title, count, the hairline, then the buttons.
+		const order = ["stonetop-gm-entry-card-title", "stonetop-gm-entry-card-count",
+			"stonetop-gm-entry-card-rule", "stonetop-gm-encounter-deploy"].map(c => head.indexOf(c));
+		expect(order.every(i => i >= 0)).toBe(true);
+		expect([...order].sort((a, b) => a - b)).toEqual(order);
+	});
+
+	// A bare 16px glyph was the one control on the card nobody could name without hovering. It
+	// wears its word now; the long form stays the tooltip, in both blocks the cards read.
+	it("labels Deploy in words, keeping the long form as the tooltip", () => {
+		const btn = CARD_MARKUP.slice(CARD_MARKUP.indexOf('class="stonetop-gm-encounter-deploy"'));
+		const inner = btn.slice(0, btn.indexOf("</button>"));
+		expect(inner).toContain('{{localize "stonetop.gmToolkit.encounters.deploy"}}');
+		expect(inner).toMatch(/class="stonetop-gm-encounter-deploy-label">\{\{localize "stonetop\.gmToolkit\.encounters\.deployShort"\}\}/);
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
+		expect(en.encounters.deployShort).toBe("Deploy");
+		expect(en.expeditions.deployShort).toBe("Deploy");
+		expect(en.encounters.deployAndFightShort).toBe("Deploy & fight");
 	});
 
 	// Only actors can become tokens, and the button now exists only where it can do something.
@@ -1015,47 +1449,48 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 	});
 
 	// game-icons art is drawn with generous margins inside its 512 square, so `contain` gives back
-	// less ink than a Font Awesome glyph at the same box size. It needs the bigger box to read at
-	// the same weight as the strip's other marks.
-	it("gives the mask more room than the font glyph it replaced", () => {
+	// less ink than a Font Awesome glyph at the same box size; and a `contain` mask needs a
+	// definite, SQUARE box, because narrowing it shrinks the whole glyph rather than its margins.
+	it("gives the mask a square box of its own beside the label", () => {
 		const icon = declarations(CSS, ".stonetop-gm-encounter-deploy-icon");
-		// THE HEIGHT IS THE STRIP'S, not a number: this artwork nearly fills its own 512 square top
-		// to bottom, so a fixed 16px box gave a 15px mark and pushed that one heading to 23px while
-		// its neighbours stayed at 22. `100%` of a stretched button can never do that.
-		expect(icon).toMatch(/height:\s*100%/);
-		expect(icon).not.toMatch(/height:\s*\d+px/);
-		// SQUARE even though the figure is narrow: `contain` scales the whole viewBox to fit the
-		// smaller side, so narrowing the box to the ink's own width shrinks the entire glyph rather
-		// than cropping its margins. At 12px the figure went from 15px tall to 11.
 		expect(icon).toMatch(/width:\s*16px/);
-		// And a `contain` mask needs a definite box, which an inline span has not got.
+		expect(icon).toMatch(/height:\s*16px/);
 		expect(icon).toMatch(/display:\s*block/);
+		expect(icon).toMatch(/flex:\s*0 0 auto/);
 	});
 
-	// A 22px control inside a 22px strip: it must not push the heading taller than the strips on
-	// the cards either side of it.
-	it("sizes it off the strip rather than off the row it came from", () => {
+	// A labelled pill at the end of the eyebrow: its own outline and padding, every scrap of core's
+	// button chrome stated away, and the eyebrow's capitals and spacing turned off inside it.
+	it("draws Deploy as a compact outlined pill in the sheet's own voice", () => {
 		const deploy = declarations(CSS, ".stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy");
-		// NO height of its own: a 20px square pushed that one strip to 27px while its neighbours
-		// stayed at 22, which reads as the Monsters card wearing a different heading. It takes the
-		// strip's own content height instead.
-		expect(deploy).not.toMatch(/height:\s*\d+px/);
-		expect(deploy).toMatch(/width:\s*22px/);
-		expect(deploy).toMatch(/align-self:\s*stretch/);
-		expect(deploy).toMatch(/padding:\s*0/);
-		// The heading spaces its caps out, and 0.04em after a one-character run pushes a glyph off
-		// its own centre -- the same trap the title's own glyph needed clearing.
+		expect(deploy).toMatch(/border:\s*1px solid/);
+		expect(deploy).toMatch(/border-radius:\s*999px/);
+		expect(deploy).toMatch(/background:\s*transparent/);
+		expect(deploy).toMatch(/box-shadow:\s*none/);
+		expect(deploy).toMatch(/width:\s*auto/);
+		expect(deploy).toMatch(/height:\s*auto/);
+		expect(deploy).toMatch(/text-transform:\s*none/);
 		expect(deploy).toMatch(/letter-spacing:\s*normal/);
-		// The blue hover is keyed on the class, so it followed the button here.
-		expect(CSS).toContain(".stonetop-gm-encounter-deploy:hover");
+		// A ~22px hit target at the least.
+		expect(Number(/min-height:\s*(\d+)px/.exec(deploy)?.[1])).toBeGreaterThanOrEqual(22);
+		expect(declarations(CSS, ".stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy:hover"))
+			.toMatch(/background:\s*var\(--st-slate-hover-bg\)/);
 	});
 
-	// The strip is the NAME of the group under it. At this size, in caps, under a card rule, a
-	// muted grey read as a disabled label rather than as a heading.
-	it("gives the group's name body ink, and steps the other two back from it", () => {
-		expect(declarations(CSS, ".stonetop-gm-entry-card-head")).toMatch(/color:\s*var\(--st-text-body\)/);
-		expect(declarations(CSS, ".stonetop-gm-entry-card-head > i")).toMatch(/color:\s*var\(--st-text-secondary\)/);
-		expect(declarations(CSS, ".stonetop-gm-entry-card-count")).toMatch(/color:\s*var\(--st-text-muted\)/);
+	// THE EYEBROW: the site card's label voice (IM Fell, capitals, spaced), a step DOWN from the
+	// rows it names, so the eye lands on the names; the glyph in the card's accent.
+	it("names each group with an eyebrow in the site card's label voice", () => {
+		const head = declarations(CSS, ".stonetop-gm-entry-card-head");
+		expect(head).toMatch(/font-family:\s*"IM Fell English"/);
+		expect(head).toMatch(/text-transform:\s*uppercase/);
+		expect(head).toMatch(/letter-spacing:\s*0\.08em/);
+		expect(head).toMatch(/color:\s*var\(--st-text-secondary\)/);
+		expect(declarations(CSS, ".stonetop-gm-entry-card-head > i")).toMatch(/color:\s*var\(--st-bundle-edge\)/);
+		// Secondary, not muted: muted ink is under 4.5:1 on the card's paper in the light theme.
+		expect(declarations(CSS, ".stonetop-gm-entry-card-count")).toMatch(/color:\s*var\(--st-text-secondary\)/);
+		// The hairline to the edge, a span of its own in the markup.
+		expect(CARD_MARKUP).toContain('<span class="stonetop-gm-entry-card-rule" aria-hidden="true"></span>');
+		expect(declarations(CSS, ".stonetop-gm-entry-card-rule")).toMatch(/height:\s*1px/);
 	});
 
 	// FA7 carries a tall ascent and almost no descent, so its ink sits high inside its own em box:
@@ -1076,13 +1511,13 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		expect(glyph).toMatch(/margin:\s*0/);
 	});
 
-	// Third box deep: the tab holds a bordered encounter which holds this. A filled panel inside a
-	// filled one is depth that means nothing, which the Completed fold's own comment says too.
-	it("gives the kind card a hairline and a headed strip, not a fill of its own", () => {
+	// NO GROUP BOXES: the card is the frame, and a bordered group with a filled strip inside it
+	// was a third frame deep. The group is an eyebrow and its rows, and nothing round them.
+	it("draws a group with no box, no fill and no strip of its own", () => {
 		const card = declarations(CSS, ".stonetop-gm-entry-card");
-		expect(card).toMatch(/border:\s*1px solid var\(--st-card-rule\)/);
+		expect(card).toMatch(/border:\s*0/);
 		expect(card).not.toMatch(/^\s*background:/m);
-		expect(declarations(CSS, ".stonetop-gm-entry-card-head")).toMatch(/background:\s*var\(--st-card-fill\)/);
+		expect(declarations(CSS, ".stonetop-gm-entry-card-head")).not.toMatch(/^\s*(background|border-bottom):/m);
 	});
 
 	// The shortest thing on the head and the only one that cannot be read at half length: wrapped
@@ -1108,20 +1543,33 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// WHAT THE ENCOUNTER IS comes before the documents it points at, and at the same place on
 	// every card: after the collected rows the note sat two lines down on one card and twelve
 	// on the next, which is a thing you hunt for rather than read.
-	// A FIELD, not a paragraph that happens to be there. The box is the character and steading
-	// Notes tabs' own, so the two surfaces cannot drift: an encounter's notes and a PC's notes are
-	// the same kind of writing and should read the same.
-	it("boxes the notes the way the character sheet boxes its own", () => {
-		const box = declarations(CSS, ".stonetop-gm-encounter-notes");
-		const reference = declarations(CSS, ".stonetop .character-notes-editor .editor-content");
-		for (const decl of ["background: rgb(var(--st-paper-rgb) / 0.28)", "border: 1px solid rgb(var(--st-ink-rgb) / 0.22)"]) {
-			expect(reference).toContain(decl);
-			expect(box).toContain(decl);
-		}
-		// And it brightens with the block, as that one brightens with its editor host.
-		const hover = declarations(CSS, ".stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes");
-		expect(hover).toMatch(/background:\s*rgb\(var\(--st-paper-rgb\) \/ 0\.5\)/);
-		expect(hover).toMatch(/border-color:\s*rgb\(var\(--st-ink-rgb\) \/ 0\.4\)/);
+	// A RULED PASSAGE, not a box: the card is already the frame, and a well inside it was a second
+	// frame round the one thing on the card that is prose. A 2px rule down its left in the card's
+	// accent (softened), a little indent, and nothing round it.
+	it("rules the notes down their left rather than boxing them", () => {
+		const notes = declarations(CSS, ".stonetop-gm-encounter-notes");
+		expect(notes).toMatch(/border-left:\s*2px solid color-mix\(in srgb, var\(--st-bundle-edge\)/);
+		expect(notes).not.toMatch(/^\s*background:/m);
+		expect(notes).not.toMatch(/^\s*border:/m);
+		// No hover well either: the passage does not light up as a field would.
+		expect(CSS).not.toContain(".stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes {");
+	});
+
+	// An empty note is one muted line, "Add notes…", that is ITSELF the pencil: it wears the
+	// pencil's class, so the one delegated handler opens the dialog from either.
+	it("offers an empty note as its own 'Add notes…' button", () => {
+		expect(CARD_MARKUP).toMatch(/class="stonetop-gm-encounter-notes-edit stonetop-gm-encounter-notes-add"[\s\S]*?\{\{localize "stonetop\.gmToolkit\.encounters\.notesAdd"\}\}/);
+		expect(TAB_JS).toContain('ev.target.closest(".stonetop-gm-encounter-notes-edit")');
+		const add = declarations(CSS, ".stonetop-gm-encounter-notes-edit.stonetop-gm-encounter-notes-add");
+		expect(add).toMatch(/position:\s*static/);
+		expect(add).toMatch(/display:\s*inline-flex/);
+		expect(add).toMatch(/font-style:\s*italic/);
+		const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit;
+		expect(en.encounters.notesAdd).toBe("Add notes…");
+		expect(en.expeditions.notesAdd).toBe("Add notes…");
+		// The old "No notes on this encounter yet." sentence is gone, not left dead in the file.
+		expect(en.encounters.notesEmpty).toBeUndefined();
+		expect(en.expeditions.notesEmpty).toBeUndefined();
 	});
 
 	// No heading: the box and its corner control are what say "notes", exactly as they do on the
@@ -1134,12 +1582,15 @@ describe("the Encounters tab: notes, used and delete", () => {
 	});
 
 	// Parked where core parks `<prose-mirror toggled>`'s own toggle, and revealed the same way.
-	it("parks one pencil in the box's corner, hidden until the block is hovered", () => {
-		expect(CARD_MARKUP.match(/stonetop-gm-encounter-notes-edit/g)).toHaveLength(1);
-		// LAST in the block, so it can sit over whichever of the two note blocks was drawn.
+	it("parks one pencil in the passage's corner, hidden until the block is hovered", () => {
+		// One per branch: the corner pencil over written notes, the "Add notes…" line in place of
+		// none. Never both on one card.
+		expect(CARD_MARKUP.match(/class="stonetop-gm-encounter-notes-edit[" ]/g)).toHaveLength(2);
 		const block = CARD_MARKUP.slice(CARD_MARKUP.indexOf("stonetop-gm-encounter-notes-block"));
-		expect(block.indexOf("stonetop-gm-encounter-notes-edit"))
-			.toBeGreaterThan(block.indexOf("notesEmpty"));
+		const written = block.slice(0, block.indexOf("{{else}}"));
+		// AFTER the passage it sits over.
+		expect(written.indexOf("stonetop-gm-encounter-notes-edit"))
+			.toBeGreaterThan(written.indexOf('class="stonetop-gm-encounter-notes"'));
 		expect(declarations(CSS, ".stonetop-gm-encounter-notes-block")).toMatch(/position:\s*relative/);
 		const pencil = declarations(CSS, ".stonetop-gm-encounter-notes-edit");
 		expect(pencil).toMatch(/position:\s*absolute/);
@@ -1153,10 +1604,12 @@ describe("the Encounters tab: notes, used and delete", () => {
 		expect(block).toContain("stonetop.gmToolkit.encounters.notesEdit");
 	});
 
-	// The box has to leave the corner control its room, or a long first line runs under it.
+	// The passage has to leave the corner control its room, or a long first line runs under it.
 	it("keeps the note's text clear of the corner control", () => {
-		expect(declarations(CSS, ".stonetop-gm-encounter-notes"))
-			.toMatch(/padding-right:\s*calc\(var\(--form-field-height/);
+		const pencil = Number(/width:\s*(\d+)px/.exec(declarations(CSS, ".stonetop-gm-encounter-notes-edit"))?.[1]);
+		const right = Number(/padding:\s*\d+(?:px)?\s+(\d+)px/.exec(declarations(CSS, ".stonetop-gm-encounter-notes"))?.[1]);
+		expect(pencil).toBeGreaterThanOrEqual(22);
+		expect(right).toBeGreaterThanOrEqual(pencil);
 	});
 
 	// NOT a live editor, whatever the box is borrowed from. This sheet re-renders on every prep
@@ -1178,17 +1631,28 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// both called "the bridge". The head of the note rides the row to tell them apart. Only
 	// while it is shut: open, the real note is two pixels below it.
 	it("rides the head of the note beside the name, and only while the row is shut", () => {
-		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{this\.notesPeek\}\}/);
+		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*><span class="stonetop-gm-encounter-peek-text">\{\{this\.notesPeek\}\}<\/span><\/span>/);
 		const peek = declarations(CSS, ".stonetop-gm-encounter-peek");
 		expect(peek).toMatch(/display:\s*none/);
 		expect(peek).toMatch(/white-space:\s*nowrap/);
 		expect(peek).toMatch(/text-overflow:\s*ellipsis/);
-		// NEITHER GROWS NOR SHRINKS, and is capped by a max-width instead. Core sizes a form input
-		// `width: 100%`, so the name beside this one is a flex item whose basis is the whole row,
-		// and every shrinkable item in the head gives up a proportional share of that overflow --
-		// which clipped a ten-word note with half the row still empty beside it.
+		// WITHOUT field-sizing it neither grows nor shrinks and is capped by a max-width. Core sizes
+		// a form input `width: 100%`, so the name beside it is a flex item whose basis is the whole
+		// row, and every shrinkable item in the head gives up a proportional share of that
+		// overflow -- which clipped a ten-word note with half the row still empty beside it.
 		expect(peek).toMatch(/flex:\s*0 0 auto/);
 		expect(peek).toMatch(/max-width:\s*\d+%/);
+		// WITH it, the name is as wide as its words and the peek takes the rest of the row.
+		expect(CSS).toMatch(/@supports \(field-sizing: content\)\s*\{[\s\S]*?\.stonetop-gm-encounter-peek\s*\{[^}]*flex:\s*1 1 0/);
+		// Squeezed to a sliver it hides its words rather than drawing one letter: the peek is a size
+		// container for them, inside that `@supports` only (a container's content does not size it,
+		// which would collapse the fallback's content-sized peek to nothing).
+		const sized = CSS.slice(CSS.indexOf("@supports (field-sizing: content)"));
+		expect(sized).toMatch(/\.stonetop-gm-encounter-peek\s*\{[^}]*container-type:\s*inline-size/);
+		expect(sized).toMatch(/@container \(max-width: \d+em\)\s*\{\s*\.stonetop-gm-encounter-peek-text\s*\{\s*visibility:\s*hidden/);
+		expect(CSS.slice(0, CSS.indexOf("@supports (field-sizing: content)")))
+			.not.toMatch(/\.stonetop-gm-encounter-peek\s*\{[^}]*container-type/);
+		expect(declarations(CSS, ".stonetop-gm-encounter-peek-text")).toMatch(/text-overflow:\s*ellipsis/);
 		expect(declarations(CSS, ".stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek"))
 			.toMatch(/display:\s*block/);
 	});
@@ -1561,29 +2025,100 @@ describe("the Encounters tab: deploying to the map", () => {
 		expect(warned.join(" ")).toContain("Rust-Hound");
 	});
 
-	// A block one grid square apart, centred on the view: a deploy is something you do to the bit
-	// of map in front of you.
-	it("clusters the tokens on distinct points around the view centre", async () => {
+	/**
+	 * A 40x40-square scene whose view is the whole window at 1:1 (so the view's middle is the window's),
+	 * holding whatever tokens are passed. Records drops and token moves.
+	 */
+	function sceneCanvas({ tokens = [], combats = [] } = {}) {
+		const placed = [];
+		const moved = [];
+		global.game.combats = combats;
+		globalThis.canvas = {
+			scene: {
+				id: "scene1",
+				grid: { size: 100, type: 1 },
+				tokens,
+				moveTokens: vi.fn(async plan => { for (const [id, m] of Object.entries(plan)) moved.push({ id, ...m.waypoints[0] }); }),
+			},
+			grid: { size: 100 },
+			stage: { pivot: { x: 2000, y: 2000 }, worldTransform: { applyInverse: p => ({ x: p.x, y: p.y }) } },
+			dimensions: { size: 100, rect: { x: 0, y: 0, width: 4000, height: 4000, contains: () => true } },
+			tokens: { _onDropActorData: vi.fn(async (ev, data) => { placed.push(data); return true; }) },
+		};
+		return { placed, moved };
+	}
+
+	const pc = (id, x, y) => ({ id, _source: { x, y, width: 1, height: 1 }, actor: { id: `a-${id}`, type: "character", uuid: `Actor.a-${id}` } });
+	const middle = () => (globalThis.innerWidth ?? 1920) / 2;
+
+	// The user's rule: the party on the left, what was deployed against them on the right.
+	it("puts the deployed monsters right of the view's middle, each on its own square", async () => {
 		const { host } = makeHost([{ id: "e1", name: "C", entries: [1, 2, 3, 4].map(n => (
 			{ id: `x${n}`, uuid: "Actor.a", type: "Actor", name: "A", note: "" }
 		)) }]);
-		const placed = fakeCanvas();
-		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A" }));
+		const { placed } = sceneCanvas();
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
 		await host._deployEncounter("e1");
-		const points = placed.map(p => `${p.x},${p.y}`);
-		expect(new Set(points).size).toBe(4);
-		// Centred: the mean of a symmetric block is the pivot it was built around.
-		expect(placed.reduce((s, p) => s + p.x, 0) / 4).toBe(1000);
-		expect(placed.reduce((s, p) => s + p.y, 0) / 4).toBe(1000);
+		expect(placed).toHaveLength(4);
+		expect(new Set(placed.map(p => `${p.x},${p.y}`)).size).toBe(4);
+		for (const p of placed) expect(p.x).toBeGreaterThan(middle());
 	});
 
-	// Core returns FALSE for a point outside the scene rect and places nothing, silently.
-	it("counts a point outside the scene rect as skipped rather than placed", () => {
-		globalThis.canvas = {
-			grid: { size: 100 }, stage: { pivot: { x: 0, y: 0 } },
-			dimensions: { rect: { contains: () => false } },
-		};
-		expect(clusterPoint(globalThis.canvas, 0, 1)).toBeNull();
+	it("lines the party's tokens up left of the view's middle, facing what was deployed", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		const { placed, moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500), pc("p2", 100, 100)] });
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
+		await host._deployEncounter("e1");
+		expect(moved.map(m => m.id).sort()).toEqual(["p1", "p2"]);
+		for (const m of moved) expect(m.x + 50).toBeLessThan(middle());
+		for (const m of moved) expect(m.x).toBeLessThan(placed[0].x);
+		// In the order they stood, top first.
+		expect(moved.find(m => m.id === "p2").y).toBeLessThan(moved.find(m => m.id === "p1").y);
+	});
+
+	// Moving someone out of a running fight would end whatever engagement they are in.
+	it("leaves anyone already in a fight on this map where they stand", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		const fight = { id: "c1", scene: { id: "scene1" }, flags: { "stonetop-pwd": { fight: true } }, combatants: [{ sceneId: "scene1", tokenId: "p1" }] };
+		const { moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500), pc("p2", 100, 100)], combats: [fight] });
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
+		await host._deployEncounter("e1");
+		expect(moved.map(m => m.id)).toEqual(["p2"]);
+	});
+
+	it("moves nobody when nothing was placed, or for a player", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		let { moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500)] });
+		globalThis.fromUuid = vi.fn(async () => null);
+		await host._deployEncounter("e1");
+		expect(moved).toEqual([]);
+
+		({ moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500)] }));
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
+		global.game.user.isGM = false;
+		await host._deployEncounter("e1");
+		expect(moved).toEqual([]);
+	});
+
+	// A follower in an encounter joins the party's column rather than the foes'.
+	it("puts a deployed follower on the party's side", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.f", type: "Actor", name: "Hound", note: "" },
+			{ id: "x2", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		const { placed } = sceneCanvas();
+		globalThis.fromUuid = vi.fn(async uuid => (uuid === "Actor.f"
+			? { documentName: "Actor", uuid, name: "Hound", type: "npc", flags: { "stonetop-pwd": { followerOrigin: { ftype: "crew" } } } }
+			: { documentName: "Actor", uuid, name: "A", type: "monster" }));
+		await host._deployEncounter("e1");
+		expect(placed[0].x).toBeLessThan(middle());
+		expect(placed[1].x).toBeGreaterThan(middle());
 	});
 
 	it("says so and places nothing when there is no scene", async () => {
@@ -1953,17 +2488,36 @@ describe("the Encounters tab: the Completed section", () => {
 	});
 
 	it("names the section and both directions of its one button in the language file", () => {
-		for (const key of ["completed", "completedNote", "emptyAllDone", "markUsed", "markUnused"]) {
+		for (const key of ["completed", "emptyAllDone", "markUsed", "markUnused"]) {
 			const full = `stonetop.gmToolkit.encounters.${key}`;
 			expect(game.i18n.localize(full)).not.toBe(full);
 		}
 		expect(game.i18n.localize("stonetop.gmToolkit.encounters.completed")).toBe("Completed");
+		// The heading's note is the COUNT now, so the old subtitle is gone from the file.
+		const full = "stonetop.gmToolkit.encounters.completedNote";
+		expect(game.i18n.localize(full)).toBe(full);
+	});
+
+	// AN EYEBROW, not a section title: capitals in the group lines' voice, the count in a pill as
+	// the heading's note, and the hairline after it, while keeping the class the fold wiring
+	// counts as a heading.
+	it("heads the fold with an eyebrow and its count", () => {
+		expect(TAB_MARKUP).toContain("note=stonetop.encounters.completed.length");
+		expect(TAB_MARKUP).toContain('headingClass="stonetop-move-group-title stonetop-gm-fold-eyebrow"');
+		const eyebrow = declarations(CSS, ".stonetop-move-group-title.stonetop-gm-fold-eyebrow");
+		expect(eyebrow).toMatch(/text-transform:\s*uppercase/);
+		expect(eyebrow).toMatch(/border:\s*0/);
+		expect(declarations(CSS, ".stonetop-move-group-title.stonetop-gm-fold-eyebrow::after")).toMatch(/height:\s*1px/);
+		expect(declarations(CSS, ".stonetop-gm-fold-eyebrow > .stonetop-section-note")).toMatch(/border-radius:\s*999px/);
 	});
 
 	// "Nothing gathered yet" is the wrong advice for a GM who has run everything they prepared:
 	// what they most likely want is the card two inches below, not a drag from the sidebar.
 	it("tells an emptied live list apart from an untouched one", () => {
-		expect(TAB_MARKUP).toMatch(/\{\{#if stonetop\.encounters\.completed\.length\}\}\{\{localize "stonetop\.gmToolkit\.encounters\.emptyAllDone"\}\}/);
+		// Run everything: a quiet line pointing at the fold.
+		expect(TAB_MARKUP).toMatch(/\{\{else if stonetop\.encounters\.completed\.length\}\}\s*<p class="stonetop-gm-encounter-empty">\{\{localize "stonetop\.gmToolkit\.encounters\.emptyAllDone"\}\}<\/p>/);
+		// Never had anything: the centred empty state, with its own heading and the add button.
+		expect(TAB_MARKUP).toMatch(/\{\{else\}\}\s*\{\{> "stonetop\.gm-prep-empty" view="encounters" kind="stonetop-gm-encounter"/);
 	});
 
 	// The pencil's `--reading` class sits on the <section> that wraps BOTH lists, so a delete
@@ -2023,27 +2577,47 @@ describe("the Encounters tab: the Completed section", () => {
 	it("takes the body button's shape and not the square tool's", () => {
 		expect(CSS).not.toMatch(/\.stonetop-gm-encounter-tools > button,[\s\S]{0,200}\.stonetop-gm-encounter-used[,{]/);
 		const shape = declarations(CSS, ".stonetop-gm-encounter-used");
-		expect(shape).toMatch(/align-self:\s*flex-start/);
-		// No `margin-top: auto` pretending to pin it: the body is a content-height column, so
-		// there is no free space for one to push into. The template's order is what puts it last.
+		// A quiet outlined button of its own words, every bit of core's chrome stated away.
+		expect(shape).toMatch(/width:\s*auto/);
+		expect(shape).toMatch(/height:\s*auto/);
+		expect(shape).toMatch(/border:\s*1px solid rgb\(var\(--st-ink-rgb\) \/ 0\.2\)/);
+		expect(shape).toMatch(/background:\s*transparent/);
+		expect(shape).toMatch(/box-shadow:\s*none/);
 		expect(shape).not.toMatch(/margin-top:\s*auto/);
-		// It no longer shares the notes pencil's rule: that one became an icon floating on the
-		// Notes heading, and this is the only labelled button in the body.
-		expect(shape).toMatch(/border:\s*1px solid var\(--st-card-rule\)/);
+		// Green on hover, the tick's colour, because pressing it files the card as done.
+		expect(declarations(CSS, ".stonetop-gm-encounter-used:hover")).toMatch(/color:\s*var\(--st-green-text\)/);
+	});
+
+	// The same foot on both cards: a hairline across the card and the actions at its right end.
+	it("sets the button in the card's foot, right-aligned under a hairline", () => {
+		expect(CARD_MARKUP).toMatch(/<div class="stonetop-gm-card-foot">\s*<button type="button" class="stonetop-gm-encounter-used"/);
+		const foot = declarations(CSS, ".stonetop-gm-card-foot");
+		expect(foot).toMatch(/justify-content:\s*flex-end/);
+		expect(foot).toMatch(/border-top:\s*1px solid var\(--st-prep-card-line\)/);
 	});
 
 	it("gives the filed card's arrow the neutral hover, after the tick's green", () => {
 		const undo = ".stonetop-gm-encounter.is-used .stonetop-gm-encounter-used:hover";
-		expect(declarations(CSS, undo)).toMatch(/color:\s*var\(--st-text-secondary\)/);
+		expect(declarations(CSS, undo)).toMatch(/background:\s*var\(--st-slate-hover-bg\)/);
+		expect(declarations(CSS, undo)).not.toMatch(/green/);
 		expect(CSS.indexOf(undo)).toBeGreaterThan(CSS.indexOf(".stonetop-gm-encounter-used:hover"));
 	});
 
-	// A rule across the column, not a box: everything inside it is already a bordered card, and a
-	// second border around a stack of them reads as a card of cards.
-	it("marks the boundary with a rule and clears it before the heading", () => {
+	// No rule across the pane and no box: the eyebrow's own hairline is the boundary, and the cards
+	// inside are already framed.
+	it("marks the boundary with the eyebrow's hairline, not a rule or a box", () => {
 		const box = declarations(CSS, ".stonetop-gm-encounters-completed");
-		expect(box).toMatch(/border-top:\s*1px solid var\(--st-card-rule\)/);
+		expect(box).not.toMatch(/border/);
 		expect(box).toMatch(/padding-top:/);
+	});
+
+	// A FILED CARD: the green edge, its head at about three quarters ink, and a check where the
+	// grip was until hovered (the grip stays the drag handle under it).
+	it("marks a filed card with a green edge, quieter ink and a check in the grip's place", () => {
+		expect(declarations(CSS, ".stonetop-gm-encounter.is-used")).toMatch(/--st-bundle-edge:\s*var\(--st-green-border\)/);
+		expect(CSS).toMatch(/\.stonetop-gm-encounter\.is-used :is\(\.stonetop-gm-encounter-name[^)]*\)\s*\{[^}]*opacity:\s*0\.75/);
+		expect(CARD_MARKUP).toMatch(/\{\{#if used\}\}<i class="fas fa-check stonetop-gm-encounter-done-mark" aria-hidden="true"><\/i>\{\{\/if\}\}/);
+		expect(declarations(CSS, ".stonetop-gm-encounter-done-mark")).toMatch(/display:\s*none/);
 	});
 });
 
@@ -2112,6 +2686,92 @@ describe("the Encounters tab: deploy and fight", () => {
 		expect(openStart).toHaveBeenCalledWith({ preselect: ["t0", "t1"], preselectPcs: true, forceFoes: ["t0"] });
 	});
 
+	// A fight already going on this map used to send the press straight to "Add to the fight" with
+	// nothing saying why, which read as a button that did nothing. Now it asks first.
+	describe("with a fight already going on this map", () => {
+		const running = () => ({
+			id: "c1", scene: { id: "scene1" }, flags: { "stonetop-pwd": { fight: true } }, combatants: [],
+			delete: vi.fn(async () => {}),
+		});
+		const setUp = fight => {
+			const { host } = makeHost(oneMonster());
+			const tokens = tokenCanvas();
+			global.game = { ...global.game, combats: [fight], stonetop: { fight: { openStart: vi.fn(async () => "opened") } } };
+			globalThis.fromUuid = vi.fn(async uuid => ({ documentName: "Actor", uuid, name: uuid }));
+			return { host, tokens, openStart: global.game.stonetop.fight.openStart };
+		};
+
+		it("asks before placing anything, naming the encounter", async () => {
+			const fight = running();
+			const { host, tokens } = setUp(fight);
+			const ask = vi.fn(async () => { expect(tokens).toHaveLength(0); return null; });
+			await deployAndFight(host._encounters, "e1", { ask });
+			expect(ask).toHaveBeenCalledWith("Crypt");
+		});
+
+		it("ends that fight and starts a new one when asked to", async () => {
+			const fight = running();
+			const { host, openStart } = setUp(fight);
+			expect(await deployAndFight(host._encounters, "e1", { ask: async () => "end" })).toBe("opened");
+			expect(fight.delete).toHaveBeenCalled();
+			expect(openStart.mock.calls[0][0]).not.toHaveProperty("combat");
+		});
+
+		// Ending it used to come first, so a deploy that then found nothing to place had ended the
+		// table's fight for nothing.
+		it("leaves that fight alone when Deploy finds nothing to place", async () => {
+			const fight = running();
+			const { host, tokens, openStart } = setUp(fight);
+			globalThis.fromUuid = vi.fn(async () => null);
+			expect(await deployAndFight(host._encounters, "e1", { ask: async () => "end" })).toBeNull();
+			expect(fight.delete).not.toHaveBeenCalled();
+			expect(tokens).toHaveLength(0);
+			expect(openStart).not.toHaveBeenCalled();
+		});
+
+		it("ends that fight before anything is placed, so the new one is laid out on a clear map", async () => {
+			const fight = running();
+			const { host, tokens } = setUp(fight);
+			fight.delete = vi.fn(async () => { expect(tokens).toHaveLength(0); });
+			await deployAndFight(host._encounters, "e1", { ask: async () => "end" });
+			expect(fight.delete).toHaveBeenCalledTimes(1);
+			expect(tokens).toHaveLength(2);
+		});
+
+		it("adds the encounter to that fight when asked to", async () => {
+			const fight = running();
+			const { host, openStart } = setUp(fight);
+			await deployAndFight(host._encounters, "e1", { ask: async () => "add" });
+			expect(fight.delete).not.toHaveBeenCalled();
+			expect(openStart.mock.calls[0][0]).toMatchObject({ combat: fight, preselect: ["t0", "t1"] });
+		});
+
+		it("places nothing and opens nothing when the GM keeps things as they are", async () => {
+			const fight = running();
+			const { host, tokens, openStart } = setUp(fight);
+			expect(await deployAndFight(host._encounters, "e1", { ask: async () => null })).toBeNull();
+			expect(tokens).toHaveLength(0);
+			expect(fight.delete).not.toHaveBeenCalled();
+			expect(openStart).not.toHaveBeenCalled();
+		});
+
+		it("asks with buttons that say what they do, Enter on the one that changes nothing", () => {
+			expect(TAB_JS).toMatch(/defaultKey:\s*"keep"/);
+			const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit.encounters.fightRunning;
+			expect(en.end).toMatch(/End/);
+			expect(en.add).toMatch(/Add/);
+			expect(en.body).toContain("{name}");
+			// Ending moves the party (deploy-layout.js lines up anyone no longer in a fight), so the
+			// question cannot borrow the Fight tab's End body, which says tokens stay where they are.
+			expect(en.endBody).toContain("{name}");
+			expect(en.endBody).not.toMatch(/stay where they are/i);
+			expect(TAB_JS).toContain("fightRunning.endBody");
+			expect(TAB_JS).not.toContain('"stonetop.fight.end.body"');
+			// It ends the fight for every player: the destructive skin.
+			expect(TAB_JS).toMatch(/key:\s*"end"[^\n]*className:\s*"stonetop-dialog-btn--danger"/);
+		});
+	});
+
 	it("opens nothing when Deploy placed nothing", async () => {
 		const { host } = makeHost(oneMonster());
 		tokenCanvas({ returns: "nothing" });
@@ -2140,15 +2800,23 @@ describe("the Encounters tab: deploy and fight", () => {
 		expect(await canFight({ on: true, gm: false })).toBe(false);
 	});
 
-	it("draws the button beside Deploy, before the count, with a label a screen reader says", () => {
+	it("draws the button after Deploy, at the end of the eyebrow, with words a screen reader says", () => {
 		const head = CARD_MARKUP.slice(
 			CARD_MARKUP.indexOf("stonetop-gm-entry-card-head"),
 			CARD_MARKUP.indexOf("stonetop-gm-encounter-entries"));
 		expect(head).toMatch(/\{\{#if canFight\}\}\s*<button type="button" class="stonetop-gm-encounter-fight"/);
+		expect(head.indexOf("stonetop-gm-entry-card-count")).toBeLessThan(head.indexOf("stonetop-gm-encounter-deploy"));
 		expect(head.indexOf("stonetop-gm-encounter-deploy")).toBeLessThan(head.indexOf("stonetop-gm-encounter-fight"));
-		expect(head.indexOf("stonetop-gm-encounter-fight")).toBeLessThan(head.indexOf("stonetop-gm-entry-card-count"));
-		expect(head).toContain('aria-label="{{localize "stonetop.gmToolkit.encounters.deployAndFight"}}"');
+		// Its accessible name is its visible label now ("Deploy & fight"); the long form is the tooltip.
+		const fight = head.slice(head.indexOf('class="stonetop-gm-encounter-fight"'));
+		const inner = fight.slice(0, fight.indexOf("</button>"));
+		expect(inner).toContain('data-tooltip="{{localize "stonetop.gmToolkit.encounters.deployAndFight"}}"');
+		expect(inner).toContain('{{localize "stonetop.gmToolkit.encounters.deployAndFightShort"}}');
+		expect(inner).not.toContain("aria-label");
+		// Core's own combat glyph, which the Fight tab wears (Font Awesome Pro).
+		expect(inner).toContain('<i class="fas fa-swords" aria-hidden="true"></i>');
 		expect(CARD_MARKUP.match(/class="stonetop-gm-encounter-deploy"/g)).toHaveLength(1);
-		expect(declarations(CSS, ".stonetop-gm-entry-card-head > .stonetop-gm-encounter-fight")).toMatch(/width:\s*22px/);
+		// The same pill as Deploy: one rule, so the pair cannot drift apart.
+		expect(CSS).toMatch(/\.stonetop-gm-entry-card-head > \.stonetop-gm-encounter-deploy,\s*\.stonetop-gm-entry-card-head > \.stonetop-gm-encounter-fight\s*\{/);
 	});
 });

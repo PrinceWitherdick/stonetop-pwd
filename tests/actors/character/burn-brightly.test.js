@@ -3,7 +3,7 @@ import { burnBrightlyAffordable, burnBrightlyTooltipKey, burnsBrightlyDriven, BU
 import { adjustXp } from "../../../module/utils/xp.js";
 
 // Burn Brightly: "When you have enough XP to Level Up, you may spend 2 XP after any roll you make to add +1".
-// The Would-Be Hero's Driven: "You always have the option to Burn Brightly; you can spend 2 XP after you roll to
+// The Would-Be Hero's Driven: "You always have the option of Burning Brightly; you can spend 2 XP after you roll to
 // add +1, even if you don't have enough XP to level."
 
 const SCOPE = "stonetop-pwd";

@@ -35,6 +35,15 @@ describe("altStatGrantsFor", () => {
 		expect(altStatGrantsFor({ moveName: "Know Things", defaultStat: "int" }, NATURAL)).toEqual([]);
 	});
 
+	// Wild Speech (Book I p.131): "When you Persuade a beast, you can choose to roll +WIS". A beast is an NPC, so
+	// the NPC Persuade only, and only learned (playbook audit RAN-L2, 2026-11-22).
+	it("grants Wild Speech's +WIS on Persuade (vs. NPCs) only, and only learned", () => {
+		const npcs = { moveName: "Persuade (vs. NPCs)", defaultStat: "cha" };
+		expect(altStatGrantsFor(npcs, { learnedMoveNames: ["Wild Speech"] }).map(g => g.altStat)).toEqual(["wis"]);
+		expect(altStatGrantsFor({ moveName: "Persuade (vs. PCs)", defaultStat: "cha" }, { learnedMoveNames: ["Wild Speech"] })).toEqual([]);
+		expect(altStatGrantsFor(npcs, { learnedMoveNames: [] })).toEqual([]);
+	});
+
 	it("never lets a background row answer for a move name that is missing", () => {
 		expect(altStatGrantForMove(undefined)).toBeNull();
 		expect(altStatGrantForMove("Skill at Arms")?.altStat).toBe("dex");

@@ -36,7 +36,7 @@
 {{#each this.exits}}
 <span style="left:{{this.left}}%;top:{{this.top}}%"
       class="stonetop-journey-pick stonetop-journey-exit h-{{this.anchorH}} v-{{this.anchorV}}{{#if this.isStop}} is-stop{{/if}}{{#if this.isChosen}} is-chosen{{/if}}">
-  <span class="stonetop-journey-arrow"><i class="fas fa-angles-right"></i></span>
+  <span class="stonetop-journey-arrow"><i class="fas fa-angles-right" aria-hidden="true"></i></span>
   <span class="stonetop-journey-tag">{{this.label}}</span>
 </span>
 {{/each}}

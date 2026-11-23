@@ -35,5 +35,5 @@
   <ul class="stonetop-cs-hint-list">{{#each kinds}}<li>{{this}}</li>{{/each}}</ul>
   {{/if}}
   {{> @partial-block}}
-  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{this.list}}"{{#if menu}} aria-haspopup="menu" aria-expanded="false"{{/if}}><i class="fas fa-plus"></i> {{this.addLabel}}</button>
+  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{this.list}}"{{#if menu}} aria-haspopup="menu" aria-expanded="false"{{/if}}><i class="fas fa-plus" aria-hidden="true"></i> {{this.addLabel}}</button>
 </div>

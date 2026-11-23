@@ -11,6 +11,7 @@ import { JOURNAL_PACK } from "../system-id.js";
 import { ensurePackIndex } from "../utils/pack-index.js";
 import { getHoverDescriptionSetting } from "../settings.js";
 import { restrictContentLinks } from "../journal/restrict-content-links.js";
+import { setTooltip } from "../utils/set-tooltip.js";
 
 // Where the resolved summary is recorded regardless of the hover setting. The hover
 // itself is `data-tooltip`, which we only stamp when the user wants hovers; but
@@ -89,10 +90,9 @@ export async function applyLocationTooltips(root) {
 		const summary = map.get(a.dataset.uuid);
 		if (!summary) continue;
 		a.dataset[SUMMARY_DATA_KEY] = summary;
-		if (showHover) a.dataset.tooltip = summary;
 		// Re-runs are idempotent, and the setting can flip between them (the menu
 		// re-renders sheets), so clear a tooltip left by an earlier pass.
-		else delete a.dataset.tooltip;
+		setTooltip(a, showHover ? summary : "");
 	}
 }
 

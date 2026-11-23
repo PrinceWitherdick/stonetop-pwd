@@ -17,7 +17,7 @@
 
 import { getLedgerEntries } from "../utils/ledger-core.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { format } from "../utils/i18n.js";
 import { warn } from "../utils/logger.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -86,7 +86,7 @@ export function levelUpMilestone(level, extra = {}) {
  * @returns {Promise<number>} How many level-ups were offered to the timeline.
  */
 export async function backfillLevelUpsOnce() {
-	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	if (!isActingPrimaryGM()) return 0;
 	const journal = findTimelineJournal();
 	if (!journal || journal.getFlag?.(SYSTEM_ID, BACKFILL_FLAG)) return 0;
 

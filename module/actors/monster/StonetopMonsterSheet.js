@@ -1,5 +1,5 @@
 import { CREATURE_TYPE_CHOICES, creatureTypeIcon, creatureTypeLabel } from "../../bestiary/creature-types.js";
-import { askWithButtons, confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { HP_MODIFIERS, ORGANIZATIONS, SIZES, rederiveMonsterHp } from "../../data/monster-builder.js";
 import { hasText } from "../bestiary/codex.js";
 import { rollDamageAt } from "../../combat/attack-flow.js";
@@ -7,7 +7,9 @@ import { damageBlows } from "../../utils/damage.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle } from "../../utils/sheet-chrome.js";
 import { capitalizeFirst, escHtml, isDefaultImg } from "../../utils/strings.js";
 import { headerPortraitContext, wirePortraitPopout } from "../../utils/actor-portrait-picker.js";
-import { updateRichTextField, updateMoveField } from "../../utils/stat-block-edit.js";
+import {
+	updateRichTextField, updateMoveField, itemFromRow, confirmDeleteMove, wireStatBlockInlineEdits,
+} from "../../utils/stat-block-edit.js";
 import { findMonsterTag } from "../../data/monster-tags.js";
 import { getHoverDescriptionSetting, getOpenSheetsInEditMode, isFightTabEnabled } from "../../settings.js";
 import { parseArmorBoost, armorBoostLabel } from "../../utils/monster-armor-boost.js";
@@ -35,10 +37,6 @@ const MONSTER_RICH_TEXT_FIELDS = [
 	{ key: "qualities", enrichedKey: "enrichedQualities" },
 	{ key: "notes",     enrichedKey: "enrichedNotes" },
 ];
-
-// The only fields an inline stat-block edit may write to a monsterMove item (its
-// name and its two schema fields), so a stray data-field can't write anywhere else.
-const MONSTER_MOVE_EDITABLE_FIELDS = new Set(["name", "system.description", "system.rollFormula"]);
 
 function _normalizeTag(value) {
 	return String(value ?? "").trim().toLocaleLowerCase();
@@ -425,9 +423,8 @@ export function createStonetopMonsterSheetClass(Base) {
 			st.headerImg    = st.editMode ? this.actor.img : st.displayImg;
 			st.showPortrait = st.editMode || st.hasPortrait;
 
-			for (const field of MONSTER_RICH_TEXT_FIELDS) {
-				st[field.enrichedKey] = await enrichHTML(system?.[field.key]);
-			}
+			const enrichedFields = await Promise.all(MONSTER_RICH_TEXT_FIELDS.map(field => enrichHTML(system?.[field.key])));
+			MONSTER_RICH_TEXT_FIELDS.forEach((field, i) => { st[field.enrichedKey] = enrichedFields[i]; });
 
 			// Empty rich text round-trips through ProseMirror as "<p></p>" etc.,
 			// so check for actual text/embeds rather than a truthy string.
@@ -634,14 +631,11 @@ export function createStonetopMonsterSheetClass(Base) {
 					});
 
 				} else if (ev.target.closest(".stonetop-monster-move-roll")) {
-					const li   = ev.target.closest("[data-item-id]");
-					const item = this.actor.items.get(li?.dataset?.itemId);
 					// Shift skips the damage window a rolling move opens, as it does on the Damage line.
-					await item?.roll({ shiftKey: ev.shiftKey });
+					await itemFromRow(this, ev)?.roll({ shiftKey: ev.shiftKey });
 
 				} else if (!this._editMode && ev.target.closest(".stonetop-monster-move-name")) {
-					const li   = ev.target.closest("[data-item-id]");
-					const item = this.actor.items.get(li?.dataset?.itemId);
+					const item = itemFromRow(this, ev);
 					if (!item) return;
 					// A move that bakes an Armor value into its name ("…(Armor 5)")
 					// toggles that boost instead of posting to chat — provided the
@@ -679,17 +673,9 @@ export function createStonetopMonsterSheetClass(Base) {
 
 				} else if (ev.target.closest(".stonetop-monster-delete-move")) {
 					if (!this._editMode) return;
-					const li   = ev.target.closest("[data-item-id]");
-					const item = this.actor.items.get(li?.dataset?.itemId);
+					const item = itemFromRow(this, ev);
 					if (!item) return;
-					const confirmed = await confirmOutcome({
-						title:   "Delete Move",
-						// Escaped: a move name is user text, and this is HTML.
-						content: `<p>Delete <strong>${escHtml(item.name)}</strong>?</p>`,
-						yes:     { label: "Delete the move", icon: "fa-trash" },
-						no:      { label: "Keep it" },
-					});
-					if (!confirmed) return;
+					if (!await confirmDeleteMove(item)) return;
 					// If the move being deleted is the live armor boost, revert it first
 					// so its Armor value isn't stranded on the stat block once it's gone.
 					if (this.actor.flags?.[SYSTEM_ID]?.armorBoost?.moveId === item.id) {
@@ -703,26 +689,8 @@ export function createStonetopMonsterSheetClass(Base) {
 				}
 			});
 
-			html[0].addEventListener("change", async ev => {
-				// Inline move edits (embedded monsterMove items): the name, roll formula,
-				// and description each carry data-field and persist straight to the item.
-				// Checked before the rich-text branch since the description editor also
-				// carries the shared .stonetop-monster-rich-editor class.
-				const moveField = ev.target.closest(".stonetop-monster-move-field");
-				if (moveField) {
-					if (!this._editMode) return;
-					const li = ev.target.closest("[data-item-id]");
-					await this._updateMoveField(li?.dataset?.itemId, moveField.dataset?.field, moveField.value);
-					return;
-				}
-
-				const editor = ev.target.closest(".stonetop-monster-rich-editor");
-				if (!editor) return;
-				// Notes stays editable in play mode; the other rich fields only in edit mode.
-				if (editor.dataset?.field === "notes" || this._editMode) {
-					await this._updateRichTextField(editor.dataset?.field, editor.value);
-				}
-			});
+			// Inline move and rich-text edits (embedded monsterMove items, Qualities, Notes).
+			wireStatBlockInlineEdits(this, html[0], "stonetop-monster");
 		}
 
 		/**
@@ -790,7 +758,7 @@ export function createStonetopMonsterSheetClass(Base) {
 
 			if (current?.moveId === item.id) {
 				const base = current.baseValue ?? baseArmor;
-				const [boostKey, boostVal] = deletionEntry("flags.stonetop-pwd.armorBoost");
+				const [boostKey, boostVal] = deletionEntry(`flags.${SYSTEM_ID}.armorBoost`);
 				await this.actor.update({
 					"system.attributes.armor.value": base,
 					[boostKey]: boostVal,
@@ -805,7 +773,7 @@ export function createStonetopMonsterSheetClass(Base) {
 			const baseValue = current ? current.baseValue : baseArmor;
 			await this.actor.update({
 				"system.attributes.armor.value": value,
-				"flags.stonetop-pwd.armorBoost": { moveId: item.id, value, baseValue, label },
+				[`flags.${SYSTEM_ID}.armorBoost`]: { moveId: item.id, value, baseValue, label },
 			});
 			this._postArmorBoostNote(label, baseArmor, value, true);
 		}
@@ -841,7 +809,7 @@ export function createStonetopMonsterSheetClass(Base) {
 		 * @param {string} value   the new value
 		 */
 		async _updateMoveField(itemId, field, value) {
-			return updateMoveField(this, MONSTER_MOVE_EDITABLE_FIELDS, itemId, field, value);
+			return updateMoveField(this, itemId, field, value);
 		}
 	};
 }

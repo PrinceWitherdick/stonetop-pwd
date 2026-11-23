@@ -18,7 +18,7 @@
 
 import { fillFollowerSlug, followerDetailBase, followerDetailFlags, FOLLOWER_FLAGS } from "./follower-roster.js";
 import { stripHtmlToText } from "../../utils/strings.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 import { crewSuppliesHeld, crewSuppliesLeaving } from "./supply-cost.js";
 import { countOf } from "../../utils/plural.js";
 

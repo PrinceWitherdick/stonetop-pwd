@@ -36,9 +36,9 @@ export const STEADING_MISS_XP_ACTION = "steadingMissXp";
 export function steadingMissXpButtons() {
 	return `<div class="card-buttons stonetop-roll-actions stonetop-steading-miss-xp-row">`
 		+ `<button type="button" class="stonetop-steading-miss-xp" data-steading-xp="mine" data-tooltip="${escHtml(localize(`${KEY}.buttonTooltip`))}" data-tooltip-direction="UP">`
-		+ `<i class="fas fa-star"></i> ${escHtml(localize(`${KEY}.button`))}</button>`
+		+ `<i class="fas fa-star" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.button`))}</button>`
 		+ `<button type="button" class="stonetop-steading-miss-xp" data-steading-xp="pick" data-tooltip="${escHtml(localize(`${KEY}.pickTooltip`))}" data-tooltip-direction="UP">`
-		+ `<i class="fas fa-user"></i> ${escHtml(localize(`${KEY}.pick`))}</button>`
+		+ `<i class="fas fa-user" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.pick`))}</button>`
 		+ `</div>`;
 }
 

@@ -17,7 +17,7 @@
 // fighters' own footprint, so a line-up tidies them up in place instead of marching everybody across
 // the map; lining up against the scene's own left and right edges would put the two sides a map
 // apart. Only when nobody stands on the map yet (a fight's arrivals) is it centred on the view, as
-// token-drop.js#clusterPoint centres a deploy. The view still sets how tall a column may grow and
+// deploy-layout.js centres a deploy. The view still sets how tall a column may grow and
 // how wide a row of scrums. Pressing it twice moves nobody the second time.
 //
 // NOBODY NEW STARTS ENGAGED. The scrums stand `gap` whole squares apart from each other and from

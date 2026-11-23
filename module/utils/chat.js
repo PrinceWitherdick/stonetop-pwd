@@ -264,7 +264,7 @@ export function springRollCardBody(total, tier, label, line, formula, dieFaces =
 export function rollKindBadge(label, icon, kind = "damage") {
 	// The label is its own element so the chip can trim it to its capitals and centre them; a bare
 	// text node in the flex badge cannot be trimmed (see .stonetop-chip-text in stonetop.css).
-	return `<span class="stonetop-roll-card-badge stonetop-roll-card-badge--${escHtml(kind)}"><i class="fas ${escHtml(icon)}"></i> <span class="stonetop-chip-text">${escHtml(label)}</span></span>`;
+	return `<span class="stonetop-roll-card-badge stonetop-roll-card-badge--${escHtml(kind)}"><i class="fas ${escHtml(icon)}" aria-hidden="true"></i> <span class="stonetop-chip-text">${escHtml(label)}</span></span>`;
 }
 
 /** The "Damage" title badge — the one indicator shared by every damage-roll card. */
@@ -409,7 +409,7 @@ export function cardNoticeHtml({ className, icon, title, lead = "", items = [] }
 	if (!items.length) return "";
 	const leadHtml = lead ? `<p class="stonetop-card-notice-lead">${escHtml(lead)}</p>` : "";
 	return `<div class="row row--border stonetop-card-notice ${className}">
-		<h3 class="cell__subtitle"><i class="fas ${icon}"></i> ${title}</h3>
+		<h3 class="cell__subtitle"><i class="fas ${icon}" aria-hidden="true"></i> ${title}</h3>
 		${leadHtml}<ul>${items.join("")}</ul>
 	</div>`;
 }

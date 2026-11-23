@@ -64,11 +64,14 @@
 			{{> "stonetop.tab-rail-item" tab="homefront"   label=(localize "stonetop.gmToolkit.tabs.homefront")}}
 			{{> "stonetop.tab-rail-item" tab="moves"       label=(localize "stonetop.gmToolkit.tabs.moves")}}
 			{{> "stonetop.tab-rail-item" tab="threats"     label=(localize "stonetop.gmToolkit.tabs.threats")}}
-			{{!-- Expeditions follows Encounters: they are the same card, and the book's own prep
-			      list for a trip (p.340) ends by telling you to prepare seven encounters. It carries
-			      Sites as a section at its foot, which is why there is no Sites button here. --}}
-			{{> "stonetop.tab-rail-item" tab="encounters"  label=(localize "stonetop.gmToolkit.tabs.encounters")}}
-			{{> "stonetop.tab-rail-item" tab="expeditions" label=(localize "stonetop.gmToolkit.tabs.expeditions")}}
+			{{!-- ONE button for all the prep a GM gathers ahead of the night: Encounters,
+			      Expeditions and Sites, chosen between by a switcher at the top of the tab
+			      (gm-toolkit-tab-prep.hbs) rather than by three buttons here. Encounters and
+			      Expeditions are the same card, the book's own prep list for a trip (p.340) ends by
+			      telling you to prepare seven encounters, and a site is what a trip is for — three
+			      rail buttons spent the rail on a distinction the cards already draw. Straight after
+			      Threats, the other half of "what is waiting out there". --}}
+			{{> "stonetop.tab-rail-item" tab="prep"        label=(localize "stonetop.gmToolkit.tabs.prep")}}
 			{{> "stonetop.tab-rail-item" tab="wonder"      label=(localize "stonetop.gmToolkit.tabs.wonder")}}
 			{{> "stonetop.tab-rail-item" tab="loop"        label=(localize "stonetop.gmToolkit.tabs.loop")}}
 			{{!-- Last, and deliberately, exactly as on the character sheet: it is the only tab here
@@ -88,8 +91,7 @@
 				{{> "stonetop.gm-toolkit-tab-homefront"}}
 				{{> "stonetop.gm-toolkit-tab-moves"}}
 				{{> "stonetop.gm-toolkit-tab-threats"}}
-				{{> "stonetop.gm-toolkit-tab-encounters"}}
-				{{> "stonetop.gm-toolkit-tab-expeditions"}}
+				{{> "stonetop.gm-toolkit-tab-prep"}}
 				{{> "stonetop.gm-toolkit-tab-wonder"}}
 				{{> "stonetop.gm-toolkit-tab-loop"}}
 				{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}

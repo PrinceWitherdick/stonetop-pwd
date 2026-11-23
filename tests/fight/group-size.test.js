@@ -1,5 +1,9 @@
+// @vitest-environment happy-dom
 import { describe, it, expect, vi } from "vitest";
-import { askGroupSize, groupSizeQuestion, groupSizeQuestions, groupSizeWindow, numberedNames, spotsAround, SCALE_FIELD } from "../../module/fight/group-size.js";
+import {
+	askGroupSize, answerFrom, countLabel, groupSizeQuestion, groupSizeQuestions, groupSizeWindow, numberedNames, spotsAround, typedSize,
+	COUNT_FIELD, OTHER_FIELD, SCALE_FIELD,
+} from "../../module/fight/group-size.js";
 import { GRID } from "../fakes/fight.js";
 
 // How many of a monster that comes in numbers join a fight.
@@ -8,16 +12,16 @@ const sq = (col, row) => ({ x: col * GRID, y: row * GRID, w: GRID, h: GRID });
 
 describe("groupSizeQuestion", () => {
 	it("offers a group 2 to 5 and a horde 6 to 12, with the stat block's count as the usual", () => {
-		expect(groupSizeQuestion({ organization: "group", count: 3 })).toEqual({ organization: "group", sizes: [2, 3, 4, 5], usual: 3 });
-		expect(groupSizeQuestion({ organization: "horde", count: 6 })).toEqual({ organization: "horde", sizes: [6, 8, 10, 12], usual: 6 });
+		expect(groupSizeQuestion({ organization: "group", count: 3 })).toEqual({ organization: "group", sizes: [2, 3, 4, 5], usual: 3, fromSheet: true });
+		expect(groupSizeQuestion({ organization: "horde", count: 6 })).toEqual({ organization: "horde", sizes: [6, 8, 10, 12], usual: 6, fromSheet: true });
 	});
 
 	it("adds a stat block's own count when the usual sizes leave it out", () => {
-		expect(groupSizeQuestion({ organization: "horde", count: 20 })).toEqual({ organization: "horde", sizes: [6, 8, 10, 12, 20], usual: 20 });
+		expect(groupSizeQuestion({ organization: "horde", count: 20 })).toEqual({ organization: "horde", sizes: [6, 8, 10, 12, 20], usual: 20, fromSheet: true });
 	});
 
 	it("takes the smallest size as the usual when no count was recorded", () => {
-		expect(groupSizeQuestion({ organization: "Horde", count: 0 }).usual).toBe(6);
+		expect(groupSizeQuestion({ organization: "Horde", count: 0 })).toMatchObject({ usual: 6, fromSheet: false });
 	});
 
 	it("asks nothing about a solitary monster, one whose stat block says 1, or one fought as a single group token", () => {
@@ -114,21 +118,36 @@ describe("numberedNames", () => {
 });
 
 describe("the group size window", () => {
-	const question = { name: "Crinwin", organization: "horde", sizes: [6, 8, 10, 12], usual: 6 };
+	const question = { name: "Crinwin", organization: "horde", sizes: [6, 8, 10, 12], usual: 6, fromSheet: true };
 
-	it("offers Just one first, then each size, with the usual size as the default", () => {
+	it("asks how many on a strip of sizes, the usual one chosen, with a box for any other", () => {
 		const view = groupSizeWindow(question);
 		expect(view.title).toBe("Crinwin: how many?");
-		expect(view.buttons.map(b => b.label)).toEqual(["Just one", "6", "8", "10", "12"]);
-		expect(view.buttons.filter(b => b.default).map(b => b.label)).toEqual(["6"]);
-		expect(view.content).toContain("Crinwin is a horde monster, found 6 or more at a time. Its stat block says 6.");
+		expect(view.content).toContain("Crinwin is a horde monster, found 6 or more at a time. Its sheet");
+		expect(view.content).toContain("group size is 6.");
+		const sizes = [...view.content.matchAll(new RegExp(`name="${COUNT_FIELD}" value="(\\d+)"( checked)?`, "g"))];
+		expect(sizes.map(m => [Number(m[1]), !!m[2]])).toEqual([[6, true], [8, false], [10, false], [12, false]]);
+		expect(view.content).toMatch(new RegExp(`type="number" name="${OTHER_FIELD}" min="2" max="99"`));
 	});
 
-	it("offers both scales, a token each chosen, and one group token beside it", () => {
-		const { content } = groupSizeWindow(question);
-		expect(content).toMatch(new RegExp(`name="${SCALE_FIELD}" value="tokens" checked`));
-		expect(content).toMatch(new RegExp(`name="${SCALE_FIELD}" value="group">`));
-		expect(content).toContain("One token for the whole group");
+	it("leaves out the sheet's size when the sheet records none", () => {
+		expect(groupSizeWindow({ ...question, fromSheet: false }).content).not.toContain("group size is");
+	});
+
+	it("names the outcome on its buttons: the count first (the default), then Just one", () => {
+		const view = groupSizeWindow(question);
+		expect(view.buttons.map(b => [b.action, b.label, b.default])).toEqual([["count", "6 tokens", true], ["one", "Just one", false]]);
+	});
+
+	it("offers one group token only when the heroes bring a group (p.416), and says why otherwise", () => {
+		// "If the PCs have a group of followers... If the group deals damage to another group".
+		const alone = groupSizeWindow(question).content;
+		expect(alone).not.toContain(SCALE_FIELD);
+		expect(alone).toContain("offered when the heroes have a group of followers");
+		const crew = groupSizeWindow({ ...question, offerGroup: true }).content;
+		expect(crew).toMatch(new RegExp(`name="${SCALE_FIELD}" value="tokens" checked`));
+		expect(crew).toMatch(new RegExp(`name="${SCALE_FIELD}" value="group">`));
+		expect(crew).toContain("One token for the whole group");
 	});
 
 	it("escapes the monster's name", () => {
@@ -136,30 +155,127 @@ describe("the group size window", () => {
 	});
 });
 
-describe("askGroupSize", () => {
-	const question = { name: "Crinwin", organization: "horde", sizes: [6, 8, 10, 12], usual: 6 };
-	const document = { createElement: () => ({ innerHTML: "" }) };
-	/** A DialogV2 that presses the button with `action`, the scale radio reading `scale`. */
-	const pressing = (action, scale) => ({
-		wait: vi.fn(async config => {
-			const button = config.buttons.find(b => b.action === action);
-			const form = { elements: { namedItem: name => (name === SCALE_FIELD ? { value: scale } : null) } };
-			return button.callback({}, { form });
-		}),
+describe("reading the answer", () => {
+	const fields = values => name => values[name] ?? null;
+
+	it("takes a whole number from 2 to 99, and nothing else, as a size", () => {
+		expect([typedSize("20"), typedSize(" 7 "), typedSize("2"), typedSize("99")]).toEqual([20, 7, 2, 99]);
+		expect(["", "1", "0", "100", "6.5", "-3", null].map(typedSize)).toEqual([null, null, null, null, null, null, null]);
 	});
 
-	it("answers the size pressed and the scale chosen, in a themed window with an element for content", async () => {
-		const DialogV2 = pressing("size-8", "group");
-		expect(await askGroupSize(question, { DialogV2, document })).toEqual({ size: 8, asGroup: true });
+	it("lets the box win over the strip, and falls back to the usual size", () => {
+		// p.416's own horde is 20 crinwin, past every size on the strip.
+		expect(answerFrom(fields({ [COUNT_FIELD]: "8", [OTHER_FIELD]: "20" }), { usual: 6 }).size).toBe(20);
+		expect(answerFrom(fields({ [COUNT_FIELD]: "8", [OTHER_FIELD]: "1" }), { usual: 6 }).size).toBe(8);
+		expect(answerFrom(fields({ [OTHER_FIELD]: "" }), { usual: 6 }).size).toBe(6);
+	});
+
+	it("counts the group scale only where it was offered", () => {
+		const group = fields({ [COUNT_FIELD]: "8", [SCALE_FIELD]: "group" });
+		expect(answerFrom(group, { usual: 6, offerGroup: true })).toEqual({ size: 8, asGroup: true });
+		expect(answerFrom(group, { usual: 6, offerGroup: false })).toEqual({ size: 8, asGroup: false });
+	});
+
+	it("words the count button for either scale", () => {
+		expect(countLabel({ size: 8 })).toBe("8 tokens");
+		expect(countLabel({ size: 8, asGroup: true })).toBe("1 group token of 8");
+	});
+});
+
+describe("askGroupSize", () => {
+	const question = { name: "Crinwin", organization: "horde", sizes: [6, 8, 10, 12], usual: 6, fromSheet: true };
+
+	/**
+	 * A DialogV2 that renders the window into a real form with a footer, runs its render hook, lets
+	 * `act` work the fields, then presses the button with `action`.
+	 */
+	const working = (action, act = () => {}) => ({
+		wait: vi.fn(async config => {
+			const root = document.createElement("div");
+			const form = document.createElement("form");
+			form.append(config.content);
+			const footer = document.createElement("footer");
+			for (const b of config.buttons) {
+				const button = document.createElement("button");
+				button.dataset.action = b.action;
+				const span = document.createElement("span");
+				span.textContent = b.label;
+				button.append(span);
+				footer.append(button);
+			}
+			form.append(footer);
+			root.append(form);
+			config.render?.({}, { element: root });
+			act(form, root);
+			return config.buttons.find(b => b.action === action).callback({}, { form });
+		}),
+	});
+	const pick = (form, name, value) => {
+		const input = form.querySelector(`input[name="${name}"][value="${value}"]`);
+		input.checked = true;
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+	};
+	const type = (form, value) => {
+		const box = form.elements.namedItem(OTHER_FIELD);
+		box.value = value;
+		box.dispatchEvent(new Event("input", { bubbles: true }));
+	};
+	const label = root => root.querySelector('button[data-action="count"] span').textContent;
+	const checked = form => [...form.querySelectorAll(`input[name="${COUNT_FIELD}"]`)].filter(i => i.checked).map(i => i.value);
+
+	it("answers the size chosen as that many tokens, in a themed window with an element for content", async () => {
+		const DialogV2 = working("count", form => pick(form, COUNT_FIELD, "8"));
+		expect(await askGroupSize(question, { DialogV2, document })).toEqual({ size: 8, asGroup: false });
 		const config = DialogV2.wait.mock.calls[0][0];
 		expect(config.classes).toContain("stonetop");
 		expect(typeof config.content).toBe("object");
-		expect(config.buttons.find(b => b.default).action).toBe("size-6");
-		expect(await askGroupSize(question, { DialogV2: pressing("size-6", "tokens"), document })).toEqual({ size: 6, asGroup: false });
+		expect(config.buttons.find(b => b.default).action).toBe("count");
 	});
 
-	it("makes Just one a single creature whichever scale is chosen, and closing it no answer", async () => {
-		expect(await askGroupSize(question, { DialogV2: pressing("size-1", "group"), document })).toEqual({ size: 1, asGroup: false });
+	it("takes a size typed in the box, clearing the strip, and the button says it", async () => {
+		let seen = null;
+		const answer = await askGroupSize(question, { DialogV2: working("count", (form, root) => {
+			type(form, "20");
+			seen = { label: label(root), strip: checked(form) };
+		}), document });
+		expect(answer).toEqual({ size: 20, asGroup: false });
+		expect(seen).toEqual({ label: "20 tokens", strip: [] });
+	});
+
+	it("puts a box left holding no size back to the usual size on the strip", async () => {
+		let seen = null;
+		await askGroupSize(question, { DialogV2: working("count", (form, root) => {
+			type(form, "20");
+			type(form, "500");
+			form.elements.namedItem(OTHER_FIELD).dispatchEvent(new Event("change", { bubbles: true }));
+			seen = { box: form.elements.namedItem(OTHER_FIELD).value, strip: checked(form), label: label(root) };
+		}), document });
+		expect(seen).toEqual({ box: "", strip: ["6"], label: "6 tokens" });
+	});
+
+	it("clears the box when a size is picked on the strip", async () => {
+		const answer = await askGroupSize(question, { DialogV2: working("count", form => {
+			type(form, "20");
+			pick(form, COUNT_FIELD, "10");
+		}), document });
+		expect(answer).toEqual({ size: 10, asGroup: false });
+	});
+
+	it("answers one group token where the scale is offered, and the button says so", async () => {
+		let seen = null;
+		const answer = await askGroupSize({ ...question, offerGroup: true }, { DialogV2: working("count", (form, root) => {
+			pick(form, SCALE_FIELD, "group");
+			pick(form, COUNT_FIELD, "12");
+			seen = label(root);
+		}), document });
+		expect(answer).toEqual({ size: 12, asGroup: true });
+		expect(seen).toBe("1 group token of 12");
+	});
+
+	it("makes Just one a single creature whatever is chosen, and closing it no answer", async () => {
+		const one = working("one", form => { pick(form, SCALE_FIELD, "group"); pick(form, COUNT_FIELD, "8"); });
+		expect(await askGroupSize({ ...question, offerGroup: true }, { DialogV2: one, document })).toEqual({ size: 1, asGroup: false });
 		expect(await askGroupSize(question, { DialogV2: { wait: async () => null }, document })).toBeNull();
 	});
 });
+

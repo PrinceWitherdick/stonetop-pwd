@@ -77,7 +77,7 @@ export function addJournalShareButton(app) {
 function _makeV1Button() {
 	const a = document.createElement("a");
 	a.className = "header-button control stonetop-share-journal";
-	a.innerHTML = `<i class="fas fa-eye"></i> Share`;
+	a.innerHTML = `<i class="fas fa-eye" aria-hidden="true"></i> Share`;
 	return a;
 }
 

@@ -398,6 +398,29 @@ describe("StonetopCharacterSheet event handlers", () => {
 			expect((await cardOf(arcanaSheet({ isGM: true }))).canGiveCard).toBe(true);
 			expect((await cardOf(arcanaSheet({ isGM: false }))).canGiveCard).toBe(false);
 		});
+
+		// The GM's "Give a major arcanum" row (seeker-major-grant.js): a GM, on a playbook whose
+		// backgrounds list major arcana (the Seeker's).
+		it("shows the GM's give-a-major row to a GM on a Seeker only", async () => {
+			const grantRow = async ({ isGM, majors = ["mindgem"], grant = "" }) => {
+				const sheet = arcanaSheet({ isGM });
+				const typed = sheet.actor.typedActor;
+				typed.seekerMajorGrant = () => grant;
+				typed.getArcanum = vi.fn(async slug => ({ slug, front: { title: "The Mindgem" } }));
+				return sheet._seekerMajorGrantRow({ backgrounds: [{ slug: "patriot", majorArcana: majors }] });
+			};
+			// getData hands the row on as built (a playbook-less sheet: no row).
+			expect((await arcanaSheet({ isGM: true }).getData()).stonetop.seekerMajorGrant).toEqual({ shown: false, name: "" });
+			// Mid-creation, before any playbook is committed: the one the player's walkthrough is on.
+			const midCreation = arcanaSheet({ isGM: true });
+			midCreation.actor.typedActor.playbookInCreation = vi.fn(async () => ({ backgrounds: [{ slug: "patriot", majorArcana: ["mindgem"] }] }));
+			midCreation.actor.typedActor.seekerMajorGrant = () => "";
+			expect((await midCreation._seekerMajorGrantRow(null)).shown).toBe(true);
+			expect(await grantRow({ isGM: true })).toEqual({ shown: true, name: "" });
+			expect(await grantRow({ isGM: true, grant: "mindgem" })).toEqual({ shown: true, name: "The Mindgem" });
+			expect((await grantRow({ isGM: false, grant: "mindgem" })).shown).toBe(false);
+			expect((await grantRow({ isGM: true, majors: [] })).shown).toBe(false);
+		});
 	});
 
 	it("_onBackgroundChange calls selectBackground with the slug", async () => {

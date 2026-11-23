@@ -132,6 +132,8 @@ jobs:
             // A release runs from the one bundled file npm run build just wrote. The tree keeps the
             // unbundled entry, so a checkout still runs straight from source. See scripts/bundle.js.
             m.esmodules = ['dist/stonetop.js'];
+            // The same for the stylesheet: npm run build wrote a copy with the comments removed.
+            m.styles = ['dist/stonetop.css'];
             // While the old package id is still shipping, the released title has to
             // disambiguate it: Foundry's Setup screen shows a package's title and never its
             // id, so during the migration window a user has two tiles both reading
@@ -229,6 +231,10 @@ jobs:
             for (const e of m.esmodules) {
               if (!require('fs').existsSync(e)) { console.error('FAIL: declared esmodule missing: ' + e); process.exit(1); }
             }
+            // A missing stylesheet installs as a system with no styling at all.
+            for (const s of m.styles) {
+              if (!require('fs').existsSync(s)) { console.error('FAIL: declared stylesheet missing: ' + s); process.exit(1); }
+            }
             console.log('manifest ok: ' + m.id + ' ' + m.version + ' \"' + m.title + '\"');
           "
 
@@ -239,7 +245,8 @@ jobs:
         #
         # dist/ is the bundle the manifest loads. stonetop.js and module/ still ship beside it: the
         # bundle's source map points at them, and the Import Book Art macro falls back to importing
-        # three of those modules by path.
+        # three of those modules by path. styles/ ships too: it is the commented source of
+        # dist/stonetop.css, and those comments carry icon credits.
         run: |
           zip -r stonetop.zip \
             system.json stonetop.js dist/ LICENSE README.md \
@@ -284,6 +291,9 @@ jobs:
             for (const e of m.esmodules) {
               if (!entries.includes(e)) fail.push('declared esmodule is not in the zip: ' + e);
               if (!entries.includes(e + '.map')) fail.push('source map is not in the zip: ' + e + '.map');
+            }
+            for (const s of m.styles) {
+              if (!entries.includes(s)) fail.push('declared stylesheet is not in the zip: ' + s);
             }
             for (const p of m.packs) {
               // A directory entry alone is not enough: an empty pack still zips its folder.

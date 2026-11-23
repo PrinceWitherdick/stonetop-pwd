@@ -46,7 +46,7 @@ export function addPopoutHeaderControl(popout, { key, icon, label, onClick } = {
 		const btn = document.createElement(isAppV1 ? "a" : "button");
 		if (isAppV1) {
 			btn.className = `header-button control ${OWN} ${key}`;
-			btn.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
+			btn.innerHTML = `<i class="fas ${icon}" aria-hidden="true"></i> ${label}`;
 		} else {
 			btn.type = "button";
 			btn.className = `header-control icon ${OWN} ${key} fa-solid ${icon}`;

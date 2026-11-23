@@ -19,7 +19,7 @@
  * Idempotent: a second pass finds nothing. Run once per version from Ready.js.
  */
 
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 
 // The page types drawn by StonetopLocationPageSheet, whose sections carry the Dangers lists.
 const PAGE_TYPES = new Set(["location", "chronicle"]);
@@ -80,7 +80,7 @@ export async function clearBlankDangers(entry) {
  * @returns {Promise<{pages: number, journals: number}>}
  */
 export async function clearAllBlankDangers() {
-	if (!game.user?.isGM || !isPrimaryGM()) return { pages: 0, journals: 0 };
+	if (!isActingPrimaryGM()) return { pages: 0, journals: 0 };
 	let pages = 0, journals = 0;
 	for (const entry of game.journal?.contents ?? []) {
 		try {

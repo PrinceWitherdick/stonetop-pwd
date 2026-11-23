@@ -27,6 +27,8 @@ import { SYSTEM_ID } from "../system-id.js";
 import { SHARED_ROUTE_HOOK } from "../settings.js";
 import { localize, format } from "../utils/i18n.js";
 import { warn } from "../utils/logger.js";
+import { journeyKey } from "../utils/travel-route.js";
+import { walkPartyMarker } from "./journey-walk.js";
 import {
 	SHARED_ROUTE_FLAG, readSharedRoute, sharedRequirementsHtml, sharedRouteCardHtml, sharedRouteChip, sharedRouteChipHtml,
 	sharedRouteView, stopSharingRoute,
@@ -141,7 +143,7 @@ export class SharedRouteWindow extends ImageZoomWindow {
 		const view = this._shownView;
 		if (!view) return localize("stonetop.expedition.shared.none");
 		if (this._isOlder()) return localize("stonetop.expedition.shared.older");
-		return `${view.title}. ${view.total}`;
+		return [view.title, view.total, view.where].filter(Boolean).join(". ");
 	}
 
 	activateListeners(html) {
@@ -180,6 +182,13 @@ export class SharedRouteWindow extends ImageZoomWindow {
 		const shown = readSharedRoute();
 		const view = sharedRouteView(shown);
 		const before = this._shownView;
+		// The party mark walks only when the same way is still shown and only its progress moved.
+		const from = this._payload?.progress?.reached ?? null;
+		const to = shown?.progress?.reached ?? null;
+		const walk = this._payload && shown && this._payload.id === shown.id && journeyKey(this._payload.journey) === journeyKey(shown.journey)
+			&& from !== to
+			? { from: from ?? 0, to: to ?? 0 }
+			: null;
 		this._payload = shown;
 		this._shownView = view;
 		const samePicture = !!before?.map && !!view?.map && before.map.src === view.map.src;
@@ -196,6 +205,9 @@ export class SharedRouteWindow extends ImageZoomWindow {
 		const data = await this.getData();
 		if (!current()) return;
 		this.setOverlay(data.overlay);
+		if (walk && view.map.path?.walked && root) {
+			walkPartyMarker(root, { legs: view.map.path.legs, reach: view.map.path.reach, ...walk });
+		}
 		const img = root?.querySelector?.(".stonetop-image-zoom-img");
 		if (img) img.alt = view.map.alt;
 		// The two text columns are re-rendered from the same template and swapped whole, so what

@@ -8,9 +8,10 @@ import { MAP_PIN_ICON_SIZE } from "../../module/utils/map-pins.js";
 import { tierDrawing } from "../../module/utils/route-path.js";
 import {
 	ROUTE_CASE_WIDTH, ROUTE_DOT_GAP, ROUTE_DOT_SIZE, ROUTE_HEAD_SIZE,
-	ROUTE_INK_FALLBACK, ROUTE_WAYPOINT_HEAD_SIZE, SCENE_ROUTE_FLAG,
-	clearRouteElsewhere, clearRouteOnScene, routeFlagTouched, routeInk, sceneJourney, sceneRouteCheck,
-	sceneRoutePlan, sceneRouteRefusal, sceneShowsJourney, showRouteOnScene,
+	ROUTE_INK_FALLBACK, ROUTE_WAYPOINT_HEAD_SIZE, SCENE_ROUTE_FLAG, SCENE_ROUTE_PROGRESS_FLAG,
+	clearRouteElsewhere, clearRouteOnScene, routeFlagTouched, routeInk, routeJourneyTouched,
+	routeProgressTouched, sceneJourney, sceneRouteCheck, sceneRoutePlan, sceneRouteProgress,
+	sceneRouteRefusal, sceneShowsJourney, setSceneRouteProgress, showRouteOnScene,
 } from "../../module/utils/scene-route.js";
 
 // Putting an expedition's route on the GM's own Scene of the same poster map.
@@ -686,5 +687,102 @@ describe("putting a hand-drawn way on a scene", () => {
 		const wanted = spotPercent({ fx: 0.25, fy: 0.5 }, frameFor(POSTER_MAPS.find(m => m.slug === "vicinity").out));
 		expect(plan.legs[0].to.x).toBeCloseTo((wanted.left / 100) * scene.width, 4);
 		expect(plan.legs[0].to.y).toBeCloseTo((wanted.top / 100) * scene.height, 4);
+	});
+});
+
+describe("the party on the scene", () => {
+	const JOURNEY = { origin: "stonetop", destination: "the-maw" };
+
+	function writableScene() {
+		const scene = posterScene("vicinity");
+		scene.update = async (changes) => applyUpdate(scene, changes);
+		return scene;
+	}
+
+	it("draws no party until the scene is told how far they have got", async () => {
+		const scene = writableScene();
+		await showRouteOnScene(scene, JOURNEY);
+		const plan = sceneRoutePlan(scene);
+		expect(plan.reached).toBeNull();
+		expect(plan.party).toBeNull();
+		expect(plan.reach[0]).toBe(0);
+		expect(plan.reach.at(-1)).toBe(plan.legs.length);
+	});
+
+	it("stands the party at the start, then on the stop they reached", async () => {
+		const scene = writableScene();
+		await showRouteOnScene(scene, JOURNEY, { progress: 0 });
+		const start = sceneRoutePlan(scene);
+		expect(start.party.x).toBeCloseTo(start.legs[0].from.x, 0);
+		expect(start.party.y).toBeCloseTo(start.legs[0].from.y, 0);
+
+		const total = start.reach.length - 1;
+		expect(await setSceneRouteProgress(scene, total)).toBe(true);
+		const end = sceneRoutePlan(scene);
+		expect(end.reached).toBe(total);
+		expect(end.party.x).toBeCloseTo(end.legs.at(-1).to.x, 0);
+		expect(end.party.y).toBeCloseTo(end.legs.at(-1).to.y, 0);
+	});
+
+	it("does not write a count the scene already holds", async () => {
+		const scene = writableScene();
+		await showRouteOnScene(scene, JOURNEY, { progress: 1 });
+		expect(await setSceneRouteProgress(scene, 1)).toBe(false);
+		expect(await setSceneRouteProgress(scene, null)).toBe(true);
+		expect(sceneRouteProgress(scene)).toBeNull();
+		expect(await setSceneRouteProgress(scene, null)).toBe(false);
+	});
+
+	it("writes nothing to a scene showing no route", async () => {
+		const scene = writableScene();
+		expect(await setSceneRouteProgress(scene, 1)).toBe(false);
+		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_PROGRESS_FLAG]).toBeUndefined();
+	});
+
+	it("keeps the count across a redraw of the same way, and drops it for another", async () => {
+		const scene = writableScene();
+		await showRouteOnScene(scene, JOURNEY, { progress: 1 });
+		await showRouteOnScene(scene, JOURNEY);
+		expect(sceneRouteProgress(scene)).toBe(1);
+		await showRouteOnScene(scene, { origin: "stonetop", destination: "the-crossroads" });
+		expect(sceneRouteProgress(scene)).toBeNull();
+		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_PROGRESS_FLAG]).toBeUndefined();
+	});
+
+	it("reads a count made on another way as no party", () => {
+		const scene = posterScene("vicinity", {
+			flags: { [SYSTEM_ID]: {
+				posterMap: "vicinity",
+				[SCENE_ROUTE_FLAG]: JOURNEY,
+				[SCENE_ROUTE_PROGRESS_FLAG]: { reached: 1, key: "table|stonetop|lygos" },
+			} },
+		});
+		expect(sceneRouteProgress(scene)).toBeNull();
+		expect(sceneRoutePlan(scene).party).toBeNull();
+	});
+
+	it("goes with the line when the route comes off", async () => {
+		const scene = writableScene();
+		await showRouteOnScene(scene, JOURNEY, { progress: 1 });
+		await clearRouteOnScene(scene);
+		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_PROGRESS_FLAG]).toBeUndefined();
+
+		const other = writableScene();
+		other.id = "other";
+		await showRouteOnScene(other, JOURNEY, { progress: 1 });
+		await clearRouteElsewhere(scene, { scenes: [scene, other] });
+		expect(other.flags[SYSTEM_ID][SCENE_ROUTE_PROGRESS_FLAG]).toBeUndefined();
+	});
+
+	it("tells a progress write from a route write, in both spellings", () => {
+		const progressOnly = { flags: { [SYSTEM_ID]: { [SCENE_ROUTE_PROGRESS_FLAG]: { reached: 1 } } } };
+		const removed = { flags: { [SYSTEM_ID]: { [`-=${SCENE_ROUTE_PROGRESS_FLAG}`]: null } } };
+		const route = { flags: { [SYSTEM_ID]: { [SCENE_ROUTE_FLAG]: JOURNEY } } };
+		expect(routeFlagTouched(progressOnly)).toBe(true);
+		expect(routeFlagTouched(removed)).toBe(true);
+		expect(routeProgressTouched(removed)).toBe(true);
+		expect(routeJourneyTouched(progressOnly)).toBe(false);
+		expect(routeJourneyTouched(route)).toBe(true);
+		expect(routeProgressTouched(route)).toBe(false);
 	});
 });

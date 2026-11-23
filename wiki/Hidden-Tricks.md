@@ -16,7 +16,8 @@ A cheat sheet of the things you'd never find by looking: modifier keys, things y
 | `Ctrl`+`Z` / `Ctrl`+`Shift`+`Z` | The relationship map | Undo and redo **your own** changes only. [More](The-Relationship-Map#undo) |
 | `Ctrl` + `Left`/`Right` | A relationship map's board tabs | Reorders the boards. |
 | `Shift`-click the map | Run an Expedition, route step | Lays a route by hand, a leg at a time; right-click takes a leg back. [More](Expeditions-and-Sites#the-route) |
-| `Alt` + `Up`/`Down` | GM Toolkit encounters and expeditions | Reorders them. [More](The-GM-Toolkit) |
+| `Alt` + `Up`/`Down` | The name of a GM Toolkit encounter or expedition | Reorders it. [More](The-GM-Toolkit#encounters) |
+| `Left`/`Right`, `Home`/`End` | The switcher on the GM Toolkit's Prep tab | Moves between Encounters, Expeditions and Sites. [More](The-GM-Toolkit#prep) |
 | `0` | The hotbar (GM) | End of Session. [More](Chronicle-Journals-and-Love-Letters#end-of-session) |
 
 ## Clicks you might not try
@@ -34,6 +35,7 @@ A cheat sheet of the things you'd never find by looking: modifier keys, things y
 | **Roll the weather** (GM) | Lands on a row **without posting**, so you can roll again or pick another. [More](Seasons-Weather-and-the-Year#the-weather-window) |
 | A page citation ("Book I, page 243") | Opens the rulebook at that page. [More](The-Rulebook-Reader) |
 | The die beside a GM Toolkit move list | Draws a GM move at random, whispered to you. [More](The-GM-Toolkit) |
+| Anywhere on a shut encounter or expedition's line (GM) | Opens the card, not only the arrow at its end. [More](The-GM-Toolkit#encounters) |
 | An edit pencil before it fades in | Works anyway; the fade is only a delay you can change on your Preferences tab. |
 
 ## Things you can drag
@@ -58,7 +60,7 @@ A cheat sheet of the things you'd never find by looking: modifier keys, things y
 
 - a threat, hazard or site card from the GM Toolkit onto a scene, to pin it ([Threats](Threats-and-Hazards#threats-on-the-map));
 - a Place of Interest disc from the steading onto a scene, for a linked pin ([Steading](The-Steading-and-Settlements#overview));
-- anything (actors, journals, scenes, tables, macros) onto the GM Toolkit's Encounters tab, to bundle it ([GM Toolkit](The-GM-Toolkit));
+- anything (actors, journals, scenes, tables, macros) onto an encounter or expedition on the GM Toolkit's **Prep** tab, to bundle it there, or onto the empty space around the cards to start a new one ([GM Toolkit](The-GM-Toolkit#prep));
 - improvement cards from journals onto the steading's **Improvements** tab;
 - NPCs onto the steading's resident lists, and characters onto its Player Characters list;
 - stat block cards from the bestiary journal onto the map.

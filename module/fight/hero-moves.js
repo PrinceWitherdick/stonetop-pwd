@@ -80,7 +80,7 @@ import { combatantSide, fightersOf, fightOnScene, gridOf } from "./fight-state.j
 import { rollerEngagement } from "./damage-seed.js";
 import { struckFoe } from "./struck-foe.js";
 import { resolveSync, askGMClient, queryAsker, serverNow } from "../utils/foundry-compat.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { escHtml } from "../utils/strings.js";
 import { damageRowActor } from "../utils/damage.js";
 import { stonetopChatCard } from "../utils/chat.js";
@@ -837,7 +837,7 @@ export async function spendRapierWitBlow(fox, attacker, {
  * GM owns), and the Fox still be owed that foe's +1d4. Whether it was spent.
  */
 export async function handleRapierWitQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const fox = data?.foxUuid ? resolve(data.foxUuid) : null;
 	const attacker = data?.attackerUuid ? resolve(data.attackerUuid) : null;
@@ -1138,7 +1138,7 @@ export async function spendCensureEnraged(roller, targets = [], {
  * rolled, and only entries the Judge still holds are let go. Whether anything was spent.
  */
 export async function handleCensureEnragedQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const judge = data?.judgeUuid ? resolve(data.judgeUuid) : null;
 	const roller = data?.rollerUuid ? resolve(data.rollerUuid) : null;
@@ -1444,17 +1444,25 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// Second Intent: a player's own move of the name acts as itself (owns-move.js#bookMoveName).
 	if (strikeBack && parry && hasBook(actor, HERO_MOVES.SECOND_INTENT)) add("secondIntent", HERO_MOVES.SECOND_INTENT, "1d4", { applied: false });
 	if (isHolyLight(weapon)) offers.push(...holyLightOffers(actor));
+	// A move earned FOE BY FOE: drawn ticked when every target has earned it, and not drawn when one has
+	// not. With NO target there is nobody to look up, and the foe may well be one that earned it, so the
+	// line is drawn UNTICKED for the player to call, as Dog with a Bone's is (hero-moves-blows.test.js
+	// "untargeted"). One rule, so the next such move cannot pick its own no-target behaviour.
+	const perFoe = (key, move, dice, earned) => {
+		if (!has(actor, move)) return;
+		if (!targets.length) add(key, move, dice, { applied: false });
+		else if (earned()) add(key, move, dice);
+	};
 	// Nemesis rides every attack after the Clash that earned it — never the Clash's own damage, which is
 	// what `since` against the card's age settles.
-	if (has(actor, HERO_MOVES.NEMESIS) && targets.length) {
+	perFoe("nemesis", HERO_MOVES.NEMESIS, "1d6", () => {
 		const known = new Map(listFlag(actor, CLASHED_FLAG).map(entry => [entry?.key, entry]));
-		const earned = targets.every(target => {
+		return targets.every(target => {
 			const entry = known.get(foeKey(target));
 			return entry && Number(entry.since) < attackAt;
 		});
-		if (earned) add("nemesis", HERO_MOVES.NEMESIS, "1d6");
-	}
-	if (paybackEarned(actor, targets)) add("payback", HERO_MOVES.PAYBACK, "1d4");
+	});
+	perFoe("payback", HERO_MOVES.PAYBACK, "1d4", () => paybackEarned(actor, targets));
 	// Storm Markings: "When you roil with anger, you do +1 damage until you calm down." The player says
 	// when they roil and when they calm (the header's storm cloud), so while it is on the +1 is ticked.
 	if (fightStateActive(actor, "roiling")) add("roiling", STORM_MARKINGS_NAME, "1");
@@ -1494,7 +1502,10 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 		if (has(actor, HERO_MOVES.DOG_WITH_BONE)) {
 			add("dogWithBone", HERO_MOVES.DOG_WITH_BONE, "1d6", targets.every(isCorruptedFoe) ? {} : { applied: false });
 		}
-		if (has(actor, HERO_MOVES.EVERYTHING_BLEEDS) && targets.every(isUnnaturalFoe)) {
+		// Drawn when ANY target may be unnatural: typed or tagged so, or a stat block that names no type at
+		// all (a homebrew monster), so a volley that also catches a farmer keeps it for the fae. Only a set
+		// every one of which is typed a person or a beast draws nothing (hero-moves-blows.test.js "mixed").
+		if (has(actor, HERO_MOVES.EVERYTHING_BLEEDS) && targets.some(mayBeUnnaturalFoe)) {
 			add("everythingBleeds", HERO_MOVES.EVERYTHING_BLEEDS, "1d6", { applied: false });
 		}
 	} else {
@@ -1569,6 +1580,11 @@ function isUnnaturalFoe(target) {
 	const system = targetSystem(target);
 	const type = creatureTypeOf(system);
 	return (!!type && !NATURAL_CREATURE_TYPES.has(type)) || systemTags(system).some(tag => UNNATURAL_TAGS.has(tag));
+}
+
+/** Everything Bleeds' line: an unnatural foe, or one whose stat block names no creature type to say. */
+function mayBeUnnaturalFoe(target) {
+	return isUnnaturalFoe(target) || !creatureTypeOf(targetSystem(target));
 }
 
 // -- What a character's own skin adds ----------------------------------------

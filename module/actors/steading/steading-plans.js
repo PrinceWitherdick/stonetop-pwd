@@ -18,10 +18,13 @@
 // down beside them.
 //
 // Both live in the steading's flags (`plans`, `contentGuidelines`), written through its turn like every list.
-// The sheet only reads a plan (and ticks its boxes); SteadingPlanDialog.js is where one is written.
+// The sheet only reads a plan (and ticks its boxes); SteadingPlanDialog.js is where one is written. Other
+// settlements and characters keep plans of their own through a store that looks like the steading to this
+// code (settlement-plans.js, character-plans.js).
 
 import { escHtml } from "../../utils/strings.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { getStonetopSteadingActorOrWarn } from "../../utils/world.js";
 
 /** The requirement prompts Make a Plan lists (Book I p.530), offered as suggestions when adding one. */
 export const PLAN_REQUIREMENT_PROMPTS = Object.freeze([
@@ -189,7 +192,8 @@ export async function confirmRemovePlan(steading, planId) {
 	const name = text(plan.name).trim();
 	const yes = await confirmOutcome({
 		title: "Remove this plan?",
-		content: `<p>Remove ${name ? `<strong>${escHtml(name)}</strong>` : "this plan"} and its requirements from the steading's plans?</p>`,
+		// Not "the steading's": a settlement and a character keep plans through this too.
+		content: `<p>Remove ${name ? `<strong>${escHtml(name)}</strong>` : "this plan"} and its requirements?</p>`,
 		yes: { label: "Remove the plan", icon: "fa-trash" },
 		no: { label: "Keep it" },
 	});
@@ -210,10 +214,11 @@ export async function setContentGuideline(steading, key, value) {
  * steading). Delegated on the tab, so a re-render needs nothing re-bound per row. A plan is read on the
  * sheet and written in its editor: `editPlan(planId)` opens it (null for a new plan). Only the tick boxes
  * write from the sheet itself, since ticking them off is the book's whole use of the list (p.530). Each
- * write re-renders the sheet through the actor update.
+ * write re-renders the sheet through the actor update. `within` is the container the listeners go on (a
+ * character's Notes tab is `.character-notes`).
  */
-export function wireSteadingNotesTab(root, steading, { editPlan = null } = {}) {
-	const tab = root?.querySelector?.(".steading-notes");
+export function wireSteadingNotesTab(root, steading, { editPlan = null, within = ".steading-notes" } = {}) {
+	const tab = root?.querySelector?.(within);
 	if (!tab) return;
 	const planOf = el => el.closest("[data-plan-id]")?.dataset.planId;
 	tab.addEventListener("click", ev => {
@@ -239,4 +244,18 @@ export function wireSteadingNotesTab(root, steading, { editPlan = null } = {}) {
 			return planId && setRequirementDone(steading, planId, Number(el.closest("[data-req-index]")?.dataset.reqIndex), el.checked);
 		}
 	});
+}
+
+/**
+ * Open the world's steading sheet on its Notes tab with the Plans heading in view: the "put it somewhere
+ * public" half of p.530, reached from a character's own Plans. Warns when the world has no steading.
+ * Opening is not a write, so a reader of the steading may follow it too.
+ */
+export async function openSteadingPlans() {
+	const sheet = getStonetopSteadingActorOrWarn()?.sheet;
+	if (!sheet) return false;
+	if (sheet._minimized) await sheet.maximize?.();
+	await sheet._render(true, { focus: true });
+	sheet._showPlans?.();
+	return true;
 }

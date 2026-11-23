@@ -80,7 +80,9 @@
 							<input type="color" class="stonetop-timeline-colours-pick" value="{{this.value}}"
 							       data-timeline-focus="colour-{{this.kind}}"
 							       aria-label="{{this.pickLabel}}" data-tooltip="{{this.pickLabel}}">
-							<button type="button" class="stonetop-timeline-colours-reset"{{#unless repainted}} hidden{{/unless}}
+							{{!-- Idle, not `hidden`: it keeps its grid cell so the picker never moves
+							      (timeline-colours-menu.js#setResetIdle sets the same three). --}}
+							<button type="button" class="stonetop-timeline-colours-reset{{#unless repainted}} is-idle{{/unless}}"{{#unless repainted}} aria-hidden="true" tabindex="-1"{{/unless}}
 							        data-tooltip="{{this.resetLabel}}" aria-label="{{this.resetLabel}}">
 								<i class="fas fa-rotate-left" aria-hidden="true"></i>
 								<span>{{localize "stonetop.timeline.colours.reset"}}</span>

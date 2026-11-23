@@ -11,7 +11,11 @@ On the **Fight** tab, click **Start a fight**. The window lists everyone you mig
 
 The button counts the sides as you tick (**Start the fight: 4 heroes, 6 foes**). Anyone not on the map is placed near the middle of your view, heroes to the left and foes to the right.
 
-Group and horde monsters ask **how many?** (the stat block's usual number is suggested), and whether to put **A token for each one, each with its own HP** or **One token for the whole group, fighting as one**.
+When the fight starts, the **A fight breaks out** banner crosses every screen whose player can see someone in it; click anywhere to dismiss it early. The world setting **Table moments** turns it off (see [Table moments](Expeditions-and-Sites#table-moments)).
+
+Group and horde monsters ask **how many?** Pick a size on the strip (the monster sheet's group size is chosen to start with) or type any other number in the box beside it, up to 99, then press the button that says what you'll get (**6 tokens**). **Just one** brings a single creature.
+
+When the heroes have a group of followers in the fight, such as the Marshal's crew, the window also asks whether to put **A token for each one, each with its own HP** or **One token for the whole group** (Book I p.416: when a group fights another group, damage is rolled once per side). Against the PCs alone every creature gets its own token, because foes engaged by individual PCs aren't really part of a group. You can still turn them into one group token later with **Merge into one group** on the Fight tab.
 
 Later arrivals join with **Add to the fight**. **Line everyone up** puts everyone who isn't fighting anybody yet into two lines, heroes on the left and foes on the right; fights already going on stay as they are. **End the fight** takes everyone out of it (tokens stay where they are).
 

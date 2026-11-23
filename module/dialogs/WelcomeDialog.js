@@ -15,6 +15,7 @@ import { hasImportedBook2Art } from "../book2-art/reapply.js";
 // warning shown before that character is deleted can never disagree.
 import { progressFor } from "../actors/character/onboarding-progress.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
+import { touchesFlag } from "../utils/touches-flag.js";
 import { pastWelcomeGuide, sessionZeroComplete } from "./walkthrough-resume.js";
 import { confirmOutcome } from "../utils/ask-with-buttons.js";
 
@@ -447,10 +448,8 @@ export class WelcomeDialog extends Application {
 			["updateActor",   Hooks.on("updateActor", (actor, changes) => {
 				if (actor?.type !== "character") return;
 				if ("name" in changes || "img" in changes || "ownership" in changes) { refresh(); return; }
-				// Onboarding progress writes (and the unset on completion, which arrives
-				// as a "-=onboardingProgress" key) should update the page count live.
-				const stFlags = changes.flags?.[SYSTEM_ID];
-				if (stFlags && Object.keys(stFlags).some(k => k.replace(/^-=/, "") === "onboardingProgress")) refresh();
+				// Onboarding progress writes, and the unset on completion, update the page count live.
+				if (touchesFlag(changes, "onboardingProgress")) refresh();
 			})],
 		];
 	}

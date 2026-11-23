@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ensurePlayerHotbarMacros } from "../../module/hooks/Ready.js";
 
 // ensurePlayerHotbarMacros is the player half of onReady's macro pass: the GM's pass
@@ -10,8 +10,8 @@ const DIE_OF_FATE = { name: "Die of Fate", command: "game.stonetop?.rollDieOfFat
 
 // A macro doc as the function reads it: `canExecute` stands in for the ownership grant
 // (Foundry's Macro#canUserExecute is testUserPermission(user, "LIMITED")).
-function macro(id, { name = DIE_OF_FATE.name, command = DIE_OF_FATE.command, canExecute = true } = {}) {
-	return { id, name, command, canExecute };
+function macro(id, { name = DIE_OF_FATE.name, command = DIE_OF_FATE.command, canExecute = true, img } = {}) {
+	return { id, name, command, canExecute, img };
 }
 
 // The slice of `game` the placement touches, with a hotbar that records assignments the
@@ -71,6 +71,17 @@ describe("ensurePlayerHotbarMacros", () => {
 		expect(global.game.user.hotbar).toEqual({});
 	});
 
+	// Our copy with its command edited is still found as ours (name and icon), but what it runs is
+	// the GM's now and may be GM-only, so it is left for the GM to put on a player's bar.
+	it("does not place our copy once the GM has edited its command", async () => {
+		global.game = world({ macros: [macro("edited", {
+			command: "ui.notifications.info('gm only')",
+			img: "systems/stonetop-pwd/assets/icons/macros/die-of-fate.svg",
+		})] });
+		await ensurePlayerHotbarMacros();
+		expect(global.game.user.hotbar).toEqual({});
+	});
+
 	// GM-only macros carry no `shared` flag, so they never reach a player's bar.
 	it("places only the shared macros, not the whole system set", async () => {
 		global.game = world({
@@ -78,5 +89,20 @@ describe("ensurePlayerHotbarMacros", () => {
 		});
 		await ensurePlayerHotbarMacros();
 		expect(Object.values(global.game.user.hotbar)).toEqual(["fate"]);
+	});
+
+	// Each placement is caught on its own, so one that fails leaves the next to be placed.
+	it("places the next shared macro when one placement fails", async () => {
+		const map = macro("map", { name: "Relationship Map", command: "game.stonetop?.openRelationshipMap?.()" });
+		global.game = world({ macros: [macro("fate"), map] });
+		const assign = global.game.user.assignHotbarMacro;
+		global.game.user.assignHotbarMacro = async (m, slot) => {
+			if (m.id === "fate") throw new Error("hotbar write refused");
+			return assign(m, slot);
+		};
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		await ensurePlayerHotbarMacros();
+		spy.mockRestore();
+		expect(global.game.user.hotbar).toEqual({ 2: "map" });
 	});
 });

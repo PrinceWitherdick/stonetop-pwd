@@ -9,6 +9,9 @@ import * as posterMaps from "../../module/book2-art/poster-maps.js";
 import * as timelineStore from "../../module/timeline/timeline-store.js";
 import * as settlementActor from "../../module/actors/settlement/settlement-actor.js";
 import * as settlementResidents from "../../module/actors/settlement/settlement-residents.js";
+import * as travelRoute from "../../module/utils/travel-route.js";
+import * as sharedRoute from "../../module/utils/shared-route.js";
+import * as shareMap from "../../module/dialogs/share-map.js";
 
 // The Import Book Art macro borrows three system modules. In a bundled release, importing them by
 // path would load second copies with their own caches, so the system hands them over on
@@ -27,8 +30,8 @@ const BORROWED = [
 ];
 
 describe("the modules the Import Book Art macro borrows", () => {
-	it("are these three, beside the test-fixtures macro's timeline and settlements", () => {
-		expect(Object.keys(MACRO_MODULES).sort()).toEqual([...BORROWED.map((b) => b.key), "timeline", "settlement", "settlementResidents"].sort());
+	it("are these three, beside the test-fixtures macro's timeline, settlements and expedition", () => {
+		expect(Object.keys(MACRO_MODULES).sort()).toEqual([...BORROWED.map((b) => b.key), "timeline", "settlement", "settlementResidents", "expedition"].sort());
 	});
 
 	it.each(BORROWED)("$key loads the system's own copy of the module, with $name on it", async ({ key, name, module }) => {
@@ -111,5 +114,30 @@ describe("the settlements the test-fixtures macro borrows", () => {
 		}
 		expect(FIXTURES).toContain("game.stonetop?.macroModules?.settlement?.()");
 		expect(FIXTURES).not.toMatch(/import\(["'`][^"'`]*settlement/);
+	});
+});
+
+describe("the expedition the test-fixtures macro borrows", () => {
+	// The trip on the road reads as the walkthrough's own only if its progress key, its share and the
+	// map that share goes out on are the system's: a copied journeyKey reads as 0 legs travelled.
+	it("is the system's own route key, share writer and map choice", async () => {
+		const loaded = await MACRO_MODULES.expedition();
+		expect(loaded.journeyKey).toBe(travelRoute.journeyKey);
+		expect(loaded.journeyRoute).toBe(travelRoute.journeyRoute);
+		for (const name of ["readSharedRoute", "sharedRoutePayload", "shareRoute", "stopSharingRoute"]) {
+			expect(loaded[name], name).toBe(sharedRoute[name]);
+		}
+		expect(loaded.shareMapFor).toBe(shareMap.shareMapFor);
+		for (const name of ["timelineNow", "partySnapshot"]) expect(typeof loaded[name], name).toBe("function");
+		expect(FIXTURES).toContain("game.stonetop?.macroModules?.expedition?.()");
+		expect(FIXTURES).not.toMatch(/import\(["'`][^"'`]*(shared-route|travel-route|share-map)/);
+		// The cleanup clears the share through the same API, never by the setting's literal key.
+		expect(FIXTURES).toContain("await shareApi.stopSharingRoute();");
+		expect(FIXTURES).not.toContain("\"sharedRoute\"");
+	});
+
+	it("is the map the walkthrough's Show players button picks too", () => {
+		const dialog = read("module/dialogs/ExpeditionDialog.js");
+		expect(dialog).toContain("await shareMapFor(shownRoute, this._shownTier);");
 	});
 });

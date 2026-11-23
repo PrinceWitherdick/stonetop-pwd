@@ -1,4 +1,7 @@
-{{!-- The "write one up" bar at the foot of a GM-prep section.
+{{!-- The "write one up" bar at the foot of a GM-prep section: the Threats tab's proximity bands and
+      hazards, and the steading's Improvements. The Prep tab's three views do not use it any more;
+      they open on a one-line bar with a compact button instead (gm-prep-pane-bar.hbs), which wears
+      the same two classes plus a modifier, so the handler hooks below hold for both.
 
       TWO classes on the button, doing two different jobs. `stonetop-prep-add-btn` is what it
       LOOKS like: the dashed full-width entry point, stated once in stonetop.css against this one
@@ -6,12 +9,12 @@
       (`.<kind>-add-btn`, see gm-prep-tabs.js), which stays per-kind so the four bars keep their
       separate handlers. Splitting them is what stops the styling being a list of kind names
       maintained in a different file from the one that creates them: that list had already
-      shipped once without `.site-add-btn` on it, so the Sites tab drew its "Create a site" as a
-      bare core button and nothing failed.
+      shipped once without `.site-add-btn` on it, so the Sites tab (then a bar like this one) drew
+      its "Create a site" as a bare core button and nothing failed.
 
       `label` is the whole button text, and `proximity` is threats-only: the Threats tab prints
       one bar per proximity band and the button carries which band it seeds. Absent elsewhere,
       where it renders as an empty attribute the handler simply reads as undefined. --}}
 <div class="steading-improvement-add-bar">
-	<button type="button" class="stonetop-prep-add-btn {{this.kind}}-add-btn" data-proximity="{{this.proximity}}"><i class="fas fa-plus"></i> {{this.label}}</button>
+	<button type="button" class="stonetop-prep-add-btn {{this.kind}}-add-btn" data-proximity="{{this.proximity}}"><i class="fas fa-plus" aria-hidden="true"></i> {{this.label}}</button>
 </div>

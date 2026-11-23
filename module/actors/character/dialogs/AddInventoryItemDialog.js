@@ -4,7 +4,7 @@ import {
 	composeInventoryNote, inventoryItemCreateData, inventoryItemFormValues, inventoryItemUpdateData,
 } from "../../../utils/inventory-item-data.js";
 import { createWorldItem } from "../../../utils/world-item.js";
-import { clampInt } from "../../../utils/custom-move-data.js";
+import { clampInt } from "../../../utils/clamp-int.js";
 import { enrichHTML, filePicker } from "../../../utils/foundry-compat.js";
 import { isDefaultImg } from "../../../utils/strings.js";
 import { ARTIFACT_STATE } from "../artifact-identify.js";

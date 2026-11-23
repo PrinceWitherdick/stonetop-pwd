@@ -49,10 +49,11 @@
 import { SYSTEM_ID } from "../../system-id.js";
 import { format, localize } from "../../utils/i18n.js";
 import { escHtml } from "../../utils/strings.js";
+import { touchesFlag } from "../../utils/touches-flag.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { rollCardRoute, writeCardRoll } from "../../utils/roll-card-writer.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
 import { holdForEach, shareHold } from "../../utils/share-hold.js";
@@ -110,7 +111,11 @@ export const BOLSTER_DURATIONS = Object.freeze([
  * stock one (boostButtonFace); falsy for the stock one.
  */
 const SOURCES = {
-	diligence: { move: CHRONICLER, cost: 1, on: "any", stacks: true },
+	// Diligence is "+1 to a roll that you or a fellow player just made" (p.118), and a steading's roll
+	// (Seasons Change, Muster, Trade & Barter...) is one a player makes, so it goes on those cards too.
+	// Sanction, Blessing and Many Hands name a character's own roll or another character's, so they do not.
+	// Pinned by roll-boosts.test.js "offers Diligence on a steading's roll".
+	diligence: { move: CHRONICLER, cost: 1, on: "any", stacks: true, onSteading: true },
 	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own", stacks: true },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
 	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessingNow },
@@ -379,7 +384,7 @@ async function askGMToBoost(message, offer) {
 export async function handleBoostQuery(data, context = {}, deps = {}) {
 	const { messages = globalThis.game?.messages, users = globalThis.game?.users, resolve = resolveSync,
 		rollerOf = speakerActor, ownersOf = ownerUsers, scope = SYSTEM_ID } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const message = messages?.get?.(data?.messageId);
 	const helper = data?.helperUuid ? resolve(data.helperUuid) : null;
@@ -439,8 +444,7 @@ export function deathsDoorPlusOnes(message, roller, { user = globalThis.game?.us
  */
 export function onUpdateActorDoorPlusOnes(actor, changes, { messages = globalThis.game?.messages, redraw = m => globalThis.ui?.chat?.updateMessage?.(m) } = {}) {
 	if (actor?.type !== "character") return;
-	const flags = changes?.flags?.[SYSTEM_ID] ?? {};
-	if (!(DEATHS_DOOR_ROLLING_FLAG in flags) && !(`-=${DEATHS_DOOR_ROLLING_FLAG}` in flags)) return;
+	if (!touchesFlag(changes, DEATHS_DOOR_ROLLING_FLAG)) return;
 	for (const message of asArray(messages).slice(-DOOR_CARD_REDRAW_DEPTH)) {
 		// Not a card this client has not drawn: core's updateMessage would post it at the foot of the log.
 		if (!message?.logged || !isDeathsDoorCard(message) || speakerActor(message)?.id !== actor.id) continue;
@@ -644,7 +648,7 @@ export async function shareBlessing(lightbearer, targets, {
  */
 export async function handleBlessingQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, scope = SYSTEM_ID } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return [];
+	if (!isActingPrimaryGM()) return [];
 	const user = queryAsker(data, context, users);
 	const lightbearer = data?.lightbearerUuid ? resolve(data.lightbearerUuid) : null;
 	if (!user || !lightbearer?.testUserPermission?.(user, "OWNER") || !ownsLearnedMoveNamed(lightbearer, PIETY)) return [];

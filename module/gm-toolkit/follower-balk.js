@@ -58,9 +58,9 @@ export function balkCardBody({ name, leaderName, reason, loyalty = 0 }) {
 		+ (why ? `<p><em>${escHtml(why)}</em></p>` : "")
 		+ `<p class="stonetop-balk-rule">${escHtml(BALK_RULE)} (p.466)</p>`
 		+ `<div class="card-buttons stonetop-balk-answers">`
-		+ `<button type="button" class="stonetop-balk-answer" data-choice="spend"${loyalty > 0 ? "" : " disabled"}><i class="fas fa-hand-holding-heart"></i> ${escHtml(format(`${KEY}.spend`, { loyalty }))}</button>`
-		+ `<button type="button" class="stonetop-balk-answer" data-choice="persuade"><i class="fas fa-comments"></i> ${escHtml(localize(`${KEY}.persuade`))}</button>`
-		+ `<button type="button" class="stonetop-balk-answer" data-choice="drop"><i class="fas fa-hand"></i> ${escHtml(localize(`${KEY}.drop`))}</button>`
+		+ `<button type="button" class="stonetop-balk-answer" data-choice="spend"${loyalty > 0 ? "" : " disabled"}><i class="fas fa-hand-holding-heart" aria-hidden="true"></i> ${escHtml(format(`${KEY}.spend`, { loyalty }))}</button>`
+		+ `<button type="button" class="stonetop-balk-answer" data-choice="persuade"><i class="fas fa-comments" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.persuade`))}</button>`
+		+ `<button type="button" class="stonetop-balk-answer" data-choice="drop"><i class="fas fa-hand" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.drop`))}</button>`
 		+ `</div>`;
 }
 
@@ -114,7 +114,7 @@ function refreshSpendButton(area, balk, character, may) {
 	if (!btn || !character || btn.dataset.busy === "1") return;
 	const loyalty = followerLoyalty(character, balk.ftype, balk.loyaltySlug ?? balk.slug ?? "");
 	btn.disabled = !may || loyalty <= 0;
-	btn.innerHTML = `<i class="fas fa-hand-holding-heart"></i> ${escHtml(format(`${KEY}.spend`, { loyalty }))}`;
+	btn.innerHTML = `<i class="fas fa-hand-holding-heart" aria-hidden="true"></i> ${escHtml(format(`${KEY}.spend`, { loyalty }))}`;
 }
 
 /** Draw a balk card: answered, or its buttons live for whoever may answer. Called on every render. */

@@ -34,7 +34,7 @@ import { SYSTEM_ID } from "../../system-id.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { heldOnTrack } from "./MoveResources.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { moveChatCard } from "../../utils/chat.js";
 import { escHtml } from "../../utils/strings.js";
 import { format, localize } from "../../utils/i18n.js";
@@ -294,7 +294,7 @@ export function partnerSpendWords(partner, heroId, scope = SYSTEM_ID) {
  */
 export async function handleUpWithPeopleQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, scope = SYSTEM_ID } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	if (!isActingPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const hero = data?.heroUuid ? resolve(data.heroUuid) : null;
 	const partner = data?.partnerUuid ? resolve(data.partnerUuid) : null;

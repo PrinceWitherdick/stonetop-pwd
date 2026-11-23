@@ -93,23 +93,38 @@ describe("the Assets card on the sheet that ships", () => {
 		// The class the return handler listens for, and the index it sends back.
 		expect(card).toContain("steading-asset-taken");
 		expect(card).toContain('data-index="0"');
-		expect(card).toContain('data-tooltip="Out on The Wandering Tower. Click to return"');
+		expect(card).toContain('data-tooltip-text="Out on The Wandering Tower. Click to return"');
 	});
 
 	it("names the character when a player took it through the Requisition move", () => {
 		const card = assetsCard([
 			{ name: "A wagon", checked: false, takenBy: { name: "Wren", id: "hero1" } },
 		]);
-		expect(card).toContain('data-tooltip="Taken by Wren. Click to return"');
+		expect(card).toContain('data-tooltip-text="Taken by Wren. Click to return"');
+	});
+
+	// The title and the name are typed by players, and core draws a plain data-tooltip as HTML:
+	// an expedition called `<img src=x onerror=…>` would run its handler in the GM's client on
+	// hover. `-text` is drawn as text, so the markup stays words.
+	it("carries the line as text, never as HTML a typed title could break out of", () => {
+		const card = assetsCard([
+			{ name: "A wagon", checked: false, takenBy: { expedition: { id: "trip-1", title: "<img src=x onerror=alert(1)>" } } },
+		]);
+		expect(card).toContain('data-tooltip-text="Out on &lt;img src&#x3D;x onerror&#x3D;alert(1)&gt;. Click to return"');
+		// Said of the name's own tag: the row's Remove button keeps its plain tooltip, our own word.
+		const name = card.slice(card.indexOf("steading-asset-taken"), card.indexOf("</span>", card.indexOf("steading-asset-taken")));
+		expect(name).not.toMatch(/\sdata-tooltip="/);
 	});
 
 	it("leaves an on-hand asset plain, with nothing to click and no tooltip", () => {
 		const card = assetsCard([{ name: "Horses", checked: true }]);
 
-		expect(card).toContain("steading-asset-name");
+		// The name's whole tag, so "no tooltip" is said of the name: the row's Remove button has
+		// one of its own (Foundry's, since the native titles went).
+		expect(card).toContain('<span class="steading-list-name steading-asset-name">Horses</span>');
 		expect(card).not.toContain("steading-asset-taken");
 		expect(card).not.toContain("is-taken");
-		expect(card).not.toContain("data-tooltip");
+		expect(card).not.toContain("Click to return");
 	});
 
 	it("keeps each row's index tied to the stored slot, past a blank one", () => {

@@ -110,8 +110,10 @@ export const PREFERENCE_GROUPS = [
 		id: "arcana",
 		titleKey: "stonetop.sheet.preferences.arcana",
 		// A GM-only, world-scoped row (Book I p.136, ruling A19): whether the world's homebrew minor
-		// arcana join the deck a new Seeker draws from. Down with the other table switches.
-		keys: ["arcanaSeekerDrawsHomebrew"],
+		// arcana join the deck a new Seeker draws from. Down with the other table switches. Then
+		// whether a Seeker may start with any major, and the homebrew row it governs straight under it
+		// (drawn plain, as every row is: its hint says it only matters while the first is on).
+		keys: ["arcanaSeekerDrawsHomebrew", "seekerAnyMajorArcanum", "seekerAnyMajorHomebrew"],
 	},
 	{
 		id: "fights",
@@ -166,7 +168,7 @@ export const PREFERENCE_KEYS = new Set(PREFERENCE_GROUPS.flatMap(group => group.
  * change handler takes its key from a `data-pref` attribute, so hiding the control without
  * refusing the key would leave the setting one hand-edited attribute from being written anyway.
  */
-export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode", "fightTab", "showTimeline", "arcanaSeekerDrawsHomebrew"]);
+export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode", "fightTab", "showTimeline", "arcanaSeekerDrawsHomebrew", "seekerAnyMajorArcanum", "seekerAnyMajorHomebrew"]);
 
 /**
  * Keys the tab offers to a player and not to a GM: the other way round from GM_ONLY_KEYS.

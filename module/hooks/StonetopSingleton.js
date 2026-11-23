@@ -1,7 +1,7 @@
 import {escHtml} from "../utils/strings.js";
 import {stonetopChatCard} from "../utils/chat.js";
 import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
-import {isPrimaryGM as _isPrimaryGM} from "../utils/primary-gm.js";
+import {isActingPrimaryGM, isPrimaryGM as _isPrimaryGM} from "../utils/primary-gm.js";
 import {STEADING_ACTOR_TYPE, STEADING_DEFAULT_IMG} from "../actors/steading/steading-portrait.js";
 import {isGmToolkitData, gmToolkitActors} from "../actors/gmtoolkit/gm-toolkit-actor.js";
 import {SETTLEMENT_TYPE} from "../actors/settlement/settlement-type.js";
@@ -28,7 +28,7 @@ const _STEADING_ACTOR_IMG = STEADING_DEFAULT_IMG;
 // saved actor. An image that still resolves is shown exactly as-is.
 
 export async function ensureStonetopSingleton() {
-	if (!game.user.isGM || !_isPrimaryGM()) return;
+	if (!isActingPrimaryGM()) return;
 	const existing = _getStonetopActors().at(0);
 	if (existing) {
 		await _ensureStartingValues(existing);
@@ -193,7 +193,7 @@ export async function resetOmenReminder() {
 function _buildOmenReminderContent(destined) {
 	const names = destined.map(a => escHtml(a.name)).join(localize(`${_OMENS_KEY}.separator`));
 	const buttons = destined.map(a => `<button type="button" class="stonetop-omens-roll-btn" data-actor-id="${escHtml(a.id)}">`
-		+ `<i class="fas fa-dice-d6"></i> ${escHtml(format(`${_OMENS_KEY}.button`, {name: a.name}))}</button>`).join("");
+		+ `<i class="fas fa-dice-d6" aria-hidden="true"></i> ${escHtml(format(`${_OMENS_KEY}.button`, {name: a.name}))}</button>`).join("");
 	return stonetopChatCard(localize(`${_OMENS_KEY}.title`),
 		`<div class="stonetop-roll-card-description">
 			<p>${format(`${_OMENS_KEY}.intro`, {names})}</p>

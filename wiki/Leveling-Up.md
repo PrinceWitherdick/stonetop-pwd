@@ -34,7 +34,7 @@ Steps that don't apply to you are skipped, so most level-ups are just the first 
 | **Move from another playbook** | when the move you picked grants one | **Choose the move this grants you from another playbook (you must qualify for it).** Filter by text, or click a playbook chip (click it again to clear it). |
 | **Stat +1** | when the move you picked raises a stat | **Choose which stat to raise by +1.** Stats already at that move's maximum are greyed out. |
 | **Marks** | when the move you picked (or got from another playbook) has choices to mark | **Make this move's selection(s) for the level you're gaining.** Click an option to pick it; click it again to unpick. Options you already have from your background are shown as such. |
-| **Animal companion** | for a Ranger with Beast-Bonded | Mark another action you can use when you focus on your animal companion. |
+| **Animal companion** | for a Beast-Bonded Ranger reaching 3rd, 5th, 7th or 9th level, or still owed an action | Mark another action you can use when you focus on your animal companion. |
 | **Invocation** | on an even level for a Lightbearer, or anyone who got Invoke the Sun God | **Choose one new Invocation to add to your repertoire.** |
 
 The last step ends with a reminder to review your Instinct and Appearance on the **Details** tab. A Ghost, Revenant or Thrall is pointed at the **Post-Death** tab for their Instinct instead, since the insert's replaced the playbook's. For them, a move that can never fire (Hard to Kill, Unstoppable, the Death's Door half of Never Gonna Keep Me Down) carries a note on its row: at 0 HP they face their insert's own move, not Death's Door. It can still be taken.

@@ -42,6 +42,19 @@ describe("who has them", () => {
 		for (const key of Object.keys(FIGHT_STATES)) expect(fightStateGlyph(hero(), key).show).toBe(false);
 	});
 
+	// Playbook audit FOX-M3 (2026-11-22): a Catlike or Stalker switched off on the sheet hides nobody.
+	it("shows the unseen glyph for a learned Catlike or Stalker only, not one switched off", () => {
+		const off = hero({ moves: ["Catlike", "Stalker"] });
+		for (const item of off.items) item.flags = { [SYSTEM_ID]: { learned: false } };
+		expect(fightStateGlyph(off, "unseen").show).toBe(false);
+	});
+
+	it("shows the nerves glyph for a learned We Happy Few only, not one switched off", () => {
+		const off = hero({ moves: [WE_HAPPY_FEW] });
+		for (const item of off.items) item.flags = { [SYSTEM_ID]: { learned: false } };
+		expect(fightStateGlyph(off, "nerves").show).toBe(false);
+	});
+
 	it("keeps a state that is still on in view on a sheet that lost what made it, so it can be put out", () => {
 		expect(fightStateGlyph(hero({ on: { unseen: true } }), "unseen").show).toBe(true);
 	});

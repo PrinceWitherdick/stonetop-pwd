@@ -283,7 +283,8 @@ describe("what a blow adds", () => {
 		const seeker = hero("Maelis", [HERO_MOVES.EVERYTHING_BLEEDS]);
 		// Unticked: the stat block says it is unnatural; whether this blow exploited a weakness is theirs.
 		expect(blowOffers(seeker, { targets: [target(t.shade)] }).find(o => o.key === "everythingBleeds")).toMatchObject({ applied: false });
-		expect(blowOffers(seeker, { targets: [target(t.bandit)] }).map(o => o.key)).not.toContain("everythingBleeds");
+		// A stat block that names no creature type cannot say it is natural either, so it keeps the line too.
+		expect(blowOffers(seeker, { targets: [target(t.bandit)] }).find(o => o.key === "everythingBleeds")).toMatchObject({ applied: false });
 
 		// Predator has no readable condition at all, so it is a standing unticked reminder.
 		const wren = hero("Wren", [HERO_MOVES.PREDATOR]);
@@ -300,8 +301,13 @@ describe("what a blow adds", () => {
 			.concat([["glow", typed("glow", "", "solitary, emanation")]]));
 		const seeker = hero("Maelis", [HERO_MOVES.EVERYTHING_BLEEDS]);
 		const bleeds = key => blowOffers(seeker, { targets: [target(t[key])] }).some(o => o.key === "everythingBleeds");
-		for (const key of ["maker", "unknown-origin", "emanation", "corrupted", "glow"]) expect(bleeds(key), key).toBe(true);
-		for (const key of ["human-individual", "human-group", "natural-beast", "untyped"]) expect(bleeds(key), key).toBe(false);
+		for (const key of ["maker", "unknown-origin", "emanation", "corrupted", "glow", "untyped"]) expect(bleeds(key), key).toBe(true);
+		for (const key of ["human-individual", "human-group", "natural-beast"]) expect(bleeds(key), key).toBe(false);
+		// Playbook audit SEE-L1 (2026-11-22), "mixed": a volley over a fae and a farmer keeps the line for the
+		// fae; only a set typed every one a person or a beast draws nothing.
+		const volley = keys => blowOffers(seeker, { targets: keys.map(key => target(t[key])) }).find(o => o.key === "everythingBleeds");
+		expect(volley(["maker", "human-individual"])).toMatchObject({ applied: false });
+		expect(volley(["human-group", "natural-beast"])).toBeUndefined();
 
 		const judge = hero("Hafgan", [HERO_MOVES.DOG_WITH_BONE]);
 		const bone = key => blowOffers(judge, { targets: [target(t[key])] }).find(o => o.key === "dogWithBone")?.applied;
@@ -323,6 +329,22 @@ describe("what a blow adds", () => {
 		const wren = hero("Wren", [HERO_MOVES.PREDATOR]);
 		expect(blowOffers(wren, {}).map(o => o.key)).not.toContain("dogWithBone");
 		expect(blowOffers(wren, {}).map(o => o.key)).not.toContain("everythingBleeds");
+	});
+
+	// Playbook audit HEA-M1 (2026-11-22), "untargeted": with no target the grudge and the Clash cannot be looked
+	// up, and the foe may be the one owed, so Payback and Nemesis are drawn UNTICKED, as Dog with a Bone's is.
+	it("offers Payback and Nemesis UNTICKED when nothing is targeted, and only when learned", () => {
+		const bram = hero("Bram", [HERO_MOVES.PAYBACK, HERO_MOVES.NEMESIS]);
+		const lines = blowOffers(bram, { targets: [] });
+		expect(lines.find(o => o.key === "payback")).toMatchObject({ dice: "1d4", applied: false });
+		expect(lines.find(o => o.key === "nemesis")).toMatchObject({ dice: "1d6", applied: false });
+		const wren = hero("Wren", [HERO_MOVES.PREDATOR]);
+		expect(blowOffers(wren, {}).map(o => o.key)).not.toContain("payback");
+		expect(blowOffers(wren, {}).map(o => o.key)).not.toContain("nemesis");
+		// Targeted and not owed: still nothing.
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]);
+		expect(blowOffers(bram, { targets: [target(t.crin)] }).map(o => o.key)).not.toContain("payback");
+		expect(blowOffers(bram, { targets: [target(t.crin)] }).map(o => o.key)).not.toContain("nemesis");
 	});
 
 	it("keeps Predator a standing reminder whatever the foe", () => {

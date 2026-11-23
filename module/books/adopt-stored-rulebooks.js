@@ -17,7 +17,7 @@
 // worlds this is for from picking anything up, so instead the notice says how to send a book back:
 // one Forget, which now sticks.
 import { listDataDir } from "../book2-art/browse.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { format, localize } from "../utils/i18n.js";
 import { RULEBOOKS, hasRulebook, wasRulebookForgotten, adoptRulebookPath } from "./rulebooks.js";
 import { RULEBOOK_DIR, rulebookFileName } from "./book-store.js";
@@ -50,7 +50,7 @@ export function rulebooksInListing(files) {
  * while a book is unanswered.
  */
 export async function adoptStoredRulebooks() {
-	if (!game.user?.isGM || !isPrimaryGM()) return [];
+	if (!isActingPrimaryGM()) return [];
 	const wanted = RULEBOOKS.filter(entry => !hasRulebook(entry.book) && !wasRulebookForgotten(entry.book));
 	if (!wanted.length) return [];
 

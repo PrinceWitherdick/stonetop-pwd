@@ -20,7 +20,7 @@
 		<label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{this.name}}"><span>{{this.label}}</span></label>
 		{{/each}}
 		<button type="button" class="stonetop-requisition-roll-btn">
-			<i class="fas fa-dice-d6"></i> Roll +Fortunes ({{this.fortunes}})
+			<i class="fas fa-dice-d6" aria-hidden="true"></i> Roll +Fortunes ({{this.fortunes}})
 		</button>
 		<ul class="stonetop-requisition-results">
 			<li><strong>10+:</strong> go ahead, but bring it back safely.</li>
@@ -40,7 +40,7 @@
 		</select>
 		<input type="text" class="stonetop-requisition-custom-input" placeholder="Enter an asset or item" disabled hidden>
 		<button type="button" class="stonetop-requisition-take">
-			<i class="fas fa-hand-holding"></i> Take
+			<i class="fas fa-hand-holding" aria-hidden="true"></i> Take
 		</button>
 	</div>
 	{{#unless assets.length}}

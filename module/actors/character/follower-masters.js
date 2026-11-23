@@ -235,7 +235,10 @@ export function followerMasterIndex({ characters = [], actors = [] } = {}) {
 		const origin = actor.flags?.[SYSTEM_ID]?.followerOrigin;
 		let stamped = byUuid.get(origin?.characterUuid) ?? null;
 		if (stamped && !cardStands(readableFlags(stamped), origin.ftype, origin.slug ?? "")) stamped = null;
-		const master = stamped ?? claimed.get(actor.uuid) ?? null;
+		// Every uuid the actor goes by: a recruited group follower walks the map UNLINKED, and the card
+		// names the world Actor, not the token's synthetic copy (linkUuidsFor says why).
+		const claimer = linkUuidsFor(actor).map(uuid => claimed.get(uuid)).find(Boolean);
+		const master = stamped ?? claimer ?? null;
 		if (master && master.id !== actor.id) masters.set(actor.id, master);
 	}
 	return masters;

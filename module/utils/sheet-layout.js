@@ -202,7 +202,7 @@ const _FOOTER = `<div class="row row--border stonetop-layout-offer__footer">
 const _button = (to, icon, label) =>
 	`<div class="row stonetop-layout-offer__actions">
 		<button type="button" class="stonetop-layout-switch" data-layout="${to}">
-			<i class="fas ${icon}"></i> ${label}
+			<i class="fas ${icon}" aria-hidden="true"></i> ${label}
 		</button>
 	</div>`;
 

@@ -26,8 +26,11 @@
 // line of the behaviour they were written against.
 import { GmBundleTab, STONETOP_ENCOUNTER_DRAG_TYPE } from "./gm-bundle-tab.js";
 import { classifySide } from "../../fight/fight-sides.js";
-import { sideInfoFor } from "../../fight/fight-state.js";
+import { fightOnScene, sideInfoFor } from "../../fight/fight-state.js";
 import { HEROES } from "../../fight/engagements.js";
+import { askWithButtons } from "../../utils/ask-with-buttons.js";
+import { format, localize } from "../../utils/i18n.js";
+import { escHtml } from "../../utils/strings.js";
 
 // Re-exported, every one of them, because this module's path is the one the rest of the system and
 // the whole of this tab's test suite import from. The definitions moved; the address did not.
@@ -54,6 +57,9 @@ export {
  *
  * `panel` is the scope of every listener this tab binds, which is what keeps a click on an
  * expedition card out of this engine's handlers — both tabs print the same class names on purpose.
+ * Both are panes of the toolkit's Prep tab now rather than rail tabs (gm-prep-views.js), and the
+ * pane kept its `tab encounters` class for exactly this reason: nothing here checks which rail tab
+ * or which view is showing, so the move under one rail button changed no selector in this file.
  *
  * `fight` puts "Deploy and fight" beside Deploy (when the Fight tab is on), and `actions` wires it.
  */
@@ -82,15 +88,56 @@ export const ENCOUNTERS_TAB = Object.freeze({
  * someone deliberately set up keeps the heroes' side.
  *
  * Opens nothing when Deploy placed nothing, since Deploy has already said why.
+ *
+ * A FIGHT ALREADY GOING ON THIS MAP IS ASKED ABOUT FIRST, before anything is placed: end it and start
+ * this one, bring this encounter into it, or leave everything as it is. Without the question the press
+ * went straight on to "Add to the fight" with nothing on screen saying why it was not "Start a fight",
+ * and read as a button that did nothing. Asked BEFORE the deploy so "leave it" places nothing.
+ * Ending goes through `combat.delete()`, as the Fight tab's own End button does, and only once Deploy has
+ * resolved something to place (gm-bundle-tab.js#deploy's `beforePlace`), so a deploy that finds nothing
+ * leaves the running fight alone.
  */
-export async function deployAndFight(tab, id) {
-	const result = await tab.deploy(id);
+export async function deployAndFight(tab, id, { ask = askAboutRunningFight } = {}) {
+	const scene = globalThis.canvas?.scene ?? null;
+	const running = scene ? fightOnScene(scene) : null;
+	let joining = null;
+	let ending = null;
+	if (running) {
+		const answer = await ask(tab.card(id)?.name ?? "");
+		if (answer === "end") ending = () => running.delete();
+		else if (answer === "add") joining = running;
+		else return null;
+	}
+	const result = await tab.deploy(id, { beforePlace: ending });
 	if (!result?.placed?.length) return null;
 	const ids = result.placed.map(token => token.id);
 	const foes = result.placed
 		.filter(token => classifySide(sideInfoFor(token.actor, token))?.side !== HEROES)
 		.map(token => token.id);
-	return globalThis.game?.stonetop?.fight?.openStart?.({ preselect: ids, preselectPcs: true, forceFoes: foes }) ?? null;
+	return globalThis.game?.stonetop?.fight?.openStart?.({
+		preselect: ids, preselectPcs: true, forceFoes: foes, ...(joining ? { combat: joining } : {}),
+	}) ?? null;
+}
+
+/**
+ * "A fight is already going on here": end it, join it, or neither. Answers "end", "add" or null.
+ * Enter lands on the answer that changes nothing, since the first one ends a fight for every player.
+ */
+export async function askAboutRunningFight(encounterName = "") {
+	const name = encounterName || localize("stonetop.gmToolkit.encounters.removeUnnamed");
+	const content = `<p>${escHtml(format("stonetop.gmToolkit.encounters.fightRunning.body", { name }))}</p>`
+		+ `<p>${escHtml(format("stonetop.gmToolkit.encounters.fightRunning.endBody", { name }))}</p>`;
+	return askWithButtons({
+		title: localize("stonetop.gmToolkit.encounters.fightRunning.title"),
+		content,
+		buttons: [
+			// Red: it ends the fight for every player, and cannot be taken back (STYLEGUIDE.md section 7).
+			{ key: "end", label: localize("stonetop.gmToolkit.encounters.fightRunning.end"), icon: "fa-flag", value: "end", className: "stonetop-dialog-btn--danger" },
+			{ key: "add", label: localize("stonetop.gmToolkit.encounters.fightRunning.add"), icon: "fa-user-plus", value: "add" },
+			{ key: "keep", label: localize("stonetop.gmToolkit.encounters.fightRunning.keep"), icon: "fa-xmark", value: null },
+		],
+		defaultKey: "keep",
+	});
 }
 
 export function withGmEncountersTab(Base) {

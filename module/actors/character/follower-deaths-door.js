@@ -72,7 +72,7 @@ export function followerDoorCardHtml(row, leaderName = "") {
 	const who = `<strong>${escHtml(row?.name || "Your follower")}</strong>`;
 	return `<p>${format(`${KEY}.triggers`, { name: who, leader: escHtml(leaderName) })}</p>`
 		+ `<button type="button" class="stonetop-follower-door-roll" ${rowButtonData(row)}>`
-		+ `<i class="fas fa-dice"></i> ${escHtml(localize(`${KEY}.rollButton`))}</button>`;
+		+ `<i class="fas fa-dice" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.rollButton`))}</button>`;
 }
 
 /** The roll card's header, "Maeve: Death's Door", the way an ordered follower's roll is named. PURE. */
@@ -96,8 +96,8 @@ export function followerDoorRollOptions(row) {
 			failure: { label: "6–", value: format(`${KEY}.failure`, { name }) },
 		},
 		tierActions: {
-			success: `<button type="button" class="stonetop-follower-door-up" ${attrs}><i class="fas fa-heart"></i> ${escHtml(localize(`${KEY}.upButton`))}</button>`,
-			failure: `<button type="button" class="stonetop-follower-door-dead" ${attrs}><i class="fas fa-skull-crossbones"></i> ${escHtml(localize(`${KEY}.deadButton`))}</button>`,
+			success: `<button type="button" class="stonetop-follower-door-up" ${attrs}><i class="fas fa-heart" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.upButton`))}</button>`,
+			failure: `<button type="button" class="stonetop-follower-door-dead" ${attrs}><i class="fas fa-skull-crossbones" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.deadButton`))}</button>`,
 		},
 	};
 }

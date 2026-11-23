@@ -84,7 +84,7 @@ import { inCardTurn } from "../../utils/card-queue.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
 import { followerCardFor, followerMasterIndex } from "./follower-masters.js";
 import { followerFateHpPath, linkedFollowerNpc } from "./follower-fate.js";
@@ -797,7 +797,7 @@ export async function healPatient(message, patient, picks, { reduced = false, me
  */
 export async function handleBathQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, messages = globalThis.game?.messages, resolve = resolveSync, apply = applyBath, groupFor = bathGroupFor } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const user = queryAsker(data, context, users);
 	const message = typeof data?.messageId === "string" ? messages?.get?.(data.messageId) : null;
 	const lightbearer = message ? speakerActor(message) : null;

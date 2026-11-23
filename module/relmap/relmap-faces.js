@@ -13,7 +13,7 @@
 //
 // Never through the undo history: nobody did this to the map, so nobody's Ctrl+Z should take it back.
 
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { clipText } from "../utils/strings.js";
 import { applyPatch, boardCarries, hasLegacyBoard, listMapPages, listRelationshipMaps, readGraph } from "./relmap-doc.js";
 import { RELMAP_NAME_MAX, nodePatch } from "./relmap-store.js";
@@ -130,7 +130,7 @@ async function writeMyBoards(userId, uuid, patchFor) {
 	if (!me) return 0;
 	const mine = userId === me.id;
 	// The primary GM picks up only the boards the person who made the change could not write.
-	const backstop = !mine && me.isGM && isPrimaryGM();
+	const backstop = !mine && isActingPrimaryGM();
 	if (!mine && !backstop) return 0;
 	const maker = backstop ? globalThis.game.users?.get?.(userId) ?? null : null;
 
@@ -154,8 +154,7 @@ async function writeMyBoards(userId, uuid, patchFor) {
  * renames a compendium actor while the table plays.
  */
 export async function sweepStaleFaces({ resolve = uuid => globalThis.fromUuidSync?.(uuid, { strict: false }) } = {}) {
-	const me = globalThis.game?.user;
-	if (!me?.isGM || !isPrimaryGM()) return 0;
+	if (!isActingPrimaryGM()) return 0;
 	// EACH ACTOR LOOKED UP ONCE FOR THE WHOLE SWEEP, and null for one that is not there to look up:
 	// the same person stands on several boards, and on several spots of one.
 	const faces = new Map();

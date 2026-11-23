@@ -106,6 +106,14 @@ describe("who sees which button", () => {
 		expect(offersFor({ roller: dry, helpers: [dry] })).toEqual([]);
 	});
 
+	it("offers Diligence on a steading's roll, and none of the other three (p.118: a roll a fellow player just made)", () => {
+		const steading = { id: "st", type: "stonetop", name: "Stonetop" };
+		expect(offersFor({ roller: steading })).toEqual(["diligence:Aeron"]);
+		const prophet = pc({ id: "judge", name: "Aeron", moves: [COMMUNE_WITH_ARATIS, PIETY], held: { [COMMUNE_WITH_ARATIS]: 1, [PIETY]: 1 } });
+		expect(offersFor({ roller: steading, helpers: [prophet] })).toEqual([]);
+		expect(offersFor({ roller: steading, helpers: [judge({ unlearned: [CHRONICLER] })] })).toEqual([]);
+	});
+
 	it("offers nothing to someone who does not play the helper", () => {
 		expect(offersFor({ user: player("fox") })).toEqual([]);
 	});

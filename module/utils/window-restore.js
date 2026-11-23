@@ -345,16 +345,26 @@ function _flushNow() {
 // sheet has fewer tab groups than were saved. Skips a saved tab the sheet no longer draws (the GM
 // switched the Timeline or Relationship Map off since): activating it would hide every tab body
 // and leave the sheet blank.
-function _applyTabs(app, tabs) {
-	if (!Array.isArray(tabs)) return;
+//
+// A sheet whose tabs were REARRANGED since the save says how the old names map onto the new ones
+// with `_mapSavedTabs(tabs)` (the GM Toolkit's Encounters and Expeditions rail tabs, now views of its
+// Prep tab); without it, the name is skipped above and the window reopens on its default tab.
+//
+// `triggerCallback`, so a restore is the same tab change as a click: core's controller only flips
+// classes, and a sheet that keeps state in step with its tabs does it in `_onChangeTab` (the
+// toolkit's Prep switcher puts its `aria-selected` / roving `tabindex` back there). Every override
+// in the system calls `super` first and then only syncs what it owns, so running it here is safe.
+function _applyTabs(app, saved) {
+	if (!Array.isArray(saved)) return;
 	const groups = app?._tabs;
 	if (!Array.isArray(groups)) return;
+	const tabs = typeof app._mapSavedTabs === "function" ? (app._mapSavedTabs(saved) ?? saved) : saved;
 	tabs.forEach((name, idx) => {
 		const group = groups[idx];
 		if (!name || !group || group.active === name) return;
 		const nav = group._nav;
 		if (nav?.querySelectorAll && ![...nav.querySelectorAll("[data-tab]")].some(el => el.dataset?.tab === name)) return;
-		group.activate?.(name);
+		group.activate?.(name, { triggerCallback: true });
 	});
 }
 

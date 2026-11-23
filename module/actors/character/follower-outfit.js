@@ -14,7 +14,7 @@
 import { STONETOP_SCOPE, readableFlags } from "./StonetopFlags.js";
 import { followerDetailBase, followerDetailFlags } from "./follower-roster.js";
 import { LOAD_LEVEL_LIMITS, deriveLoadLevel, loadBandLabels } from "../../utils/load.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 
 const sameName = (a, b) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
 

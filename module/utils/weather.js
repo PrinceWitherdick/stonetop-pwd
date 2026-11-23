@@ -316,7 +316,7 @@ export async function postWeather(seasonKey, { row = null, roll = null, note = "
 // says what the weather is, and stays quiet about a die that never left the GM's hand.
 function _weatherCardBody(row, roll, note = "") {
 	const reroll = row?.reroll
-		? `<p class="stonetop-weather-reroll"><i class="fas fa-rotate-right"></i> ${REROLL_NOTE}</p>`
+		? `<p class="stonetop-weather-reroll"><i class="fas fa-rotate-right" aria-hidden="true"></i> ${REROLL_NOTE}</p>`
 		: "";
 	// Why the die was thrown the way it was, so the players reading "2d6kl1" or a second die
 	// they never saw are told in words. Above the rider, which is about the NEXT roll.

@@ -1,0 +1,48 @@
+{{!-- THE BAR AT THE TOP OF A PREP VIEW: one muted line saying what the view is for, a small "?" that
+      opens the full account of it, and the one act the view exists for ("New encounter", "New
+      expedition", "New site") at the right.
+
+      IT REPLACES TWO THINGS. A three-line italic intro, which was the loudest thing on the pane
+      and was read once and never again; and the dashed add bar at the foot of the list, which on a
+      pane of eight cards was a scroll away from the top a GM opens onto. Up here the button is in
+      the same place on all three views, the way the switcher above it is.
+
+      THE FULL INTRO IS A DISCLOSURE, NOT A TOOLTIP. It was the lead's tooltip, behind a help
+      cursor: core's tooltip opens on pointerenter and nothing else, so a keyboard user never saw
+      it, a touch user had to know to press a line of text, and a screen reader heard only the
+      lead. The "?" is a real button (`aria-expanded`, `aria-controls`) that shows the intro as a
+      line of text under the bar, which every one of those can reach. Its open state is the
+      sheet's, kept per view across renders (gm-prep-views.js#wirePrepIntros), because this sheet
+      repaints for writes anywhere in the world and an explanation that snapped shut mid-sentence
+      would be worse than none. `pane` is the view's entry in `stonetop.prep.panes`, which carries
+      the id the button points at and whether it is open.
+
+      THE BUTTON KEEPS BOTH OF ITS CLASSES' JOBS. `{{kind}}-add-btn` is the hook the handlers
+      match (`.stonetop-gm-encounter-add-btn` in gm-bundle-tab.js, `.site-add-btn` through
+      gm-prep-tabs.js's PREP_TOOLS), so a view's bar has to stay INSIDE the scope that handler is
+      bound to (`.tab.encounters`, `.tab.expeditions`, `.steading-sites`). `stonetop-prep-add-btn`
+      is the system's "write one up" look; `stonetop-gm-pane-add` turns it from that full-width
+      dashed strip into a compact outlined button, in stonetop.css, without touching the Threats
+      tab's own add bars, which wear the base class alone (gm-prep-add-bar.hbs). It is also the
+      ANCHOR the pane's edit pencil is placed against (stonetop.css), which is how the pencil sits
+      just left of it rather than in a notch reserved at the bar's end.
+
+      `bare` drops the button: an EMPTY view carries the same button, larger, in its empty state
+      (gm-prep-empty.hbs), and two identical buttons a hand apart read as two different acts.
+
+      Hash parameters, merged into the caller's context like every partial's (section-heading.hbs
+      states the trap). Only ever rendered at the top of a pane, never inside an `{{#each}}`, so
+      there is no view-model field for them to shadow. --}}
+<div class="stonetop-gm-pane-bar">
+	<p class="stonetop-gm-pane-lead">{{this.lead}}</p>
+	<button type="button" class="stonetop-gm-pane-help" data-prep-intro="{{pane.key}}"
+	        aria-expanded="{{#if pane.introOpen}}true{{else}}false{{/if}}" aria-controls="{{pane.id}}-intro"
+	        aria-label="{{localize "stonetop.gmToolkit.prep.aboutView"}}"
+	        data-tooltip="{{localize "stonetop.gmToolkit.prep.aboutView"}}" data-tooltip-direction="UP">
+		<i class="fas fa-circle-question" aria-hidden="true"></i>
+	</button>
+	{{#unless bare}}
+	<button type="button" class="stonetop-prep-add-btn stonetop-gm-pane-add {{this.kind}}-add-btn"><i class="fas fa-plus" aria-hidden="true"></i> <span class="stonetop-chip-text">{{this.label}}</span></button>
+	{{/unless}}
+	<p class="stonetop-gm-pane-intro" id="{{pane.id}}-intro"{{#unless pane.introOpen}} hidden{{/unless}}>{{this.intro}}</p>
+</div>

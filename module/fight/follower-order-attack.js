@@ -65,13 +65,13 @@ function cardAttrs({ ftype, slug = "", member = "", memberName = "" }) {
  */
 export function orderedAttackButton({ ftype, slug = "", name = "", move, member = "", memberName = "" }) {
 	return `<button type="button" class="stonetop-follower-order-damage" ${cardAttrs({ ftype, slug, member, memberName })} data-move="${escHtml(move)}">`
-		+ `<i class="fas fa-dice-d6"></i> ${escHtml(format(`${KEY}.damageButton`, { name: name || "their" }))}</button>`;
+		+ `<i class="fas fa-dice-d6" aria-hidden="true"></i> ${escHtml(format(`${KEY}.damageButton`, { name: name || "their" }))}</button>`;
 }
 
 /** Let Fly's 7-9 deplete button, for a follower whose card tracks ammo. PURE. */
 export function orderedDepleteButton({ ftype, slug = "", name = "" }) {
 	return `<button type="button" class="stonetop-follower-order-deplete" ${cardAttrs({ ftype, slug })} data-name="${escHtml(name ?? "")}">`
-		+ `<i class="fas fa-arrow-down-short-wide"></i> ${escHtml(format(`${KEY}.depleteButton`, { name: name || "their" }))}</button>`;
+		+ `<i class="fas fa-arrow-down-short-wide" aria-hidden="true"></i> ${escHtml(format(`${KEY}.depleteButton`, { name: name || "their" }))}</button>`;
 }
 
 /**

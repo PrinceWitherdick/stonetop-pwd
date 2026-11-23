@@ -106,7 +106,7 @@ export function wireCampCard(message, html) {
 	if (!button) return;
 	const sitting = campActors(camp.campId).some(actor => playsCharacter(actor));
 	if (sitting || (game.user?.isGM && !myCampCharacters().length)) {
-		button.innerHTML = `<i class="fas fa-campground"></i> Open the camp`;
+		button.innerHTML = `<i class="fas fa-campground" aria-hidden="true"></i> Open the camp`;
 	}
 	button.addEventListener("click", async ev => {
 		ev.preventDefault();

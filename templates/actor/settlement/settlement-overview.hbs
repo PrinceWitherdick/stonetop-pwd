@@ -35,12 +35,12 @@
 
 	{{#if system.setupNote}}
 	<div class="stonetop-settlement-setup" role="note">
-		<i class="fa-solid fa-scroll" inert></i>
+		<i class="fas fa-scroll" aria-hidden="true"></i>
 		<p>{{system.setupNote}}</p>
 		{{#if canWrite}}
 		<button type="button" class="stonetop-settlement-quiet" data-action="dismissSetup"
 		        data-tooltip="{{localize "stonetop.settlement.setupDismiss"}}" aria-label="{{localize "stonetop.settlement.setupDismiss"}}">
-			<i class="fa-solid fa-check" inert></i>
+			<i class="fas fa-check" aria-hidden="true"></i>
 		</button>
 		{{/if}}
 	</div>
@@ -101,13 +101,13 @@
 						{{#if partnerUuid}}
 						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{this.partnerUuid}}" data-reader-ok
 						        data-tooltip="{{localize "stonetop.settlement.openPartner" name=partner}}" aria-label="{{localize "stonetop.settlement.openPartner" name=partner}}">
-							<i class="fa-solid fa-arrow-up-right-from-square" inert></i>
+							<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
 						</button>
 						{{/if}}
 						{{#if ../editable}}
 						<button type="button" class="steading-list-delete" data-action="deleteRow"
 						        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
-							<i class="fa-solid fa-xmark" inert></i>
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 						{{/if}}
 					</span>
@@ -119,7 +119,7 @@
 			{{/if}}
 			{{#if editable}}
 			<button type="button" class="steading-list-add" data-action="addRow" data-list="tradeWith">
-				<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addPartner"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.settlement.addPartner"}}
 			</button>
 			{{/if}}
 		</div>
@@ -139,7 +139,7 @@
 			<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noGovernment"}}</p>
 			{{#if editable}}
 			<button type="button" class="steading-list-add" data-action="editGovernment">
-				<i class="fa-solid fa-pen" inert></i> {{localize "stonetop.settlement.writeGovernment"}}
+				<i class="fas fa-pencil" aria-hidden="true"></i> {{localize "stonetop.settlement.writeGovernment"}}
 			</button>
 			{{/if}}
 			{{/if}}
@@ -162,19 +162,19 @@
 						{{#if uuid}}
 						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{this.uuid}}" data-reader-ok
 						        data-tooltip="{{localize "stonetop.settlement.openPerson" name=name}}" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">
-							<i class="fa-solid fa-id-card" inert></i>
+							<i class="fas fa-id-card" aria-hidden="true"></i>
 						</button>
 						{{#if ../editable}}
 						<button type="button" class="stonetop-settlement-quiet" data-action="unlinkLeader"
 						        data-tooltip="{{localize "stonetop.settlement.unlink"}}" aria-label="{{localize "stonetop.settlement.unlink"}}">
-							<i class="fa-solid fa-link-slash" inert></i>
+							<i class="fas fa-link-slash" aria-hidden="true"></i>
 						</button>
 						{{/if}}
 						{{/if}}
 						{{#if ../editable}}
 						<button type="button" class="steading-list-delete" data-action="deleteRow"
 						        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
-							<i class="fa-solid fa-xmark" inert></i>
+							<i class="fas fa-xmark" aria-hidden="true"></i>
 						</button>
 						{{/if}}
 					</span>
@@ -186,7 +186,7 @@
 			{{/if}}
 			{{#if editable}}
 			<button type="button" class="steading-list-add" data-action="addRow" data-list="leaders">
-				<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addPerson"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.settlement.addPerson"}}
 			</button>
 			{{/if}}
 		</div>
@@ -204,7 +204,7 @@
 					{{#if ../editable}}
 					<button type="button" class="steading-list-delete" data-action="deleteRow"
 					        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
-						<i class="fa-solid fa-xmark" inert></i>
+						<i class="fas fa-xmark" aria-hidden="true"></i>
 					</button>
 					{{/if}}
 				</li>
@@ -215,7 +215,7 @@
 			{{/if}}
 			{{#if editable}}
 			<button type="button" class="steading-list-add" data-action="addRow" data-list="groups">
-				<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addGroup"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.settlement.addGroup"}}
 			</button>
 			{{/if}}
 		</div>

@@ -49,6 +49,15 @@ The world setting **Artifacts Arrive Unidentified** makes new artifacts start hi
 - Editing a card that characters hold updates their sheets. Deleting one asks first; holders keep its name.
 - **Include homebrew minor arcana in the Seeker's draw** (off by default) adds your finished minor arcana to the deck a new Seeker draws 3 from. It's on the GM's **Preferences** tab under **Arcana**, and in Configure Settings.
 
+## Starting with a specific major arcanum
+
+A Seeker's background lists 3 major arcana, and creation has the player take 1 of them. When you want a Seeker to start with a different one, such as a character brought over from another table, you have two ways to do it.
+
+- **Give it yourself.** On a Seeker's **Arcana** tab, **Give a major arcanum** opens every major arcanum, yours included. Pick one and press **Give this arcanum**. The button shows as soon as the player has chosen the Seeker, even partway through creation. If they're still in creation, their window updates: the background's 3 are replaced by yours, with no choice to make, and they still mark 1 ○ or □ and answer the questions. If the character is already made, the card goes on now and you're asked for its mark. Their old major arcanum goes only if nothing has been marked on it since creation. **The background's own three** takes your pick back, and the card stays held. To remove it, use the card's own **Remove**.
+- **Let players choose.** Turn on **Seekers may start with any major arcanum**, and a **Choose a different arcanum** button joins the background's 3, both in creation and when the background is changed on the Details tab. Players see the books' major arcana. Your own appear only when **Players may pick homebrew major arcana** is on as well.
+
+Only the starting arcanum carries over this way. Any later progress, such as more marks, an unlocked card or a consequence, is ticked on the Arcana tab once creation is done.
+
 ## See also
 - [Arcana and Artifacts](Arcana-and-Artifacts)
 - [Homebrew Content](Homebrew-Content)

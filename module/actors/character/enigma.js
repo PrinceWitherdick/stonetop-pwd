@@ -15,7 +15,7 @@
 import { resolvedFlagProperty } from "./StonetopFlags.js";
 import { writeSetupResource } from "./background-tracks.js";
 import { actorTookBackground } from "./took-background.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 import { splitInventoryNote } from "../../utils/inventory-item-data.js";
 
 export const ENIGMA_KEY   = "enigma";

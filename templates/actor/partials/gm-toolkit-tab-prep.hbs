@@ -1,0 +1,56 @@
+{{!-- PREP — everything a GM gathers ahead of the night, behind one rail button: the Encounters
+      for a session, the Expeditions for a trip, and the Sites a trip is for. A switcher at the
+      top of the tab chooses between them; module/actors/gmtoolkit/gm-prep-views.js says why it is
+      one button and not three.
+
+      A TAB GROUP INSIDE A TAB. This panel is the rail's (`data-group="primary"`); the switcher
+      and the three panes under it are a second group of their own (`data-group="prep"`), bound by
+      the second entry of the sheet's `tabs` option. Core's controller skips any panel whose group
+      is not its own, so the rail never shows or hides a pane and the switcher never touches a rail
+      tab. That is also what makes the view survive a repaint: the controller outlives every
+      render and re-applies its `active` each time it binds.
+
+      THE PANES KEEP THEIR OWN IDENTITIES, `.tab.encounters` and `.tab.expeditions`, and that is
+      load-bearing rather than tidy: each bundle engine scopes every listener and its drop zone to
+      its own pane (`panel` in gm-encounters-tab.js / gm-expeditions-tab.js), and each pane keeps
+      its own edit pencil. The Sites pane's listeners are scoped to `.steading-sites` inside it.
+      The panes are SIBLINGS, never nested: an encounter pane inside the expeditions pane would
+      answer both engines' `closest`.
+
+      THE PILL IS A BARE NUMBER; what it counts is in the tooltip, and in the button's
+      `aria-label`, so a screen reader hears "Encounters, 3 to run" rather than "Encounters 3".
+
+      THE SWITCHER IS A REAL TABLIST. Buttons, so Enter and Space work with nothing wired; role and
+      `aria-selected` and a roving `tabindex` stamped from the render context, and kept right
+      between renders by the sheet's `_onChangeTab`; the arrow keys from gm-prep-views.js. Each
+      segment's pill counts what is LIVE in its view — the encounters and expeditions still to run,
+      and every site — so the number says how much prep is waiting, not how much has ever been
+      made.
+
+      NOT `sheet-tabs` on the nav. The rail's own controller finds its nav by that class, and a
+      second match is a thing only source order would be saving us from.
+
+      The switcher sits IN the tab and scrolls away with it, like everything else on this frame:
+      the sheet scrolls as one unit (gm-toolkit.hbs), and there is no pinned region to put it in. --}}
+<div class="tab prep" data-group="primary" data-tab="prep">
+	<nav class="stonetop-gm-prep-switcher" data-group="prep" role="tablist" aria-label="{{stonetop.prep.label}}">
+		{{#each stonetop.prep.views}}
+		<button type="button" class="item stonetop-gm-prep-view{{#if this.active}} active{{/if}}"
+		        data-tab="{{this.key}}" id="{{this.tabId}}"
+		        role="tab" aria-controls="{{this.paneId}}"
+		        aria-selected="{{#if this.active}}true{{else}}false{{/if}}" tabindex="{{#if this.active}}0{{else}}-1{{/if}}"
+		        aria-label="{{this.label}}, {{this.countTip}}"
+		        data-tooltip="{{this.countTip}}" data-tooltip-direction="DOWN">
+			<span class="stonetop-gm-prep-view-icon" aria-hidden="true"></span>
+			<span class="stonetop-gm-prep-view-label">{{this.label}}</span>
+			<span class="stonetop-gm-prep-view-count{{#unless this.count}} stonetop-gm-prep-view-count--zero{{/unless}}">{{this.count}}</span>
+		</button>
+		{{/each}}
+	</nav>
+
+	<div class="stonetop-gm-prep-panes">
+		{{> "stonetop.gm-toolkit-tab-encounters"}}
+		{{> "stonetop.gm-toolkit-tab-expeditions"}}
+		{{> "stonetop.gm-toolkit-tab-sites"}}
+	</div>
+</div>

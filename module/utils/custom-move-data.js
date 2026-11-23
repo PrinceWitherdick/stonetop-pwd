@@ -2,15 +2,8 @@ import { CUSTOM_MOVE_ROLL_TYPES } from "./roll-types.js";
 import { formatCustomMoveDescription } from "./custom-move-text.js";
 import { buildMoveTierResults, parseTierInput } from "./move-results.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
+import { clampInt } from "./clamp-int.js";
 
-// Coerce a value to an integer clamped to [lo, hi]; non-numeric / out-of-range → nearest bound.
-// With a `fallback`, a value that is no finite number at all (missing, "abc", Infinity) is that
-// instead (an imported playbook's unreadable count keeps its default).
-export function clampInt(value, lo, hi, fallback) {
-	const n = Math.trunc(Number(value));
-	if (!Number.isFinite(n) && fallback !== undefined) return fallback;
-	return Math.max(lo, Math.min(hi, n || 0));
-}
 
 /**
  * Shape raw custom-move dialog input into the item document data shared by every save

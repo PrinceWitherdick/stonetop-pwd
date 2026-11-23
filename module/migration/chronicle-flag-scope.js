@@ -36,7 +36,7 @@ import { mergeSeasonBlock } from "../seasons/seasons-chronicle.js";
 import { cloneChronicleSection, normaliseChronicleHtml } from "../utils/chronicle-core.js";
 import { CHRONICLE_PROSE_FLAG } from "../utils/chronicle-journals.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 
 /** The property name a plain (uncomputed) `SYSTEM_ID` key lands under. */
 export const LITERAL_SCOPE_KEY = "SYSTEM_ID";
@@ -289,7 +289,7 @@ export async function repairChronicleFlagScope(entry) {
  * try to delete the same pages (the loser throwing on documents that no longer exist).
  */
 export async function repairAllChronicleFlagScopes() {
-	if (!game.user?.isGM || !isPrimaryGM()) return { updated: 0, deleted: 0, journals: 0 };
+	if (!isActingPrimaryGM()) return { updated: 0, deleted: 0, journals: 0 };
 	let updated = 0, deleted = 0, journals = 0;
 	for (const entry of game.journal?.contents ?? []) {
 		try {

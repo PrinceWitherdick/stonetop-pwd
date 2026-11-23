@@ -80,7 +80,7 @@ function gmMoveCardBody(move, rng) {
 function shareRow() {
 	return `<div class="stonetop-gm-move-card-actions">
 		<button type="button" class="stonetop-gm-move-share">
-			<i class="fas fa-eye"></i> ${escHtml(localize("stonetop.gmToolkit.moves.share"))}
+			<i class="fas fa-eye" aria-hidden="true"></i> ${escHtml(localize("stonetop.gmToolkit.moves.share"))}
 		</button>
 	</div>`;
 }

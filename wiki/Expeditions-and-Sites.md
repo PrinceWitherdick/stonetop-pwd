@@ -4,7 +4,7 @@ Leaving town is where Stonetop's adventures happen. The **Run an Expedition** wa
 
 ## Run an Expedition
 
-Open it from the **Run an Expedition** macro (hotbar slot 2), or with **Run it** on an expedition prepared on the GM Toolkit's **Expeditions** tab. It's a stepped window with the steps listed on the left and the **Exploration moves** (the GM's moves for the road) always on the right:
+Open it from the **Run an Expedition** macro (hotbar slot 2), or with **Run the expedition** on an expedition prepared in the GM Toolkit (**Prep** tab, **Expeditions**). It's a stepped window with the steps listed on the left and the **Exploration moves** (the GM's moves for the road) always on the right:
 
 | Step | What it does |
 |---|---|
@@ -17,7 +17,7 @@ Open it from the **Run an Expedition** macro (hotbar slot 2), or with **Run it**
 | **Player moves on the road** | What the players might do: Have What You Need, Recover, Struggle as One, Keep Company, Make Camp, Forage. |
 | **Going home** | Questions for the homecoming, Return Triumphant, what is still out with the trip, **Reset Inventory** for the party, and **Save to the Chronicle**. |
 
-![The Run an Expedition window on The route step: the Vicinity map with a red dotted route from Stonetop to The Tower on the Heath and the travel time on each leg, and the Put a site on the map, Draw it on the scene and Show players buttons](images/expeditions-and-sites-route.webp)
+![The Run an Expedition window on The route step, its banner marked Planning: the Vicinity map with a red dotted route from Stonetop to The Tower on the Heath and the travel time on each leg, and the Put a site on the map, Draw it on the scene and Show players buttons](images/expeditions-and-sites-route.webp)
 
 > **Did you know?**
 > - The walkthrough reopens where you left it after a reload.
@@ -41,11 +41,28 @@ The poster-map scenes come from [Import Book Art](Import-Book-Art). If you made 
 
 The **Running the journey** step has the tools for each leg:
 
+- **The road** panel, under the set-out line at the top, lists the stops, with a marker for the party. **Travel on to (the next stop)** moves the party one leg on, and the marker walks to it; **Back a leg** undoes a click too many. After a leg it offers **Spend (days) of supplies...**, which opens **Days pass on the road** with that leg's days filled in. The panel never stops you: with no route plotted it says so and offers **Plot the route**, and with the trip not marked as set out it says that too.
+- The window's banner shows where the trip stands: **Planning**, **On the road, leg 2 of 3**, **Arrived** or **Home**.
+- **Start a fight...** opens Start a fight with every character on the map already ticked. It is only there while the **Fight** tab is on.
 - **Roll the Die of Fate**, with advantage or disadvantage, and its table for perilous legs.
 - **Call for Struggle as One** when the whole party faces the same danger. The window says it's **Part of a journey**. See [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves).
 - **Days pass on the road...** for days you gloss over: it spends the supplies each traveller eats (1 use a head a day; a mess kit feeds four). You can adjust each person before it's spent. A Ghost or Revenant needs no food, so their **Eats** box starts unticked with a line saying why; their followers still eat. So does someone holding a length of prayer beads whose back is realised, while they hold at least 1 Preparation. Tick the box to count them anyway.
 
 Players run Make Camp themselves in its shared window.
+
+### What the players see
+
+Each **Travel on** moves the party on every map that shows the route:
+
+- On the GM's map windows, and in the players' route window once you've used **Show players**, the part of the way already travelled is drawn solid and a walking figure marks the party. The players' window also says where they are in words ("Leg 2 of 3: next stop..."), so a screen reader hears it.
+- On a scene where you used **Draw it on the scene**, a round marker walks the ribbon.
+- A route shared in the middle of a trip shows the party where it already is.
+
+### Table moments
+
+A short banner crosses every screen at the big beats of a trip: **The expedition sets out** and **Home again** when you mark either end, and **The party arrives** with **Reached (stop)** at each stop of a route the players can see. A trip you haven't shown the players moves only in your own window, and its stop names stay yours. **A fight breaks out** plays for everyone who can see a fighter when a fight starts, with **On the road to (stop)** under it during a shared journey.
+
+The banner stays up for about four seconds and is read out by screen readers. Click it to dismiss it sooner; during **A fight breaks out**, which darkens the screen behind it, a click anywhere does. Around the smaller **The party arrives** card, clicks still reach whatever is under it. Players with **Reduce Motion** on (or their computer set to reduce motion) see it without movement. The world setting **Table moments** (Configure Settings, GM only) turns all of these banners off for everyone; there is no per-player switch.
 
 ## Setting out and coming home
 
@@ -70,9 +87,9 @@ The last step asks the questions for the homecoming, runs Return Triumphant inli
 
 ## Sites
 
-Sites are the places the party explores: a barrow, a ruined tower, a cave. They live at the foot of the GM Toolkit's **Expeditions** tab.
+Sites are the places the party explores: a barrow, a ruined tower, a cave. They live in the GM Toolkit: open the **Prep** tab and choose **Sites** at the top.
 
-- **Create a site** walks through Book I's process for creating sites in nine steps, with a list on the left to jump between them.
+- **New site** walks through Book I's process for creating sites in nine steps, with a list on the left to jump between them.
 - You don't have to finish it in one go. **Save for now**, beside **Next** on every step, saves the site as it stands; its card's pencil reopens the walkthrough with your answers in place. Closing the window with unsaved answers asks first: **Save my changes** or **Discard what I wrote**; close the question to keep writing.
 - Each site card has its tables (click a d20 table to roll it), a **Running it** reference (light sources, tags and marching order), and edit and delete buttons.
 - **Mark visited** asks **Who went to (site)?** and writes the visit onto their timelines and Stonetop's, where the players can read it.
@@ -83,11 +100,11 @@ Sites are the places the party explores: a barrow, a ruined tower, a cave. They 
 - Drag a site card from the toolkit onto a scene to pin it.
 - Click a site pin to run the way through it; `Shift`-click to add it as another stop; right-click to take the pin off the map (the write-up stays). Dragging a pin on the scene moves the site on the map too.
 
-![The GM Toolkit's Expeditions tab: two prepared expeditions, the Call for Struggle as One button, and the Sites section with two site cards, one marked visited](images/expeditions-and-sites-sites.webp)
+![The GM Toolkit's Prep tab with Sites chosen in the switcher: the New site button and two site cards, one marked visited](images/expeditions-and-sites-sites.webp)
 
 ## Preparing expeditions ahead of time
 
-The GM Toolkit's **Expeditions** tab holds prepared expeditions: bundles of the actors, journals, scenes and notes you'll want on the road, like the Encounters tab. **Run it** starts the walkthrough named after the bundle. See [The GM Toolkit](The-GM-Toolkit).
+The GM Toolkit's **Prep** tab holds prepared expeditions under **Expeditions**: bundles of the actors, journals, scenes and notes you'll want on the road, like its encounters. **Run the expedition** at the foot of a card starts the walkthrough named after the bundle, and the card says **On the road** until the trip is over. See [The GM Toolkit](The-GM-Toolkit#expeditions).
 
 ## See also
 - [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves)

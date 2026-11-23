@@ -15,6 +15,13 @@ import { BOOK_SETTLEMENT_STATS, settlementTemplate } from "../../data/settlement
 // (SpringBurstDialog). The second used to record the gains' NAMES in the Chronicle and apply
 // none of them, so a Tor's blessing taken at the very first spring never held.
 
+/**
+ * The gains that change the sheet when ticked, the three above; the rest leave nothing. Keep it in
+ * step with the branches in seasonalGainChanges. The Seasons Change window's close-out relabels to
+ * "Apply those gains" off this list, so it names Tor's blessing's write as well as the two stat ones.
+ */
+export const MECHANICAL_GAIN_KEYS = Object.freeze(["population", "bounty", "tor"]);
+
 /** The move every gain is filed under in the ledger. */
 export const SEASONAL_GAINS_MOVE = "Seasons Change";
 

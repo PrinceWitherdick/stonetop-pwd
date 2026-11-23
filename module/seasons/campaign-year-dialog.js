@@ -13,7 +13,7 @@ import { contentElement } from "../utils/dialogv2-content.js";
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { timelineNow } from "../timeline/timeline-record.js";
 import { cardinalWord } from "./seasons-chronicle.js";
@@ -113,7 +113,7 @@ export function installCampaignYearSync() {
 			if (journal.sheet?.rendered) journal.sheet.render(false);
 		}
 		// The one write, and the GM's: two GMs racing would both issue it.
-		if (game.user?.isGM && isPrimaryGM()) {
+		if (isActingPrimaryGM()) {
 			try { await renameAllSeasonYearPages(); }
 			catch (err) { console.error("Stonetop | Chronicle year-page rename failed", err); }
 		}

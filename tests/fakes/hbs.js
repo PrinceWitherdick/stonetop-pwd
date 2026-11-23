@@ -111,3 +111,59 @@ export function bareHelperLookups(source) {
 	visitor.accept(Handlebars.parse(source));
 	return found;
 }
+
+/**
+ * Every opening tag in a template, read the way a browser would read it once Handlebars had run:
+ * `{ name, start, end, attrs: [{ name, raw }] }`, where `raw` is the attribute's value as written
+ * (mustaches and all) or undefined for a bare attribute.
+ *
+ * A regex cannot do this. An attribute value may hold a mustache with quotes of its own
+ * (`data-tooltip="{{localize "stonetop.x"}}"`), and a partial call takes hash arguments that LOOK
+ * like attributes (`{{> section-heading title="Stats"}}`) and are not: both are skipped whole here,
+ * so `title=` on a partial is never mistaken for a native title. A mustache standing between two
+ * attributes (`{{#if x}}disabled{{/if}}`) is stepped over and the attributes round it are kept.
+ */
+export function openingTags(source) {
+	const tags = [];
+	const n = source.length;
+	const pastMustache = j => {
+		if (source.startsWith("{{!--", j)) { const e = source.indexOf("--}}", j); return e < 0 ? n : e + 4; }
+		const triple = source.startsWith("{{{", j);
+		const e = source.indexOf(triple ? "}}}" : "}}", j);
+		return e < 0 ? n : e + (triple ? 3 : 2);
+	};
+	let i = 0;
+	while (i < n) {
+		if (source.startsWith("{{", i)) { i = pastMustache(i); continue; }
+		if (source.startsWith("<!--", i)) { const e = source.indexOf("-->", i); i = e < 0 ? n : e + 3; continue; }
+		const open = source[i] === "<" && /^<([a-zA-Z][\w-]*)/.exec(source.slice(i, i + 40));
+		if (!open) { i++; continue; }
+		const tag = { name: open[1].toLowerCase(), start: i, attrs: [] };
+		let j = i + open[0].length;
+		while (j < n) {
+			if (/\s/.test(source[j])) { j++; continue; }
+			if (source.startsWith("{{", j)) { j = pastMustache(j); continue; }
+			if (source[j] === ">") { j++; break; }
+			if (source[j] === "/" && source[j + 1] === ">") { j += 2; break; }
+			const name = /^[^\s=>/{]+/.exec(source.slice(j, j + 80));
+			if (!name) { j++; continue; }
+			const attr = { name: name[0] };
+			j += name[0].length;
+			if (source[j] === "=") {
+				j++;
+				const quote = source[j] === '"' || source[j] === "'" ? source[j++] : null;
+				const from = j;
+				while (j < n && (quote ? source[j] !== quote : !/[\s>]/.test(source[j]))) {
+					j = source.startsWith("{{", j) ? pastMustache(j) : j + 1;
+				}
+				attr.raw = source.slice(from, j);
+				if (quote) j++;
+			}
+			tag.attrs.push(attr);
+		}
+		tag.end = j;
+		tags.push(tag);
+		i = j;
+	}
+	return tags;
+}

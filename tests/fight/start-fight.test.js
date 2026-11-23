@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-	startWindowModel, startFight, lineUpFight, viewRectWorld, withGroupSizes, monsterNote,
+	startWindowModel, startFight, lineUpFight, viewRectWorld, withGroupSizes, monsterNote, heroesBringAGroup,
 } from "../../module/fight/start-fight.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection, GRID } from "../fakes/fight.js";
@@ -419,6 +419,51 @@ describe("withGroupSizes", () => {
 	it("leaves a pick as it was when its question is closed unanswered", async () => {
 		const picks = [{ id: "token:tCrin", name: "Crinwin", side: "foes" }];
 		expect(await withGroupSizes(picks, infoFor, async () => null)).toEqual(picks);
+	});
+
+	it("tells each question whether to offer the group scale", async () => {
+		const seen = [];
+		const ask = async question => { seen.push(question.offerGroup); return null; };
+		const picks = [{ id: "token:tCrin", name: "Crinwin", side: "foes" }];
+		await withGroupSizes(picks, infoFor, ask);
+		await withGroupSizes(picks, infoFor, ask, { offerGroup: true });
+		expect(seen).toEqual([false, true]);
+	});
+});
+
+describe("heroesBringAGroup", () => {
+	// Book I p.416: "If the PCs have a group of followers... If the group deals damage to another group".
+	const cadi = fakeActor({ id: "cadi", type: "character", name: "Cadi", flags: { [SYSTEM_ID]: { crew: { size: 6 } } } });
+	const crewOf = id => fakeActor({ id, type: "npc", name: "Crew", flags: { [SYSTEM_ID]: { followerOrigin: { characterUuid: "Actor.cadi", ftype: "crew", slug: "" } } } });
+	const resolve = uuid => ({ "Actor.cadi": cadi, "Actor.crew": crewOf("crew") })[uuid] ?? null;
+	const bram = fakeActor({ id: "bram", type: "character", name: "Bram" });
+	const tBram = fakeToken({ id: "tBram", actor: bram });
+	const tCrew = fakeToken({ id: "tCrew", actor: crewOf("crewToken") });
+	const scene = fakeScene({ tokens: [tBram, tCrew] });
+	const withResolve = fn => {
+		const was = globalThis.fromUuidSync;
+		globalThis.fromUuidSync = resolve;
+		try { return fn(); } finally { globalThis.fromUuidSync = was; }
+	};
+
+	it("is false for the PCs alone: foes they engage aren't really part of a group", () => {
+		expect(withResolve(() => heroesBringAGroup([{ id: "token:tBram", side: "heroes" }], null, scene, { resolve }))).toBe(false);
+	});
+
+	it("is true for a crew ticked on the heroes' side, on the map or not", () => {
+		expect(withResolve(() => heroesBringAGroup([{ id: "token:tCrew", side: "heroes" }], null, scene, { resolve }))).toBe(true);
+		expect(withResolve(() => heroesBringAGroup([{ id: "actor:Actor.crew", side: "heroes" }], null, scene, { resolve }))).toBe(true);
+	});
+
+	it("is false for a group on the foes' side only", () => {
+		expect(withResolve(() => heroesBringAGroup([{ id: "token:tCrew", side: "foes" }], null, scene, { resolve }))).toBe(false);
+	});
+
+	it("is true for a group already fighting on the heroes' side, a GM's headcount included", () => {
+		const combat = fakeCombat({ scene, combatants: [fakeCombatant({ id: "cBram", token: tBram, scene, side: "heroes", count: 4 })] });
+		expect(withResolve(() => heroesBringAGroup([], combat, scene, { resolve }))).toBe(true);
+		const alone = fakeCombat({ scene, combatants: [fakeCombatant({ id: "cBram", token: tBram, scene, side: "heroes" })] });
+		expect(withResolve(() => heroesBringAGroup([], alone, scene, { resolve }))).toBe(false);
 	});
 });
 

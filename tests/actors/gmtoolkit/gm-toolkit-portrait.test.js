@@ -161,9 +161,9 @@ describe("an existing toolkit is healed, but only over a stock default", () => {
 	// all. Pinned as a call-order fact because it is invisible from either function alone.
 	it("is reachable without the per-user assignment latch", async () => {
 		const src = read("module/hooks/Ready.js");
-		const readyBody = src.slice(src.indexOf("_ensurePlayerActorCreationGrant()"));
-		const mint = readyBody.indexOf("await _ensureGmToolkit()");
-		const assign = readyBody.indexOf("await _assignGmToolkitToGm()");
+		const readyBody = src.slice(src.indexOf(`bestEffort("player actor-creation grant", _ensurePlayerActorCreationGrant)`));
+		const mint = readyBody.indexOf(`await bestEffort("GM Toolkit", _ensureGmToolkit)`);
+		const assign = readyBody.indexOf(`await bestEffort("GM Toolkit assignment", _assignGmToolkitToGm)`);
 		expect(mint, "onReady never calls _ensureGmToolkit on its own").toBeGreaterThan(-1);
 		expect(mint).toBeLessThan(assign);
 	});

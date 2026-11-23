@@ -108,7 +108,7 @@ const _STEPS = [
 		icon:    "fa-clipboard-check",
 		isFinal: true,
 		body:    `<p>Read it over. Is anything missing? Add it. Is anything no longer needed? Cut it. It'll never be perfect, and that's fine: if anyone even notices, you can fix it during play.</p>
-				<p>Its card lives at the foot of the GM Toolkit's Expeditions tab. Drag it onto a scene to pin it to the map, and edit it any time.</p>`,
+				<p>Its card lives under Sites, on the GM Toolkit's Prep tab. Drag it onto a scene to pin it to the map, and edit it any time.</p>`,
 	},
 ];
 
@@ -899,7 +899,7 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			title:   "Roll the lot?",
 			content: `<p>You already have ${n === 1 ? "an answer" : `${n} answers`} on the <strong>${escHtml(manner.label)}</strong> tables.</p>
 				<p>Rolling the lot throws ${n === 1 ? "it" : "all of them"} away and rolls every table afresh. To change just one, use the dice beside it instead.</p>`,
-			yes: { label: "Roll the lot anyway", icon: "fa-dice-d20", className: "stonetop-dialog-btn--danger" },
+			yes: { label: "Roll the lot anyway", icon: "fa-dice-d6", className: "stonetop-dialog-btn--danger" },
 			no:  { label: "Keep my answers" },
 		}));
 	}
@@ -932,7 +932,7 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 
 	// Save for now and the close-guard's question (dialogs/save-for-now.js).
 	get _saveCopy() {
-		return { noun: "site", keptAt: "at the foot of the GM Toolkit's Expeditions tab", saveLabel: "Save my changes" };
+		return { noun: "site", keptAt: "under Sites, on the GM Toolkit's Prep tab", saveLabel: "Save my changes" };
 	}
 
 	_captureLiveFields() {

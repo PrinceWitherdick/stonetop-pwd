@@ -52,7 +52,7 @@ const GEAR_OPTIONS = [
 	{
 		id: "arcanumInspire",
 		label: "Inspire me…",
-		icon: "fa-dice-d20",
+		icon: "fa-dice-d6",
 		arcanum: true,
 		hint: "Roll the Book II Artifact Creation tables (origin, nature, form) for a themed starting point, then build the arcanum from the results.",
 		create: () => _openArcanaInspire(),
@@ -75,7 +75,7 @@ const DANGER_OPTIONS = [
 		label: "Site",
 		icon: "fa-mountain-sun",
 		gmOnly: true,
-		hint: "Walk through Book I's Creating Sites process. The write-up lands at the foot of the GM Toolkit's Expeditions tab, ready to pin to a scene.",
+		hint: "Walk through Book I's Creating Sites process. The write-up lands under Sites, on the GM Toolkit's Prep tab, ready to pin to a scene.",
 		create: () => openCreateSite(),
 	},
 	// Book II, The Things Below. Thing + corrupted site become draggable threat cards; corrupted

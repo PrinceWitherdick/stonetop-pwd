@@ -21,7 +21,7 @@
 //     write that is refused leaves the card's own roll as it was for the next press.
 
 import { canUserWriteCard } from "./chat.js";
-import { isPrimaryGM } from "./primary-gm.js";
+import { isActingPrimaryGM } from "./primary-gm.js";
 import { askGMClient, queryAsker } from "./foundry-compat.js";
 
 /**
@@ -120,7 +120,7 @@ export async function pressRollCard(message, action, data = {}, {
 export async function handleRollCardQuery(data, context = {}, {
 	messages = globalThis.game?.messages, users = globalThis.game?.users,
 } = {}) {
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const user = queryAsker(data, context, users);
 	const message = messages?.get?.(data?.messageId);
 	const run = _actions.get(data?.action);

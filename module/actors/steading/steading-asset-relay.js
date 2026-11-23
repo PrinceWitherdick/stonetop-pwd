@@ -12,7 +12,7 @@
 // player who could have written the steading themselves: the relay orders the writes, it grants nothing.
 
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 
 /** The query a player's client sends the GM's to make one asset or herd write. */
 export const STEADING_ASSETS_QUERY = "stonetop.steadingAssets";
@@ -138,7 +138,7 @@ export async function relayAssetWrite(steading, op, args, {
 export async function handleSteadingAssetsQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, wrap = actor => actor?.typedActor ?? null, now = Date.now } = deps;
 	const arrived = now();
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return { refused: true };
+	if (!isActingPrimaryGM()) return { refused: true };
 	const asker = queryAsker(data, context, users);
 	const actor = data?.steadingUuid ? resolve(data.steadingUuid) : null;
 	const method = RELAYED_ASSET_WRITES[data?.op];

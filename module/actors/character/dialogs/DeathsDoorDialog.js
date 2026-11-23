@@ -306,7 +306,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			"stonetop-deathsdoor-dialog", character?._actor?.id, options));
 		this._character = character;
 		this._onDone = onDone;
-		this._stat   = "";               // "" = +nothing; "con" with Hard to Kill
+		this._stat   = "";               // "" = +nothing; "con" with Hard to Kill; "cha" with Laugh at Danger too
 
 		// The 10+ mark's wound, once a 10+ has seeded it, and the text last written to it. The
 		// wound is created by the tier itself and the text saves as the player leaves the field,
@@ -937,7 +937,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 				// Destined: "treat a 6- on Death's Door as a 7-9, and a 7-9 as a 10+". The card reads its
 				// tier the same way and names the background beside the result.
 				...(tierShift ? { missCountsAsPartial: tierShift, partialCountsAsSuccess: tierShift } : {}),
-				moveDescription: `<p>${_MOVE.trigger} ${format(`${_I18N}.roll.thenRoll`, { stat: this._stat ? "+CON" : "+nothing" })}</p>`,
+				moveDescription: `<p>${_MOVE.trigger} ${format(`${_I18N}.roll.thenRoll`, { stat: this._stat ? `+${this._stat.toUpperCase()}` : "+nothing" })}</p>`,
 				// " / " so the card's own pick-list formatter (formatOutcomeDetail) recognises the
 				// "choose 1:" hinge and breaks the three fates onto bulleted lines instead of one
 				// run-on. Safe despite the fates' own semicolons: the separator only treats a ";"

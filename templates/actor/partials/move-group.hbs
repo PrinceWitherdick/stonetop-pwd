@@ -158,7 +158,7 @@
 					<span class="stonetop-item-resource-entry">
 						<button type="button" class="stonetop-item-resource-check{{#if checked}} is-checked{{/if}}"
 						        data-move-name="{{../name}}"
-						        data-index="{{@index}}"></button>
+						        data-index="{{@index}}" aria-label="{{this.name}}"></button>
 						{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 					</span>
 					{{/each}}
@@ -166,8 +166,8 @@
 				{{/if}}
 				{{#if (and @root.stonetop.movesEdit owned (lookup @root.stonetop.possessionTriggerMoves name))}}
 				<a class="stonetop-move-possession-edit" data-possession-choices="{{lookup @root.stonetop.possessionTriggerMoves name}}"
-				   data-tooltip="Choose your sacred pouch's remarkable trait(s)" data-tooltip-direction="UP">
-					<i class="fas fa-pen-to-square" aria-hidden="true"></i>
+				   data-tooltip="Choose your sacred pouch's remarkable trait(s)" aria-label="Choose your sacred pouch's remarkable trait(s)" data-tooltip-direction="UP">
+					<i class="fas fa-pencil" aria-hidden="true"></i>
 				</a>
 				{{/if}}
 			</div>

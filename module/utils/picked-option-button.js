@@ -137,6 +137,7 @@ export function wirePickedOptionButton(message, html, spec) {
 		btn.className = buttonClass;
 		const glyph = document.createElement("i");
 		glyph.className = icon(pick);
+		glyph.setAttribute("aria-hidden", "true");
 		btn.append(glyph, label(pick));
 		btn.hidden = !box.checked;
 		item.appendChild(btn);

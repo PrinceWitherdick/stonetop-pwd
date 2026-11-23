@@ -131,8 +131,9 @@ export function addOpenMapButton(app, element, onOpen) {
 	button.type = "button";
 	button.dataset.relmapOpenMap = "";
 	const icon = document.createElement("i");
-	icon.className = "fa-solid fa-diagram-project";
+	icon.className = "fas fa-diagram-project";
 	icon.setAttribute("inert", "");
+	icon.setAttribute("aria-hidden", "true");
 	const label = document.createElement("span");
 	label.textContent = localize("stonetop.relmap.directory.open");
 	button.append(icon, label);

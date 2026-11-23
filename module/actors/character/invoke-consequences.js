@@ -748,7 +748,7 @@ export function wielderRollOptions(actor) {
 	if (!ownsLearnedMoveNamed(actor, WIELDER_OF_THE_WHITE_FLAME) || !ownsLearnedMoveNamed(actor, INVOKE_THE_SUN_GOD)) return null;
 	return {
 		tierActions: {
-			success: `<button type="button" class="stonetop-wielder-invoke"><i class="fas fa-sun"></i> `
+			success: `<button type="button" class="stonetop-wielder-invoke"><i class="fas fa-sun" aria-hidden="true"></i> `
 				+ `${escHtml(localize("stonetop.invocations.wielderButton"))}</button>`,
 		},
 	};

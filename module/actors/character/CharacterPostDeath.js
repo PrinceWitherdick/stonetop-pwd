@@ -12,7 +12,7 @@ import {
 	MoveSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
 import { composeInstinct, stripHtmlToText } from "../../utils/strings.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 import { zeroHpResolution, FAVOR_MAX, FAVOR_TRACK, POST_DEATH_INSERT_SLUGS } from "./deaths-door.js";
 import { MANIFEST_KEY } from "./manifest.js";
 

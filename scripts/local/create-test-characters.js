@@ -47,9 +47,12 @@
 //             left Stonetop, and one who turned villain, with the threat page he became among
 //             the steading's threats and each pointing at the other. Same rules as the Graveyard.
 //             The Heavy carries two wounds on the wound ledger: one untreated, one permanent
-//             with a Make-a-Plan list half ticked.
+//             with a Make-a-Plan list half ticked. The Blessed's Notes tab holds a plan of
+//             the Blessed's own: cleansing a corrupted oak, one requirement of five met.
 //             The steading's Notes tab gets three Plans (one finished, one under way built from
-//             the book's prompts, one just named) and its four content-guideline boxes; the
+//             the book's prompts, one just named) and its four content-guideline boxes; its
+//             Improvements tab gets a custom, uncategorised "Cleanse the Old Oak" (the Blessed's
+//             plan as an improvement, one of four requirements ticked, no grants); the
 //             Hillfolk Raiders threat is crossed off; and an "Other Settlements" folder gets
 //             settlement sheets for Marshedge and Gordin's Delve (from their stat blocks, wearing
 //             the standings seeded on Stonetop) and a Hillfolk band made from Book II's typical
@@ -66,12 +69,21 @@
 //             the Book I p.430 identify ladder (unknown / partial / known), so one Inventory tab
 //             shows an artifact concealed, half worked out and read whole; the same three sit in
 //             the world Items folder, where a treasure's write-up now reads on its own sheet.
-//             Also records Introductions answers + TWO example Expeditions and compiles the
-//             shared "Chronicle" journal. The two trips are the two the route step has: one
+//             Also records Introductions answers + THREE example Expeditions and compiles the
+//             shared "Chronicle" journal. Two are the two the route step has: one
 //             plotted off the book's travel table (multi-leg, so Chart a Course gets both of the
 //             rows the map fills in for itself) and home again, and one still out on a way the
 //             GM drew by hand, holding two of the village's communal assets — which are struck
-//             through on the steading sheet and tagged with the trip that took them.
+//             through on the steading sheet and tagged with the trip that took them. The third,
+//             "Up to the Foothills", is the one to TEST RUNNING A JOURNEY WITH, and the trip the
+//             walkthrough opens on: a hand-drawn way of three legs (Crossroads, Ruined Tower,
+//             Foothills, the last priced in days), stamped as set out this season with four of the
+//             party (the rest ticked out), one leg travelled, and shown to the players with the
+//             party mark on it (no chat card; the steading's "See the route" chip opens it). Its
+//             party stands on the scene being viewed, with three Hillfolk Raiders hidden a few
+//             squares east, and the GM Toolkit has a "Road, leg N" encounter for each leg (the
+//             first used, the next two ready for Deploy and fight) and a prepped Expedition card
+//             bound to the trip.
 //             Lays a THREE-YEAR history on the Timeline (Spring, Year One to Spring, Year
 //             Three): a Seasons Change for every season (how its +Fortunes roll went, gains,
 //             Surplus and notes, printed in the season's heading, with a failed harvest and a
@@ -118,7 +130,7 @@
 //             a written answer or a hunch and six still blank, plus three more already ticked
 //             into the Answered fold, so the tab is seen holding a long list and both of its
 //             two sections rather than the empty-state line. Seeds its Encounters tab with three
-//             prepared bundles pointing at documents rather than copying them: one reaching every
+//             prepared bundles (and the road trip's three) pointing at documents rather than copying them: one reaching every
 //             kind of row the tab collects (world and compendium Actors and Items, a journal
 //             entry and one of its pages, a macro, the world's first scene and roll table), one
 //             built out of the prep this macro just seeded, and one marked used that carries a
@@ -212,6 +224,9 @@
 //             removes the world Moves/Items/Monsters and the
 //             example NPC (and their now-empty folders), sends home every steading asset a test
 //             trip was holding (matched by trip id, so the GM's own requisitions are untouched),
+//             stops showing the players a test trip's route (a share of the GM's own stays), takes
+//             every test token off every scene (the road party, its ambush, and anything else made
+//             from a test actor, such as a test monster Deploy put down),
 //             unmarks the seeded debility while it is still the only one marked, takes the
 //             seeded rows off Stonetop's Timeline thread (the table's own rows stay), takes the
 //             seeded Ages off the world's (the GM's own stay), and prunes
@@ -684,11 +699,12 @@
   });
 
   // ── Example expeditions (so the log + its Chronicle pages show) ────────
-  // TWO trips, because the walkthrough's route step has two modes and one trip cannot be in
-  // both: a journey plotted off the book's travel table, and a way the GM drew by hand on the
-  // map. The rest of the log's states are staggered across them the way the threats and the
-  // sites below are: one trip is home and reads complete, the other is still out and is holding
-  // two of the village's communal assets for as long as it is.
+  // THREE trips. The first two because the walkthrough's route step has two modes and one trip
+  // cannot be in both: a journey plotted off the book's travel table, and a way the GM drew by
+  // hand on the map. The rest of the log's states are staggered across them the way the threats
+  // and the sites below are: one trip is home and reads complete, the other is still out and is
+  // holding two of the village's communal assets for as long as it is. The third is ON THE ROAD,
+  // set out and a leg along, for testing Running the journey (see its seed).
   //
   // EVERY FIELD HERE IS ONE THE WALKTHROUGH STILL WRITES, which is worth saying because most
   // of what a trip used to carry is gone. `chart.checks`, `outfit`, `requisition`, `prep`,
@@ -793,6 +809,44 @@
       takes: [0, 3],
       holds: true,
     },
+    // 3. ON THE ROAD, and the trip the switcher opens on: the one to test Running the journey
+    //    against. Stamped as set out (this season, four of the party), one leg of three travelled,
+    //    and shared with the players, so the road panel, the banner's status chip, the party mark
+    //    on the GM's maps and the players' Shared Route window all have a trip mid-journey without
+    //    a click. Drawn by hand through three places the table knows, because the travel table
+    //    never gives more than two legs and a road of three is the one that shows a leg behind
+    //    them, the leg ahead and one past it at once. The last leg is priced in DAYS (3), so the
+    //    "Spend 3 days" offer has a fixture once the GM travels the middle one; the first two are
+    //    hours. Each leg has a prepared encounter on the GM Toolkit ("Road, leg N"), and
+    //    the party stands on the scene (seedRoadScene), so Deploy and fight and A fight breaks
+    //    out both work straight away.
+    {
+      title:   "Up to the Foothills",
+      journey: {
+        origin: "stonetop",
+        custom: { tier: "vicinity", points: [{ slug: "the-crossroads" }, { slug: "the-ruined-tower" }, { slug: "the-foothills" }] },
+      },
+      route:   "The Highway as far as the Crossroads, the old track up to the Ruined Tower to sleep "
+             + "inside the walls, then three days climbing into the Foothills to find the shepherds' summer camp.",
+      picked: [
+        // Answered by the route: the drawn way's legs are priced, so the day count is the map's.
+        { group: "requirements", key: "days",     fromRoute: true },
+        { group: "requirements", key: "guide",
+          answer: "Wren has been as far as the tower. Nobody has been past it since the shepherds stopped coming down." },
+        { group: "challenges",   key: "watchOut",
+          answer: "wolves on the open grass between the Crossroads and the tower" },
+        { group: "challenges",   key: "grueling",
+          answer: "Three days of climbing with everything on their backs once the track gives out." },
+      ],
+      notes: "The shepherds missed the autumn market and the spring one. Someone has to go and ask "
+           + "why, and the steading lent the pack mule on condition it comes back.",
+      takes: [1],
+      holds: true,
+      // Written with the walkthrough's own stamp, key and share (macroModules.expedition), in
+      // putTripsOnTheRoad: the season they left in, who went (short playbook slugs), and the legs
+      // travelled.
+      onTheRoad: { party: ["heavy", "ranger", "fox", "lightbearer"], reached: 1 },
+    },
   ];
 
   const buildExampleExpeditions = () => TEST_EXPEDITIONS.map((seed, i) => ({
@@ -823,6 +877,95 @@
     // that requisitioned nothing carries, so this is also the resting shape.
     requisitioned: [],
   }));
+
+  // ── The trip on the road ───────────────────────────────────────────────
+  // Puts every seed with `onTheRoad` where the walkthrough would have left it after Set out and a
+  // Travel on click or two: `setOut` (the season now, which is when stampSetOut stamps it), `party`
+  // (partySnapshot, the list the homecoming credits), `partyOut` (everyone else, as the Outfit
+  // step's chips tick them out), and `progress` keyed by journeyKey. The key is the point of
+  // borrowing the system's function: a progress written against a key the walkthrough spells
+  // differently reads as 0 legs travelled, which is exactly the bug a fixture should not hide.
+  //
+  // Runs on the built entries BEFORE the log is written, so the setting lands once. Without the
+  // expedition loader (a build older than it) the trip is logged un-stamped and says so.
+  // Returns the trips it put on the road, with the route each was solved to.
+  const putTripsOnTheRoad = (api, entries, pcs, pcSlugs) => {
+    const onRoad = [];
+    for (const [i, entry] of entries.entries()) {
+      const seed = TEST_EXPEDITIONS[i]?.onTheRoad;
+      if (!seed) continue;
+      if (!api) {
+        console.warn(`[TEST] "${entry.title}" is logged but not on the road: this build has no macroModules.expedition.`);
+        continue;
+      }
+      const party = pcs.filter(a => seed.party.includes(pcSlugs.get(a.id)));
+      entry.partyOut = Object.fromEntries(pcs.filter(a => !party.includes(a)).map(a => [a.id, true]));
+      entry.setOut = api.timelineNow();
+      entry.party = api.partySnapshot(entry, pcs);
+      const route = api.journeyRoute(entry.journey);
+      const legs = route?.legs?.length ?? 0;
+      entry.progress = { reached: Math.min(seed.reached, legs), key: api.journeyKey(entry.journey) };
+      onRoad.push({ entry, route, party });
+    }
+    return onRoad;
+  };
+
+  // Show the players the way the trip on the road is taking, with the party mark where it stands:
+  // the share Show players would have sent, on the map it would have picked (shareMapFor), the
+  // progress riding on it as _shareRouteNow sends it mid-journey. No chat card, which is the one
+  // half of a real share left out: the players open the window from the steading sheet's "See the
+  // route" button, and a card would be one more thing for the re-run to find and delete.
+  // A share of the GM's own (one not pointing at a test trip) is left in place.
+  const shareTripOnTheRoad = async (api, onRoad, testTripIds) => {
+    const trip = onRoad.at(-1);
+    if (!api || !trip?.route?.legs?.length) return null;
+    const current = api.readSharedRoute();
+    if (current && !testTripIds.has(current.expeditionId)) {
+      console.log("[TEST] The players are being shown a route of the GM's own, so the trip on the road was not shared over it.");
+      return null;
+    }
+    const { tier, art } = await api.shareMapFor(trip.route);
+    const payload = api.sharedRoutePayload({ trip: trip.entry, tier, art, progress: { reached: trip.entry.progress.reached } });
+    if (!payload) return null;
+    await api.shareRoute(payload);
+    return { payload, mapped: !!art };
+  };
+
+  // ── The party on the scene ─────────────────────────────────────────────
+  // Start a fight lists the tokens on the scene the GM is LOOKING AT (fight/start-fight.js reads
+  // canvas.scene), and both road buttons lean on that: Running the journey's "A fight breaks out"
+  // ticks every character on the map, and an encounter's "Deploy and fight" ticks the party beside
+  // the monsters it puts down. So the party of the trip on the road stands in a row in the middle
+  // of the viewed scene, and three Hillfolk Raiders crouch HIDDEN a few squares off: a fight
+  // started with only hidden foes plays no curtain for a player until one is revealed, and this is
+  // the fixture for that.
+  //
+  // Every token carries the test flag, and the re-run also takes any token of a test actor off
+  // every scene (Deploy's own tokens of the test monsters among them), since a token outlives the
+  // actor it was made from. Skipped, with a line in the console, when no scene is being viewed.
+  const seedRoadScene = async (party, ambushActor) => {
+    const scene = canvas?.ready ? canvas.scene : null;
+    if (!scene || !party.length) {
+      if (!scene) console.log("[TEST] No scene is being viewed, so the road party was not put on one. View a scene and run the macro again.");
+      return null;
+    }
+    const gs = scene.grid?.size ?? canvas.dimensions?.size ?? 100;
+    const rect = canvas.dimensions?.sceneRect ?? { x: 0, y: 0, width: gs * 10, height: gs * 10 };
+    // The sceneRect starts on a grid line (the padding is whole squares), so whole squares from it
+    // are on the grid too.
+    const midX = rect.x + Math.floor(rect.width / gs / 2) * gs;
+    const midY = rect.y + Math.floor(rect.height / gs / 2) * gs;
+    const at = (dx, dy) => ({ x: midX + dx * gs, y: midY + dy * gs });
+    const flagged = data => foundry.utils.mergeObject(data, { flags: { [FLAG_SCOPE]: { [TEST_FLAG]: true } } });
+    const AMBUSH = ambushActor ? 3 : 0;
+    const place = async (actor, where) => flagged((await actor.getTokenDocument(where)).toObject());
+    const docs = await Promise.all([
+      ...party.map((actor, i) => place(actor, at(i - Math.floor(party.length / 2), 0))),
+      ...Array.from({ length: AMBUSH }, (_, i) => place(ambushActor, { ...at(4, i - 1), hidden: true })),
+    ]);
+    const made = await scene.createEmbeddedDocuments("Token", docs);
+    return { scene, party: party.length, hidden: AMBUSH, made: made.length };
+  };
 
   // ── Steading test members (Residents / Neighbors / Players) ────────────
   // Thematic fixtures for the steading "Stonetop" so its member tables aren't empty
@@ -1453,6 +1596,30 @@
       requirements: [],
     },
   ];
+  // A custom improvement for the same project the Blessed keeps as a plan of their own (the corrupted
+  // oak; see "A plan of a character's own" below): the Improvements tab's other way of tracking it, for
+  // when the outcome changes the village. Uncategorised, so every category chip shows it, and no grants,
+  // so finishing it changes nothing on the steading. One of four requirements ticked. Its slug is fixed,
+  // which is how the cleanup finds the definition and its ticks; written beside the table's own.
+  const TEST_CUSTOM_IMPROVEMENT_SLUG = "custom-testfixture-cleanse-the-old-oak";
+  const TEST_CUSTOM_IMPROVEMENT = {
+    slug: TEST_CUSTOM_IMPROVEMENT_SLUG,
+    label: "Cleanse the Old Oak",
+    category: "",
+    flavor: "The oak at the edge of the Steepwood has rotted from the roots up since the thing below woke.",
+    sections: [{
+      heading: "Requires:",
+      items: [
+        "Learn what has its roots in the oak's roots",
+        "Water from the spring at Danu's shrine",
+        "The help of the initiates of Danu",
+        "Wait for the first new moon of spring",
+      ],
+    }],
+    effect: "<p>The oak is whole again and the thing below has lost its hold here. The GM says what that means for Stonetop.</p>",
+    grants: null,
+  };
+  const TEST_CUSTOM_IMPROVEMENT_R = [true, false, false, false];
   const TEST_CONTENT_GUIDELINES = {
     excluded: "Harm to children, on camera or off. Sexual violence.",
     veiled:   "Torture: it can happen, but the scene cuts away. Whatever the Crow-Mother does to a body.",
@@ -2903,14 +3070,15 @@
     return { toolkit, added: seeded.length, kept: keep.length };
   };
 
-  // ── GM Toolkit: three prepared Encounters ──────────────────────────────
+  // ── GM Toolkit: prepared Encounters ────────────────────────────────────
   // The toolkit's other authored surface, and the only one in the system that stores POINTERS at
   // documents rather than prose about them. A flat array on the toolkit's own
   // `actor.system.encounters` (module/data-models/fields.js#encountersField), like the
   // "I wonder..." list beside it and unlike the Threats and Sites tabs, whose pages stayed on the
   // steading.
   //
-  // The three cover the states the tab renders differently (gm-toolkit-tab-encounters.hbs and
+  // Three road encounters follow, one per leg of the trip on the road (see the seeds). The first
+  // three cover the states the tab renders differently (gm-toolkit-tab-encounters.hbs and
   // gm-encounters-tab.js#ENCOUNTER_DOC_TYPES):
   //   * one FULL bundle reaching every kind of row the tab collects — a world Actor, a world
   //     Item, a compendium Actor, a compendium JournalEntry, a compendium Macro, and the
@@ -2989,6 +3157,17 @@
       packPageByName(JOURNAL_PACK_ID, "Ferrier's Fen"),
       packDocByName(MACRO_PACK_ID,    "Run an Expedition"),
     ]);
+    // The road encounters' own: the bestiary's road-side people and beasts, and the location page
+    // for each leg's end.
+    const [packWolf, packBandit, packBanditChief, packCaravanGuard, packRoads, packRuinedTower, packFoothills] = await Promise.all([
+      packDocByName(BESTIARY_PACK_ID, "Wolf"),
+      packDocByName(BESTIARY_PACK_ID, "Bandit"),
+      packDocByName(BESTIARY_PACK_ID, "Bandit Chief"),
+      packDocByName(BESTIARY_PACK_ID, "Caravan Guard"),
+      packPageByName(JOURNAL_PACK_ID, "The Makers' Roads"),
+      packPageByName(JOURNAL_PACK_ID, "The Ruined Tower"),
+      packPageByName(JOURNAL_PACK_ID, "The Foothills"),
+    ]);
     const worldItem = game.items?.find(i => i.name === "Boar Spear" && i.getFlag(FLAG_SCOPE, TEST_FLAG)) ?? null;
     const scene     = game.scenes?.contents?.[0] ?? null;
     const table     = game.tables?.contents?.[0] ?? null;
@@ -3050,6 +3229,50 @@
           },
         ],
       },
+      // THE ROAD ENCOUNTERS: one per leg of "Up to the Foothills", the trip on the road, named
+      // for the leg so the GM finds the next one at a glance. The leg behind them is USED (they
+      // met it); the leg ahead and the one past it are not. A monster listed three times is three
+      // rows on purpose: Deploy puts down one token per Actor row, so a pack is a row per wolf.
+      // Each fighting leg has its foes, its place and a line on how it starts, which is what
+      // "Deploy and fight" needs, and a creature with a disposition, as the walkthrough's prep
+      // step asks of an encounter.
+      {
+        id:   `${TEST_ENCOUNTER_ID_PREFIX}4`,
+        name: "Road, leg 1: Caravan at the Crossroads",
+        used: true,
+        notes: `<p>Not a fight. A Marshedge caravan camped at the Crossroads, two days late and short a wagon. They saw wolves on the grass to the west, more than usual, and bolder.</p>`,
+        entries: [
+          encounterRow(packCaravanGuard, "Tired, wary, and glad of company that is not a wolf."),
+          encounterRow(packRoads, "The Crossroads, where the Highway meets the West Road."),
+        ],
+      },
+      {
+        id:   `${TEST_ENCOUNTER_ID_PREFIX}5`,
+        name: "Road, leg 2: Wolves in the long grass",
+        used: false,
+        notes: `<h3>The next leg</h3>`
+             + `<p>Halfway to the tower, the grass is shoulder high and the wind is wrong. <strong>Three wolves, hungry, testing.</strong> They go for whoever is leading the mule.</p>`
+             + `<p>If the party drives one off, the other two follow it. If they kill one, the rest circle until dusk.</p>`,
+        entries: [
+          encounterRow(packWolf, "The lead wolf. Grey muzzle, one torn ear."),
+          encounterRow(packWolf),
+          encounterRow(packWolf),
+          encounterRow(packRuinedTower, "Where they sleep tonight, if they get there."),
+        ],
+      },
+      {
+        id:   `${TEST_ENCOUNTER_ID_PREFIX}6`,
+        name: "Road, leg 3: Toll on the ridge",
+        used: false,
+        notes: `<p>Bandits have taken over the shepherds' summer camp, which is why nobody came down to market. The chief wants a toll and is willing to talk first. Her people are not.</p>`,
+        entries: [
+          encounterRow(packBanditChief, "Parleys from the ridge. Wants the mule more than a fight."),
+          encounterRow(packBandit),
+          encounterRow(packBandit),
+          encounterRow(packBandit, "Comes round behind once the talking starts."),
+          encounterRow(packFoothills, "The climb, and the camp at the top of it."),
+        ],
+      },
     ];
 
     // Entry ids are derived from the bundle's, so a re-seed is byte-identical rather than a new
@@ -3069,7 +3292,7 @@
     return { toolkit, added: rows.length, kept: keep.length, entries: rows.reduce((n, r) => n + r.entries.length, 0) };
   };
 
-  // ── GM Toolkit: three prepped Expeditions ──────────────────────────────
+  // ── GM Toolkit: prepped Expeditions ────────────────────────────────────
   // THE SAME CARD THE ENCOUNTERS TAB HOLDS, deliberately (actors/gmtoolkit/gm-expeditions-tab.js):
   // one array on the toolkit's own `actor.system.expeditions`, one normalizer, one piece of
   // machinery, and one field of its own — `tripId`, the JOIN to the walkthrough.
@@ -3083,7 +3306,8 @@
   // TEST_EXPEDITIONS), which is why this pass runs LAST of all — the trips have to have ids
   // before a card can name one.
   //
-  // The three cover the states the tab renders and presses differently:
+  // A fourth is bound to the trip ON THE ROAD and points at its legs' places. The first three
+  // cover the states the tab renders and presses differently:
   //   * one bound to the trip that is STILL OUT, richly noted and gathering everything the walk
   //     needs — the map page, the site, the threat, the monster waiting at the end. Pressing Run
   //     drops the GM back into a half-finished walkthrough;
@@ -3117,7 +3341,7 @@
     // Every pack lookup at once: each is a load, and none depends on any other. The location
     // PAGE rather than its entry, on the rule the threat and site rows follow — the page is the
     // document a GM reads aloud from, so its uuid is the one worth storing.
-    const [packFlats, packMarshedge, packLake, packSteplands, packChart, packRequisition, packReturn] = await Promise.all([
+    const [packFlats, packMarshedge, packLake, packSteplands, packChart, packRequisition, packReturn, packRuinedTower, packFoothills, packMakeCamp] = await Promise.all([
       packPageByName(JOURNAL_PACK_ID, "The Flats"),
       packPageByName(JOURNAL_PACK_ID, "Marshedge"),
       packPageByName(JOURNAL_PACK_ID, "Blackwater Lake"),
@@ -3125,6 +3349,9 @@
       packDocByName(PACK_ID, "Chart a Course"),
       packDocByName(PACK_ID, "Requisition"),
       packDocByName(PACK_ID, "Return Triumphant"),
+      packPageByName(JOURNAL_PACK_ID, "The Ruined Tower"),
+      packPageByName(JOURNAL_PACK_ID, "The Foothills"),
+      packDocByName(PACK_ID, "Make Camp"),
     ]);
     const scene = game.scenes?.contents?.[0] ?? null;
 
@@ -3176,6 +3403,27 @@
           encounterRow(packLake, "The shore, the standing stones, and four days of nothing on the way to them."),
           encounterRow(named(sitePages, "The Barrow Beneath the Black Water"), "What they went looking for. The stones at the lake are the same stones."),
           encounterRow(packReturn, "Rolled at the gate on the way in."),
+        ],
+      },
+      // Bound to the trip ON THE ROAD: Run reopens the walkthrough a leg in, and the notes name
+      // which prepared encounter waits on each leg (the Encounters tab's "Road, leg N" bundles).
+      {
+        id:     `${TEST_EXPEDITION_ID_PREFIX}4`,
+        name:   "Up to the Foothills",
+        used:   false,
+        tripId: tripId("Up to the Foothills"),
+        notes: `<h3>On the road now: one leg of three behind them</h3>`
+             + `<ul>`
+             + `<li><strong>Leg 1, to the Crossroads:</strong> done. They met the caravan.</li>`
+             + `<li><strong>Leg 2, to the Ruined Tower:</strong> wolves in the long grass. Encounters tab, "Road, leg 2".</li>`
+             + `<li><strong>Leg 3, into the Foothills:</strong> three days, then the bandits at the camp. "Road, leg 3".</li>`
+             + `</ul>`
+             + `<p>Each night on the road: <strong>[[/r 1d6]]</strong>, and on a 1 something finds the camp.</p>`,
+        entries: [
+          encounterRow(packRuinedTower, "Tonight's camp, if they reach it."),
+          encounterRow(packFoothills, "The last leg and the shepherds' summer camp."),
+          encounterRow(packMakeCamp, "Every night of the three in the Foothills."),
+          encounterRow(scene, "The map the party is standing on."),
         ],
       },
     ];
@@ -3251,6 +3499,17 @@
         .filter(a => testExpIds.includes(a.takenBy?.expedition?.id));
       for (const asset of returnable) await steadingAssets.typedActor.returnAsset(asset.index);
       if (returnable.length) console.log(`[TEST] Returned ${returnable.length} requisitioned asset(s) to the steading.`);
+
+      // And stop showing the players the way the trip on the road was taking. Only a share that
+      // names one of these trips: a route the GM is showing from a trip of their own stays up.
+      // Through the system's own reader and writer (macroModules.expedition), so the setting's
+      // name and scope are never spelled here.
+      const shareApi = await game.stonetop?.macroModules?.expedition?.();
+      const shown = shareApi?.readSharedRoute();
+      if (shown?.expeditionId && testExpIds.includes(shown.expeditionId)) {
+        await shareApi.stopSharingRoute();
+        console.log("[TEST] Stopped showing the players the test trip's route.");
+      }
     }
 
     // Take the seeded history back off Stonetop's own thread, which is the world's: only the rows
@@ -3447,6 +3706,20 @@
         if (dropOurs(rows) !== false) await sheet.update({ "system.residents": rows });
       }
     }
+    // Their tokens first, on every scene: a token outlives the actor it was made from, and what is
+    // left is a nameless figure the GM has to find and delete by hand. The road party and its
+    // hidden ambush (seedRoadScene) carry the test flag; anything else made from a test actor (a
+    // test monster Deploy put down, a test character dragged on) goes by its actor id.
+    const goneActorIds = new Set(liveIds);
+    // One delete per scene, all sent together: no scene's tokens wait on another's.
+    const tokenSweeps = [...(game.scenes ?? [])]
+      .map(scene => [scene, scene.tokens
+        .filter(t => t.getFlag?.(FLAG_SCOPE, TEST_FLAG) || (t.actorId && goneActorIds.has(t.actorId)))
+        .map(t => t.id)])
+      .filter(([, ids]) => ids.length);
+    await Promise.all(tokenSweeps.map(([scene, ids]) => scene.deleteEmbeddedDocuments("Token", ids)));
+    const tokenCount = tokenSweeps.reduce((sum, [, ids]) => sum + ids.length, 0);
+    if (tokenCount) console.log(`[TEST] Took ${tokenCount} test token(s) off the scenes.`);
     if (liveIds.length) await Actor.deleteDocuments(liveIds);
 
     // Strip the steading's test Residents / Neighbors / Players (anything tagged isTest),
@@ -3503,6 +3776,12 @@
       if (Array.isArray(steadingFlags.plans)) {
         const ownPlans = steadingFlags.plans.filter(pl => !String(pl?.id ?? "").startsWith(TEST_PLAN_ID_PREFIX));
         if (ownPlans.length !== steadingFlags.plans.length) { steadingFlags.plans = ownPlans; memberChanged = true; }
+      }
+      // The seeded custom improvement, by its fixed slug (see TEST_CUSTOM_IMPROVEMENT); its ticks go
+      // with the hold tray's improvements below, through a deletion, since setFlag merges objects.
+      if (Array.isArray(steadingFlags.customImprovements)) {
+        const ownCustom = steadingFlags.customImprovements.filter(d => d?.slug !== TEST_CUSTOM_IMPROVEMENT_SLUG);
+        if (ownCustom.length !== steadingFlags.customImprovements.length) { steadingFlags.customImprovements = ownCustom; memberChanged = true; }
       }
       if (memberChanged) await steadingDel.setFlag(FLAG_SCOPE, "steading", steadingFlags);
 
@@ -3575,6 +3854,9 @@
         if (!entry?.completed || entry.applied !== null) continue;
         if (!fixtureR(slug, entry.r)) continue;
         Object.assign(holdKill, dropKey(`${holdBase}.improvements.${slug}`));
+      }
+      if (steadingFlags.improvements?.[TEST_CUSTOM_IMPROVEMENT_SLUG]) {
+        Object.assign(holdKill, dropKey(`${holdBase}.improvements.${TEST_CUSTOM_IMPROVEMENT_SLUG}`));
       }
       // The content guidelines, only while every box still holds exactly the seed: a table that
       // has written its own lines into them has made them theirs.
@@ -6337,6 +6619,28 @@
     console.log(`[TEST] Wound ledger: two wounds on ${woundedPc.name} (one untreated, one permanent with a plan).`);
   }
 
+  // ── A plan of a character's own ────────────────────────────────────────
+  // The Notes tab's Plans on a character sheet (character-plans.js), from the case that asked for
+  // them: the Blessed Makes a Plan (Book I p.530) to cleanse a tree corrupted by a thing below. Built
+  // from the book's prompts, one box ticked, with what goes undone meanwhile. Written whole onto the
+  // character's `plans` flag, so the re-run's actor sweep takes it with the sheet.
+  const plannerPc = created.find(a => createdSlugs.get(a.id) === "blessed") ?? created[0];
+  if (plannerPc) {
+    await plannerPc.setFlag(FLAG_SCOPE, "plans", [{
+      id: foundry.utils.randomID(),
+      name: "Cleanse the old oak the thing below has corrupted",
+      undone: "the spring rites at the standing stones",
+      requirements: [
+        { text: "You must learn/know/decipher what has its roots in the oak's roots", done: true },
+        { text: "You must find/locate/obtain water from the spring at Danu's shrine", done: false },
+        { text: "You'll need the help/support/approval of the initiates of Danu", done: false },
+        { text: "You must wait until/for the first new moon of spring", done: false },
+        { text: "You'll risk the corruption taking root in you instead", done: false },
+      ],
+    }]);
+    console.log(`[TEST] Character plan: "Cleanse the old oak" on ${plannerPc.name}'s Notes tab (1 of 5 requirements met).`);
+  }
+
   // ── Seed reusable world Moves / Items / Monsters ───────────────────────
   // Independent of the level choice and of the characters — draggable world content grouped
   // into "Moves" / "Items" (Item folders) and "Monster" (Actor folder). Torn down on re-run
@@ -6393,6 +6697,12 @@
     const ownPlans = (Array.isArray(sf.plans) ? sf.plans : [])
       .filter(p => !String(p?.id ?? "").startsWith(TEST_PLAN_ID_PREFIX));
     sf.plans = [...ownPlans, ...structuredClone(TEST_PLANS)];
+    // The corrupted oak as a custom improvement (see TEST_CUSTOM_IMPROVEMENT), a prior run's copy
+    // replaced by its slug. Its ticks go in with the book improvements' below (sf.improvements).
+    sf.customImprovements = [
+      ...(Array.isArray(sf.customImprovements) ? sf.customImprovements : []).filter(d => d?.slug !== TEST_CUSTOM_IMPROVEMENT_SLUG),
+      structuredClone(TEST_CUSTOM_IMPROVEMENT),
+    ];
     const guidelinesSeeded = guidelinesEmpty(sf.contentGuidelines) || sameGuidelines(sf.contentGuidelines);
     if (guidelinesSeeded) sf.contentGuidelines = { ...TEST_CONTENT_GUIDELINES };
     // The two demonstration sites, the same way: `site` pages of the steading's Sites journal,
@@ -6534,6 +6844,8 @@
       };
       improvementsSeeded.push(slug);
     }
+    // The corrupted oak, under way: its first requirement met, not built.
+    sf.improvements[TEST_CUSTOM_IMPROVEMENT_SLUG] = { completed: false, r: [...TEST_CUSTOM_IMPROVEMENT_R] };
 
     // The inn's gathering costs 1 Surplus, and a chip for something unaffordable is not an
     // unspent opportunity. Raised only when the steading is actually broke, so a stocked
@@ -6756,12 +7068,31 @@
   // The trips are built first (each needs an id before anything can be tagged with it), then
   // the requisition pass fills in what they took and marks the steading's copy, and only then
   // is the log written — so the setting lands once, holding both halves already agreed. The
-  // switcher opens on the LAST of them, which is the trip that is still out.
+  // switcher opens on the LAST of them, which is the trip on the road.
   const expLog   = game.settings.get(FLAG_SCOPE, "expeditionAnswers") ?? {};
   const keep     = Array.isArray(expLog.list) ? expLog.list.filter(e => !e?.isTest) : [];
   const examples = buildExampleExpeditions();
   const tripKit  = await seedTripAssets(steading, examples);
+  const expeditionApi = await game.stonetop?.macroModules?.expedition?.();
+  const onRoad   = putTripsOnTheRoad(expeditionApi, examples, created, createdSlugs);
   await game.settings.set(FLAG_SCOPE, "expeditionAnswers", { currentId: examples.at(-1).id, list: [...keep, ...examples] });
+  // After the log is written: the share names the trip by id, and a share of a trip the log does
+  // not hold yet is one the walkthrough reads as "stale".
+  // The share and the scene are independent writes, so they go together.
+  const [roadShare, roadScene] = await Promise.all([
+    shareTripOnTheRoad(expeditionApi, onRoad, new Set(examples.map(e => e.id)))
+      .catch(err => { console.error("[TEST] Sharing the trip on the road failed.", err); return null; }),
+    seedRoadScene(onRoad.at(-1)?.party ?? [], testMonsters.find(m => m.name === "Hillfolk Raider") ?? null)
+      .catch(err => { console.error("[TEST] Putting the road party on the scene failed.", err); return null; }),
+  ]);
+  if (onRoad.length) {
+    const trip = onRoad.at(-1);
+    console.log(`[TEST] "${trip.entry.title}" is on the road: set out with ${trip.party.map(a => a.name).join(", ")}, `
+      + `${trip.entry.progress.reached} of ${trip.route?.legs?.length ?? 0} legs travelled`
+      + `${roadShare ? `, shown to the players${roadShare.mapped ? "" : " (this world has no copy of the map, so the way is written out)"}` : ""}`
+      + `${roadScene ? `, the party standing on "${roadScene.scene.name}" with ${roadScene.hidden} hidden Hillfolk Raiders a few squares east` : ""}. `
+      + `Open the walkthrough on Running the journey; the GM Toolkit's Encounters tab has a "Road, leg N" encounter for each leg.`);
+  }
 
   // ── Seed the GM Toolkit's Expeditions tab ──────────────────────────────
   // LAST OF EVERYTHING, and later even than the Encounters pass, because a prepped expedition

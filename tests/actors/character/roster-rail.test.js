@@ -18,7 +18,7 @@
  *    rail is decoration on top of exactly the tall window it replaced.
  */
 import { describe, it, expect } from "vitest";
-import { readRepo as read, readCss, declarations, specificity, beats } from "../../fakes/css.js";
+import { readRepo as read, readCss, declarations, specificity, beats, hiddenHides } from "../../fakes/css.js";
 import { renderRoster } from "../../fakes/hbs.js";
 import { RosterDialog } from "../../../module/actors/character/dialogs/RosterDialog.js";
 
@@ -224,12 +224,11 @@ describe("the classes the rail is found by", () => {
 });
 
 describe("what the rail looks like", () => {
-	// The panels declare `display: flex`, which beats the UA's `[hidden] { display: none }` — the
-	// same trap `.wd-section[hidden]` and `.stonetop-custom-move-section[hidden]` are here for.
-	// Without this every panel renders at once and the rail sits on top of the tall window it was
-	// added to replace.
+	// The panels declare `display: flex`, which beats the UA's `[hidden] { display: none }`.
+	// Without the stylesheet's own `hidden` rule every panel renders at once and the rail sits on
+	// top of the tall window it was added to replace.
 	it("makes the panels' hidden attribute stick", () => {
-		expect(declarations(CSS, ".stonetop-roster-panel[hidden]")).toMatch(/display:\s*none/);
+		expect(hiddenHides(CSS, "stonetop-roster-panel")).toBe(true);
 	});
 
 	// The panel fills the column and its LIST is what scrolls, so each list's add bar stays pinned

@@ -329,12 +329,12 @@ function resetButtonHtml(r) {
 	if (!reset || !r.actorId) return "";
 	return `
 				<button type="button" class="stonetop-seasons-reset-btn" data-reset="${escHtml(r.reset)}" data-actor-id="${escHtml(r.actorId)}">`
-		+ `<i class="fas ${reset.icon ?? "fa-rotate-left"}"></i> ${escHtml(reset.label)}</button>`;
+		+ `<i class="fas ${reset.icon ?? "fa-rotate-left"}" aria-hidden="true"></i> ${escHtml(reset.label)}</button>`;
 }
 
 function markResetDone(btn, reset) {
 	btn.disabled = true;
-	btn.innerHTML = `<i class="fas fa-check"></i> ${escHtml(reset.done)}`;
+	btn.innerHTML = `<i class="fas fa-check" aria-hidden="true"></i> ${escHtml(reset.done)}`;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { readinessPips, resourceCheckName } from "../../utils/resource-checks.js";
 import {
 	AppearanceLineSnapshot,
 	AppearanceOptionSnapshot,
@@ -105,7 +106,8 @@ import {spendSurpriseForRoll, refundSurpriseForRoll} from "../../combat/battle-h
 import {settleTierEffects, recordTierEffects, reconcileTierEffects, tierEffectsAllowed, insertFormRollFor, holdOnRollFor, holdMoreBonus} from "./tier-effects.js";
 import {xpToLevelUp, xpAfterLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
-import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
+import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed, seekerOfferedMajors} from "./seeker-collection.js";
+import {getBooleanSetting} from "../../settings.js";
 import {CharacterLore} from "./CharacterLore.js";
 import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./CharacterPostDeath.js";
 import {INSERT_MOVES_PENDING_FLAG, isPostDeathMove, planLoreMoveSync, planMissingInsertMoves, postDeathMoveItemData} from "./post-death-moves.js";
@@ -124,7 +126,8 @@ import {readCurrentSeason} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
 import {moveChatCard, postMoveNote} from "../../utils/chat.js";
 import {isFixedRollValue, normalizeRollType} from "../../utils/roll-types.js";
-import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
+import {buildCustomMoveData} from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 import {buildInventoryItemData, readInventoryItemData, WRITEUP_EDITED_FLAG} from "../../utils/inventory-item-data.js";
 import { bronzeRowOf } from "./bronze-lines.js";
 import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtifactState} from "./artifact-identify.js";
@@ -4842,12 +4845,67 @@ export class StonetopCharacter {
 	async settleSeekerMajorOnBackground() {
 		const state      = this.seekerCreationState();
 		const background = await this.selectedBackground();
-		const offered    = background?.majorArcana ?? [];
+		const { offered, locked } = await this._liveSeekerMajorOffer(background);
 		const held       = !!state.major && this._arcana.ownedSlugs.has(state.major);
 		const asGranted  = held && await this._seekerCardAsGranted(state.major, "major", state);
-		const plan       = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted });
+		const plan       = seekerMajorSwitchPlan({ major: state.major, held, offered, asGranted, locked });
 		if (plan === "replace") await this.settleSeekerArcana(state, { ...state, major: "", majorMarks: [] });
-		return { plan, background, offered, major: state.major };
+		return { plan, background, offered, locked, major: state.major };
+	}
+
+	/**
+	 * The playbook a character not made yet is being created as: the walkthrough's own record
+	 * (onboardingProgress.playbookSlug, the sheet's _setOnboardingState), or null.
+	 */
+	async playbookInCreation() {
+		if (this._actor.system?.playbook?.slug) return null;
+		const slug = resolvedFlags(this._actor).onboardingProgress?.playbookSlug;
+		return slug ? this._playbookRepo.findBySlug(slug) : null;
+	}
+
+	/** The GM's given starting major (CharacterArcana#majorGrantSlug), or "". */
+	seekerMajorGrant() {
+		return this._arcana.majorGrantSlug;
+	}
+
+	/** Give (or, with "", take back) the GM's pick of starting major. The card held is not touched. */
+	async setSeekerMajorGrant(slug) {
+		await this._arcana.setMajorGrant(slug);
+	}
+
+	/**
+	 * The majors `background` offers this Seeker (seekerOfferedMajors): the GM's grant, or the
+	 * background's list plus, with the world's "any major" switch on, the creation major already held.
+	 * A creation major no longer held is left out, so a deleted card is not offered back as a 4th.
+	 */
+	seekerMajorOffer(background, { grant = this.seekerMajorGrant() } = {}) {
+		const state = this.seekerCreationState();
+		const major = state.major && this._arcana.ownedSlugs.has(state.major) ? state.major : "";
+		return seekerOfferedMajors({
+			listed: background?.majorArcana ?? [],
+			grant,
+			open:   getBooleanSetting("seekerAnyMajorArcanum"),
+			major,
+		});
+	}
+
+	// A grant whose card no longer resolves (the GM deleted that world arcanum) counts as no grant:
+	// left in, it would owe a card no dialog can show, and a "replace" plan would release the held
+	// major before the empty ask (seeker-major-grant.test.js, "a deleted grant").
+	async _liveSeekerMajorOffer(background) {
+		return this.seekerMajorOffer(background, { grant: await this.liveSeekerMajorGrant() });
+	}
+
+	/**
+	 * The GM's grant, or "" when its card is gone. Only a GM's client can tell: world arcana resolve
+	 * through `game.items`, which holds only the items this user may see, so on a player's client a
+	 * card hidden from them looks deleted. There the grant stands, and still locks the offer
+	 * (seeker-major-grant.test.js, "a card hidden from the player").
+	 */
+	async liveSeekerMajorGrant() {
+		const grant = this.seekerMajorGrant();
+		if (!grant || !globalThis.game?.user?.isGM) return grant;
+		return await this.getArcanum(grant) ? grant : "";
 	}
 
 	/**
@@ -4857,11 +4915,11 @@ export class StonetopCharacter {
 	async seekerMajorOwed(playbookData = undefined) {
 		if (!this.backgroundState().slug) return false;
 		const background = this._selectedBackground(playbookData === undefined ? await this.playbook() : playbookData);
-		const offered    = background?.majorArcana ?? [];
-		if (!offered.length) return false;
+		if (!(background?.majorArcana ?? []).length && !this.seekerMajorGrant()) return false;
+		const { offered, locked } = await this._liveSeekerMajorOffer(background);
 		const leads = this._arcana.leadSlugs;
 		const owned = [...this._arcana.ownedSlugs].filter(s => !leads.has(s));
-		return seekerMajorOwed({ offered, owned, major: this.seekerCreationState().major });
+		return seekerMajorOwed({ offered, owned, major: this.seekerCreationState().major, locked });
 	}
 
 	/** Give `major` as the Seeker's major arcanum with its 1 mark ("context:index" keys). */
@@ -5139,7 +5197,7 @@ export class StonetopCharacter {
 		const flags = resolvedFlags(this._actor);
 		const keys  = [
 			"possessions", "possessionGrantsApplied", POSSESSION_PRESELECTED_WALKED_FLAG, "background", "instinct", "lore",
-			"arcana.major", "arcana.minorDraw", "arcana.minorRoles", "arcana.majorMarks", "arcana.majorMarksFor",
+			"arcana.major", "arcana.minorDraw", "arcana.minorRoles", "arcana.majorMarks", "arcana.majorMarksFor", "arcana.majorGrant",
 			"moves.backgroundAnswers", "moves.dismissedLevelOverage",
 			"crew", "animalCompanion",
 			// "With the party" too (follower-party.js), or an initiate picked again later comes back already travelling.
@@ -6281,9 +6339,6 @@ export class StonetopCharacter {
 		const opts  = { hasShield: await this.bearsShield(gear), hasGuardian: this.hasGuardianMove };
 		const value = this.defendReadiness;
 		const cap   = defendReadinessCap(opts);
-		// Never render fewer circles than are held, so an over-held pool (e.g. shield
-		// dropped mid-fight) stays visible and spendable.
-		const count = Math.max(cap, value);
 		return {
 			value,
 			cap,
@@ -6292,7 +6347,8 @@ export class StonetopCharacter {
 			// Big Damn Hero's "don't roll to Defend", while it is still there to make in this fight
 			// (fight/hero-moves.js#leapInOpen): the row's Leap in button.
 			leapIn: leapInOpen(this._actor),
-			pips: Array.from({ length: count }, (_, i) => ({ index: i, filled: i < value })),
+			// Named one by one ("Readiness 2 of 3"): the sheet draws each as an empty button.
+			pips: readinessPips(value, cap),
 		};
 	}
 
@@ -9145,9 +9201,11 @@ function _buildPlaybookSection(playbookData, background, instinct, appearance, o
 					max,
 					// The moves that empty it (background-tracks.js): Auspicious Birth's circle.
 					clearsOn: Array.isArray(r.clearsOn) ? [...r.clearsOn] : [],
+					// Named one by one: the tab draws each circle as an empty button.
 					checks: Array.from({ length: max }, (_, i) => ({
 						index: i,
 						checked: i < current,
+						name: resourceCheckName(r.label ?? r.key, i, max),
 					})),
 				};
 			}))

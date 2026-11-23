@@ -16,7 +16,7 @@
 	<ul class="stonetop-world-setup-steps">
 		{{#each steps}}
 			<li class="stonetop-world-setup-step is-{{this.state}}">
-				<i class="fas {{this.stateIcon}} stonetop-world-setup-step-icon"></i>
+				<i class="fas {{this.stateIcon}} stonetop-world-setup-step-icon" aria-hidden="true"></i>
 				<span class="stonetop-world-setup-step-body">
 					<span class="stonetop-world-setup-step-label">{{this.label}}</span>
 					{{#if this.detail}}<span class="stonetop-world-setup-step-detail">{{this.detail}}</span>{{/if}}
@@ -28,9 +28,9 @@
 	<div class="stonetop-world-setup-actions">
 		<button type="button" data-action="hide">
 			{{#if complete}}
-				<i class="fas fa-check"></i> <span>Close</span>
+				<i class="fas fa-check" aria-hidden="true"></i> <span>Close</span>
 			{{else}}
-				<i class="fas fa-arrow-right-to-bracket"></i> <span>Continue in the background</span>
+				<i class="fas fa-arrow-right-to-bracket" aria-hidden="true"></i> <span>Continue in the background</span>
 			{{/if}}
 		</button>
 	</div>

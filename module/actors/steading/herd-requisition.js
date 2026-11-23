@@ -1,7 +1,7 @@
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { escHtml } from "../../utils/strings.js";
 import { plural } from "../../utils/plural.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 
 /**
  * Requisitioning from the Herd of Horses: how many horses go?

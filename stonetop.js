@@ -82,9 +82,11 @@ import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
 import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
+import { patchCoreConfirms } from "./module/hooks/core-confirms.js";
 import { onRenderPause } from "./module/hooks/RenderPause.js";
 import { registerBookBroadcast } from "./module/books/book-broadcast.js";
 import { registerEndOfSessionBroadcast } from "./module/dialogs/end-of-session-broadcast.js";
+import { registerMomentBroadcast } from "./module/moments/moment-broadcast.js";
 import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.js";
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
@@ -98,7 +100,8 @@ import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
+import { resourceCheckGroups, resourceCheckItems } from "./module/utils/resource-checks.js";
+import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill, wireDescToggle } from "./module/utils/roll-engine.js";
 import { countedResult, rolledRecord, cardCountedTier, cardTierNow } from "./module/utils/counted-tier.js";
 import { burnBrightlyAffordable, burnBrightlyTooltipKey } from "./module/actors/character/burn-brightly.js";
 import { xpRules } from "./module/utils/xp.js";
@@ -328,6 +331,11 @@ Hooks.once("init", () => {
 	// page content. See module/journal/journal-image-titles.js.
 	patchJournalImagePopoutTitles();
 
+	// Core's yes/no questions met in play (sidebar deletes, clear chat, end combat, the canvas
+	// Delete key, Clear All) ask in a bare Yes/No DialogV2; ask them in ours. See
+	// module/hooks/core-confirms.js.
+	patchCoreConfirms();
+
 	// Skin a curated allowlist of core Foundry windows (e.g. User Configuration)
 	// to match our sheets/modals; scoped to a marker class so nothing else moves.
 	registerStonetopWindowTheme();
@@ -414,26 +422,15 @@ Hooks.once("init", () => {
 	};
 	Handlebars.registerHelper("statLabel", key => game.i18n.localize(_STAT_LABEL_KEYS[String(key)] ?? String(key)));
 
-	Handlebars.registerHelper("resourceChecks", resource => {
-		if (!resource) return [];
-		const { current, max, labels } = resource;
-		return Array.from({ length: max }, (_, i) => ({ checked: i < current, label: labels[i] || null }));
-	});
+	// A resource track's circles, each with the spoken name its empty button carries
+	// (utils/resource-checks.js).
+	Handlebars.registerHelper("resourceChecks", resource => resourceCheckItems(resource));
 
 	// Same circles as resourceChecks, but chunked into fixed-size groups (default 5)
 	// so a long track (e.g. a fully-upgraded sacred pouch's Stock) reads in fives.
 	// Each item keeps its absolute index; groups stay atomic so they never split
 	// across a wrapped row and every wrapped row aligns under the first circle.
-	Handlebars.registerHelper("resourceGroups", (resource, size) => {
-		if (!resource) return [];
-		const { current, max } = resource;
-		const labels = resource.labels || [];
-		const n = Number(size) > 0 ? Number(size) : 5;
-		const items = Array.from({ length: max }, (_, i) => ({ checked: i < current, label: labels[i] || null, index: i }));
-		const groups = [];
-		for (let i = 0; i < items.length; i += n) groups.push(items.slice(i, i + n));
-		return groups;
-	});
+	Handlebars.registerHelper("resourceGroups", (resource, size) => resourceCheckGroups(resource, size));
 
 	const _flatPoolItems = pool => {
 		if (!pool) return [];
@@ -781,8 +778,10 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
-		// Not a tab any more: a folded section at the foot of the Expeditions panel.
-		"stonetop.gm-toolkit-sites-section": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-sites-section.hbs",
+		// The Prep tab: one rail button over three views, chosen by a switcher at its top
+		// (actors/gmtoolkit/gm-prep-views.js). The three after it are its panes, not rail tabs.
+		"stonetop.gm-toolkit-tab-prep":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-prep.hbs",
+		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
@@ -795,6 +794,10 @@ Hooks.once("init", () => {
 		"stonetop.gm-expedition-card":        "systems/stonetop-pwd/templates/actor/partials/gm-expedition-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
+		// The Prep tab's three views open on the same one-line bar and, with nothing in them, the
+		// same centred empty state; the Threats tab keeps its own foot-of-section add bars above.
+		"stonetop.gm-prep-pane-bar":          "systems/stonetop-pwd/templates/actor/partials/gm-prep-pane-bar.hbs",
+		"stonetop.gm-prep-empty":             "systems/stonetop-pwd/templates/actor/partials/gm-prep-empty.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
 		"stonetop.gm-prep-guide-items":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-guide-items.hbs",
 		"stonetop.monster-sheet":             "systems/stonetop-pwd/templates/actor/monster.hbs",
@@ -815,6 +818,7 @@ Hooks.once("init", () => {
 		"stonetop.guide-toc":                 "systems/stonetop-pwd/templates/dialogs/partials/guide-toc.hbs",
 		"stonetop.guide-tabs":                "systems/stonetop-pwd/templates/dialogs/partials/guide-tabs.hbs",
 		"stonetop.expedition-load":           "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs",
+		"stonetop.expedition-trail":          "systems/stonetop-pwd/templates/dialogs/partials/expedition-trail.hbs",
 		"stonetop.expedition-home-assets":    "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-assets.hbs",
 		"stonetop.expedition-home-reset":     "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-reset.hbs",
 		"stonetop.expedition-journey":        "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey.hbs",
@@ -981,6 +985,9 @@ Hooks.once("ready", registerBookBroadcast);
 // The same for End of Session: a player's read-only copy of the GM's window, which follows the
 // GM's ticks. See module/dialogs/end-of-session-broadcast.js.
 Hooks.once("ready", registerEndOfSessionBroadcast);
+// Table moments: every user listens, since the players are who the band is for. See
+// module/moments/moment-broadcast.js.
+Hooks.once("ready", registerMomentBroadcast);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 
 // -- THREAT BOARD (opt-in on-canvas threat cards) --------------
@@ -1417,20 +1424,16 @@ function _chatWireRebuildCrops(message, html) {
 			// only the parents that failed. Latching it closed on "Rebuilt N" would make a
 			// reload the only way back to the remainder.
 			btn.disabled = false;
-			btn.innerHTML = `<i class="fas fa-rotate-right"></i> Retry ${res.failed}`;
+			btn.innerHTML = `<i class="fas fa-rotate-right" aria-hidden="true"></i> Retry ${res.failed}`;
 		} else {
-			btn.innerHTML = `<i class="fas fa-check"></i> Rebuilt ${res.written}`;
+			btn.innerHTML = `<i class="fas fa-check" aria-hidden="true"></i> Rebuilt ${res.written}`;
 		}
 	});
 }
 
 // -- MOVE DESCRIPTION TOGGLE -----------------------------------
 function _chatWireDescToggle(message, html) {
-	const toggle = html.querySelector(".stonetop-roll-card-desc-toggle");
-	if (!toggle) return;
-	toggle.addEventListener("click", () => {
-		toggle.closest(".stonetop-roll-card")?.classList.toggle("desc-revealed");
-	});
+	wireDescToggle(html);
 }
 
 // -- DEBILITY DISADVANTAGE ANNOTATION -------------------------
@@ -1832,7 +1835,7 @@ function _wireLogbook(message, html, actor, card) {
 	for (const { source, uses } of offers) {
 		const btn = document.createElement("button");
 		btn.className = "stonetop-logbook-btn";
-		btn.innerHTML = `<i class="fas ${source.icon}"></i> ${escHtml(source.button)}`;
+		btn.innerHTML = `<i class="fas ${source.icon}" aria-hidden="true"></i> ${escHtml(source.button)}`;
 		btn.dataset.tooltip = source.tooltip?.(uses)
 			?? `Expend a use (${uses.left} of ${uses.max} left) to ignore this roll and treat the result as a 10+.`;
 		btn.dataset.tooltipDirection = "UP";
@@ -2032,7 +2035,7 @@ function _chatWireHolyRelics(message, html) {
 		const btn = document.createElement("button");
 		btn.className = "stonetop-logbook-btn stonetop-holy-relic-btn";
 		btn.dataset.prePick = prePick ? "1" : "";
-		btn.innerHTML = `<i class="fas fa-sun"></i> ${escHtml(i18n(prePick ? "stonetop.invocations.relicButtonEmpowered" : "stonetop.invocations.relicButton"))}`;
+		btn.innerHTML = `<i class="fas fa-sun" aria-hidden="true"></i> ${escHtml(i18n(prePick ? "stonetop.invocations.relicButtonEmpowered" : "stonetop.invocations.relicButton"))}`;
 		btn.dataset.tooltip = i18n(prePick ? "stonetop.invocations.relicTooltipEmpowered" : "stonetop.invocations.relicTooltip",
 			{ left: relics.left, max: relics.max });
 		btn.dataset.tooltipDirection = "UP";
@@ -2765,6 +2768,7 @@ function _chatWireOptionDamageChoices(message, html, move, { usable = true } = {
 			btn.className = "stonetop-option-damage-roll";
 			const glyph = document.createElement("i");
 			glyph.className = "fas fa-dice-d6";
+			glyph.setAttribute("aria-hidden", "true");
 			btn.append(glyph, ` Roll ${dealt.formula} (${dealt.label})`);
 			btn.hidden = !box.checked;
 			item.appendChild(btn);

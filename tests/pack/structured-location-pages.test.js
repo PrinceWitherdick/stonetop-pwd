@@ -97,6 +97,42 @@ describe.each([
 		);
 		expect(bad.map(b => b.file)).toEqual([]);
 	});
+
+	// The PDF import ran the book's layout together (issue #55). Each pattern is one way it did:
+	const IMPORT_GLITCHES = {
+		// "Size … Population … Prosperity" on one line
+		statLine: /Population [^<]*Prosperity/,
+		// a list header ("Resources", "Defenses +1") glued to the last item of the list before it
+		gluedStatHeader: /\S (?:Resources|Defenses [+\-−]\d[^<]*)<\/(?:li|p)>/,
+		// a "…" leader left at the end of the line above the option it belongs to
+		trailingLeader: /(?:\.\.\.|…)\s*<\/li>/,
+		doubledLeader: /(?:\.\.\.|…) (?:\.\.\.|…)/,
+		// one list chopped into several back-to-back lists
+		splitList: /<\/ul><ul>/,
+		// a price list flattened into one line of "item N item N item N"
+		flatPriceList: /(?:[a-z)] [0-4] [A-Z…][^<0-9]{3,80}){3,}/,
+		// a treasure's name, tags and description run into one line
+		// (tags in parentheses mid-sentence are fine, and so is a Dangers card's one-line
+		// "Spirit, magical, … Instinct to …" header)
+		runTreasure: /<(?:li|p)>[A-Z][^<(]{2,50}? (?:magical|immobile|fragile)(?:, [a-z]+)*,? (?:Value \d+ )?(?!Instinct|Damage)[A-Z][a-z]/,
+		// a threat's name and "Threat (type)" run into one line
+		runThreat: /<li>[^<]{3,80} Threat \([a-z ]+\)/,
+	};
+	const htmlIn = (section) => [section.body, ...(section.groups ?? []).map(g => g.body)].filter(Boolean);
+
+	it("no section keeps the PDF import's run-together layout", () => {
+		const bad = [];
+		for (const { file, doc } of entries) {
+			for (const s of doc.pages?.[0]?.system?.sections ?? []) {
+				for (const html of htmlIn(s)) {
+					for (const [name, re] of Object.entries(IMPORT_GLITCHES)) {
+						if (re.test(html)) bad.push(`${file} › ${s.heading}: ${name}`);
+					}
+				}
+			}
+		}
+		expect(bad).toEqual([]);
+	});
 });
 
 describe("locations journal: the Dangers section", () => {

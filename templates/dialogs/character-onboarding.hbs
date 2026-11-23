@@ -31,8 +31,8 @@
 		{{/if}}
 		<h2 class="stonetop-onboarding-playbook-name">{{this.playbookName}}</h2>
 		{{#if hasFaq}}
-		<button type="button" class="stonetop-onboarding-faq-badge" title="Related questions: click for the full FAQ" aria-label="Related questions">
-			<i class="fas fa-question"></i>
+		<button type="button" class="stonetop-onboarding-faq-badge" data-tooltip="Related questions: click for the full FAQ" aria-label="Related questions">
+			<i class="fas fa-question" aria-hidden="true"></i>
 		</button>
 		{{/if}}
 	</div>
@@ -163,9 +163,9 @@
 						      forwards a click on it to the trait input — it only rolls. --}}
 						<button type="button"
 						        class="onboard-background-neighbor-random"
-						        title="Roll a trait at random"
+						        data-tooltip="Roll a trait at random"
 						        aria-label="Roll a random trait for {{this.name}}">
-							<i class="fas fa-dice-d6"></i>
+							<i class="fas fa-dice-d6" aria-hidden="true"></i>
 						</button>
 					</label>
 					{{/each}}
@@ -243,15 +243,17 @@
 				{{/if}}
 				{{#if majorArcana.length}}
 				<div class="stonetop-onboarding-background-arcana">
-					<p class="stonetop-onboarding-background-arcana-label">Major arcanum</p>
+					<p class="stonetop-onboarding-background-arcana-label">{{#if majorGranted}}{{this.majorGrantedLabel}}{{else}}Major arcanum{{/if}}</p>
 					<div class="stonetop-onboarding-arcana-grid stonetop-onboarding-arcana-grid--background">
 						{{#each majorArcana}}
 						<span class="stonetop-onboarding-arcana-option{{#if selected}} is-selected{{/if}}">
+							{{#unless granted}}
 							<input type="radio"
 							       name="onboard-background-major-arcanum"
 							       value="{{this.slug}}"
 							       data-background-slug="{{this.backgroundSlug}}"
 							       {{#if selected}}checked{{/if}}>
+							{{/unless}}
 							{{#if img}}<img class="stonetop-onboarding-arcana-thumb" src="{{this.img}}" alt="">{{/if}}
 							<span class="stonetop-onboarding-arcana-name">{{this.name}}</span>
 							<span class="stonetop-onboarding-arcana-preview">
@@ -864,7 +866,7 @@
 			<p class="stonetop-onboarding-step-hint stonetop-onboarding-ac-over"{{#unless acData.selectedType.overCount}} hidden{{/unless}}>You have more options picked than your companion can have (only {{acData.selectedType.pickCount}}). Untick <span class="stonetop-onboarding-ac-over-count">{{acData.selectedType.overCount}}</span> to go on.</p>
 			<div class="stonetop-onboarding-tag-grid">
 				{{#each acData.selectedType.traits}}
-				<label class="stonetop-onboarding-tag-option{{#if isSelected}} is-selected{{/if}}{{#if isMandatory}} is-mandatory{{/if}}"{{#if isMandatory}} title="Always included; doesn't count toward your picks"{{/if}}>
+				<label class="stonetop-onboarding-tag-option{{#if isSelected}} is-selected{{/if}}{{#if isMandatory}} is-mandatory{{/if}}"{{#if isMandatory}} data-tooltip="Always included; doesn't count toward your picks"{{/if}}>
 					<input type="checkbox" name="onboard-ac-trait" value="{{this.slug}}"
 					       {{#if isSelected}}checked{{/if}}
 					       {{#if disabled}}disabled{{/if}}>
@@ -942,7 +944,7 @@
 		<div class="stonetop-onboarding-arcana-picker">
 			<section class="stonetop-onboarding-arcana-section">
 				<h4 class="stonetop-onboarding-lore-section-title">Major Arcanum</h4>
-				<p class="stonetop-onboarding-step-hint">Choose the major arcanum granted by your background.</p>
+				<p class="stonetop-onboarding-step-hint">{{seekerArcanaChoices.majorHint}}</p>
 				<div class="stonetop-onboarding-arcana-grid stonetop-onboarding-arcana-grid--major">
 					{{#each seekerArcanaChoices.major}}
 					<label class="stonetop-onboarding-arcana-option{{#if selected}} is-selected{{/if}}">
@@ -957,6 +959,13 @@
 					</label>
 					{{/each}}
 				</div>
+				{{#if seekerArcanaChoices.majorActions.length}}
+				<div class="stonetop-seeker-major-actions">
+					{{#each seekerArcanaChoices.majorActions}}
+					<button type="button" class="stonetop-inline-btn" data-seeker-major-action="{{this.action}}"><i class="fas {{this.icon}}" aria-hidden="true"></i>{{this.label}}</button>
+					{{/each}}
+				</div>
+				{{/if}}
 			</section>
 		</div>
 		{{#if seekerArcanaData.sections.length}}

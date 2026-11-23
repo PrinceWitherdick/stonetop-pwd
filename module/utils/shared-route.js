@@ -30,6 +30,7 @@ import { escHtml, htmlToPlainText } from "./strings.js";
 import { chartedLines } from "./chronicle-core.js";
 import { format, localize } from "./i18n.js";
 import { journeyMapLayer } from "../dialogs/journey-map-layer.js";
+import { roadWhere } from "./trip-progress.js";
 
 /** The world setting the shared route lives in. */
 export const SHARED_ROUTE_SETTING = "sharedRoute";
@@ -80,9 +81,10 @@ export function readSharedRoute() {
  *
  * Null when the trip describes no route.
  */
-export function sharedRoutePayload({ trip, tier, art = null, requirements = null, now = Date.now(), id = null } = {}) {
+export function sharedRoutePayload({ trip, tier, art = null, requirements = null, progress = null, now = Date.now(), id = null } = {}) {
 	const journey = storedJourney(trip?.journey);
 	if (!journey) return null;
+	const travelled = sharedProgress(progress);
 	return {
 		id: id ?? globalThis.foundry?.utils?.randomID?.() ?? String(now),
 		sharedAt: now,
@@ -97,7 +99,15 @@ export function sharedRoutePayload({ trip, tier, art = null, requirements = null
 		// already filled, grouped as the walkthrough groups them. Absent rather than empty when not
 		// sent, so a reader can tell "none were chosen" from "none were shared".
 		...(Array.isArray(requirements) && requirements.length ? { requirements } : {}),
+		// How many legs the party has travelled, once the GM has them on the road (`shareRouteProgress`).
+		...(travelled ? { progress: travelled } : {}),
 	};
+}
+
+/** `{ reached }` read tolerantly, or null: a whole number of legs, at least 0. */
+function sharedProgress(progress) {
+	const reached = progress?.reached;
+	return Number.isInteger(reached) && reached >= 0 ? { reached } : null;
 }
 
 /**
@@ -162,8 +172,13 @@ export function sharedRouteDestination(route) {
 export function sharedLegLine(leg) {
 	const where = `${leg.fromName} to ${leg.toName}`;
 	if (!leg.time) return where;
-	const time = leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time;
-	return `${where}, ${time}${leg.via ? ` (via ${leg.via})` : ""}`;
+	return `${where}, ${legTimeLabel(leg)}${leg.via ? ` (via ${leg.via})` : ""}`;
+}
+
+/** A leg's time in words: "about 2 days" when estimated (never a tilde, see above), "" with none. */
+export function legTimeLabel(leg) {
+	if (!leg?.time) return "";
+	return leg.estimated ? format("stonetop.expedition.shared.estimated", { time: leg.time }) : leg.time;
 }
 
 /**
@@ -233,6 +248,25 @@ export function sharedRoutePlace(payload) {
 	return sharedRouteDestination(sharedPublicRoute(payload));
 }
 
+/**
+ * The stop the party is on the way to, as the players read it, or null: with no `progress` on the
+ * share, or with every leg travelled. Never from the trip log, which players are not shown.
+ */
+export function sharedNextStop(payload) {
+	const travelled = sharedProgress(payload?.progress);
+	return travelled ? sharedStopName(payload, travelled.reached + 1) : null;
+}
+
+/**
+ * Stop `index` of a share's way as the players read it (0 is where they set out, `k` where leg `k`
+ * ends), or null past either end. The road panel's arrival band names the stop through this.
+ */
+export function sharedStopName(payload, index) {
+	const legs = sharedPublicRoute(payload)?.legs;
+	if (!legs?.length || !Number.isInteger(index) || index < 0 || index > legs.length) return null;
+	return (index === 0 ? legs[0].fromName : legs[index - 1].toName) || null;
+}
+
 export function sharedRouteView(payload) {
 	const route = sharedPublicRoute(payload);
 	if (!route) return null;
@@ -243,6 +277,7 @@ export function sharedRouteView(payload) {
 			: localize("stonetop.expedition.shared.titleDrawn"));
 	const line = routeLine(route);
 	const phrase = routePhrase(route);
+	const travelled = sharedProgress(payload.progress);
 	return {
 		id: payload.id,
 		title,
@@ -254,6 +289,8 @@ export function sharedRouteView(payload) {
 			? format("stonetop.expedition.draw.estimate", { map: travelMap(route.tier)?.name ?? "" })
 			: "",
 		legs: route.legs.map(leg => ({ text: sharedLegLine(leg), estimated: !!leg.estimated })),
+		// Where the party is, in the players' names, once the GM has them travelling; "" before.
+		where: travelled ? roadWhere(route.legs, travelled.reached, { setOut: true }) : "",
 		// The Chart a Course lines the GM chose to send, as words (audit ruling E4).
 		requirements: readRequirements(payload.requirements),
 		map: sharedRouteMap(payload, route),
@@ -281,6 +318,7 @@ function sharedRouteMap(payload, route) {
 	const stops = custom.on && custom.tier === tier ? customStops(start, custom) : [];
 	const layer = journeyMapLayer(tier, art, {
 		routes: solvedRoutes(payload.journey), route, start, origin, destination, stops, sites: [],
+		reached: sharedProgress(payload.progress)?.reached,
 	});
 	if (!layer) return null;
 	const legs = route.legs;
@@ -360,6 +398,24 @@ export function sharedRouteChipHtml(chip) {
 export function shareRoute(payload) {
 	if (!payload) return Promise.resolve();
 	return setWorldSetting(SHARED_ROUTE_SETTING, payload);
+}
+
+/**
+ * Tell the players how far along the shown way the party is: `progress` is `{ reached }`, or null
+ * to draw no party mark. GM only. Writes nothing when nothing is shown or nothing changes, and
+ * keeps the rest of the share as it is, so `sharedRouteState` still answers "same" after it.
+ * Answers whether it wrote. Guarded by tests/utils/shared-route.test.js.
+ */
+export async function shareRouteProgress(progress) {
+	if (!globalThis.game?.user?.isGM) return false;
+	const shared = readSharedRoute();
+	if (!shared) return false;
+	const next = sharedProgress(progress);
+	const now = sharedProgress(shared.progress);
+	if ((next?.reached ?? null) === (now?.reached ?? null)) return false;
+	const { progress: _old, ...rest } = shared;
+	await setWorldSetting(SHARED_ROUTE_SETTING, next ? { ...rest, progress: next } : rest);
+	return true;
 }
 
 /** Stop showing the players any route. */

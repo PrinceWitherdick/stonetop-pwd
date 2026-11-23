@@ -17,6 +17,18 @@ export function isPrimaryGM() {
 }
 
 /**
+ * Whether THIS client is a connected GM and the primary one: the gate for a write only a GM may
+ * make, such as a world sweep, a world-scope latch or a whisper to the GMs.
+ *
+ * `isPrimaryGM()` alone is true on every client when no GM is connected, so on its own it hands a
+ * player alone in the world the GM's writes: each one fails, and a world-scope once-per-version
+ * gate the player has no right to set gets stamped anyway.
+ */
+export function isActingPrimaryGM() {
+	return !!globalThis.game?.user?.isGM && isPrimaryGM();
+}
+
+/**
  * Whether ANY GM is connected — the other question about the same set of users, and the one a
  * whispered ask has to have answered before it counts as asked.
  *

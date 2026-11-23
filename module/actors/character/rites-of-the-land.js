@@ -123,7 +123,7 @@ export function openRitesOfTheLand({ character, steading, actorId = "", year = 1
 
 	// ── The rites ────────────────────────────────────────────────────────────────
 	const ritesBody = state.ritesDone
-		? `<p class="stonetop-rites-done"><i class="fas fa-check"></i> Already overseen in ${seasonLine}. The rites are once per season.</p>`
+		? `<p class="stonetop-rites-done"><i class="fas fa-check" aria-hidden="true"></i> Already overseen in ${seasonLine}. The rites are once per season.</p>`
 		: `<p>Hold <strong>${state.plainBoon} Boon</strong>${state.canSacrificeSurplus
 			? `, or <strong>${state.surplusBoon}</strong> if the steading also sacrifices <strong>1 Surplus</strong>.`
 			: `. <em>The steading has no Surplus to sacrifice.</em>`}</p>

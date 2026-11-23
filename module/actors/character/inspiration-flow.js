@@ -48,7 +48,7 @@ import {
 	damageBoostHolder, openDamageCard, addTermToRoll, writeDamageBoost, damageBoostCard, drawDamageBoostNote,
 	appendDamageBoostButton,
 } from "./damage-card-boost.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { holdForEach, shareHold } from "../../utils/share-hold.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
@@ -322,7 +322,7 @@ export async function handleInspirationQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync, messages = globalThis.game?.messages,
 		scope = SYSTEM_ID } = deps;
 	const hold = data?.action === "hold";
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return hold ? [] : false;
+	if (!isActingPrimaryGM()) return hold ? [] : false;
 	const user = queryAsker(data, context, users);
 	if (!user) return hold ? [] : false;
 
@@ -448,7 +448,7 @@ export function wireKeepOneHp(message, html, { user = globalThis.game?.user } = 
 	const button = (root.ownerDocument ?? globalThis.document).createElement("button");
 	button.type = "button";
 	button.className = "stonetop-dying-btn stonetop-inspiration-keep";
-	button.innerHTML = `<i class="fas fa-heart-pulse"></i> ${escHtml(localize(`${KEY}.keepCardButton`))}`;
+	button.innerHTML = `<i class="fas fa-heart-pulse" aria-hidden="true"></i> ${escHtml(localize(`${KEY}.keepCardButton`))}`;
 	button.dataset.tooltipText = format(`${KEY}.keepAsk`, { name: actor.name, held: inspirationHeld(actor) });
 	button.addEventListener("click", async () => {
 		if (button.disabled) return;

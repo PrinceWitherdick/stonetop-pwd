@@ -10,7 +10,7 @@
     <div class="stonetop-guide-main">
 
       <div class="stonetop-guide-banner">
-        <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+        <i class="fas {{step.icon}} stonetop-guide-banner-icon" aria-hidden="true"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">{{#if isEmanation}}Create an emanation{{else}}Corrupt a being{{/if}}</div>
@@ -57,7 +57,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-origin stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll</button>
+        <button type="button" class="stonetop-tb-roll-origin stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll</button>
         {{/if}}
 
         {{#if is_essence}}
@@ -71,7 +71,7 @@
             </label>
             {{/each}}
           </div>
-          <button type="button" class="stonetop-tb-roll-themes stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll 2</button>
+          <button type="button" class="stonetop-tb-roll-themes stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll 2</button>
         </div>
         <div class="stonetop-cf-pick">
           <div class="stonetop-cf-pick-label">Aspects</div>
@@ -83,7 +83,7 @@
             </label>
             {{/each}}
           </div>
-          <button type="button" class="stonetop-tb-roll-aspects stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll 2</button>
+          <button type="button" class="stonetop-tb-roll-aspects stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll 2</button>
         </div>
         <label class="stonetop-cf-label">Instinct <span class="stonetop-cf-pick-hint">(rewrite it to suit)</span>
           <input type="text" class="stonetop-cf-input" data-field="instinct" value="{{this.instinct}}" placeholder="to spread cruelty, pain, fire…">
@@ -102,7 +102,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-gifts stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll</button>
+        <button type="button" class="stonetop-tb-roll-gifts stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll</button>
         {{/if}}
 
         {{#if is_marks}}
@@ -117,7 +117,7 @@
             {{/each}}
           </div>
         </div>
-        <button type="button" class="stonetop-tb-roll-marks stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll</button>
+        <button type="button" class="stonetop-tb-roll-marks stonetop-cf-mini-btn"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll</button>
         {{/if}}
 
         {{#if is_review}}
@@ -155,7 +155,7 @@
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
-    <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-skull"></i> {{#if isEmanation}}Create the emanation{{else}}Create the being{{/if}}</button>
+    <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-skull" aria-hidden="true"></i> {{#if isEmanation}}Create the emanation{{else}}Create the being{{/if}}</button>
     {{else}}
     <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
     {{/if}}

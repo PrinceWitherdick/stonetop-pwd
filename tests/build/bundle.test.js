@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, buildBundle, precompileTemplates } from "../../scripts/bundle.js";
+import * as esbuild from "esbuild";
+import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, STYLES_ENTRY, STYLES_OPTIONS, STYLES_OUTFILE, buildBundle, buildStyles, precompileTemplates } from "../../scripts/bundle.js";
 import { RELMAP_WINDOW_CLASS } from "../../module/utils/window-restore.js";
 
 /**
@@ -128,5 +129,50 @@ describe("where a checkout and a release load the system from", () => {
 
 		expect(step(yml, "Verify the checkout before it is zipped")).toContain("m.esmodules");
 		expect(step(yml, "Verify the zip that will ship")).toContain("m.esmodules");
+	});
+
+	it("a checkout loads the commented stylesheet and a release loads the stripped one", () => {
+		// Failing after trying the build locally? Put system.json back before committing.
+		expect(JSON.parse(read("system.json")).styles).toEqual([STYLES_ENTRY]);
+
+		const yml = read(".github/workflows/release.yml");
+		expect(step(yml, "Patch manifest")).toContain(`m.styles = ['${STYLES_OUTFILE}']`);
+		expect(step(yml, "Create zip")).toContain(" styles/ ");
+		expect(step(yml, "Verify the checkout before it is zipped")).toContain("m.styles");
+		expect(step(yml, "Verify the zip that will ship")).toContain("m.styles");
+	});
+
+	it("keeps the stripped stylesheet at the depth its ../assets URLs resolve from", () => {
+		expect(path.dirname(STYLES_OUTFILE).split("/")).toHaveLength(path.dirname(STYLES_ENTRY).split("/").length);
+	});
+});
+
+describe("the release stylesheet", () => {
+	const source = read(STYLES_ENTRY);
+	const { css, bytes } = buildStyles({ write: false });
+
+	it("drops the comments, which are over half the source", () => {
+		expect(bytes).toBeLessThan(Buffer.byteLength(source) * 0.6);
+		expect(css).not.toContain("/*");
+	});
+
+	it("keeps a /* that sits inside a string or url(), since only real comments go", () => {
+		const { code } = esbuild.transformSync(`a{content:"/* kept */";background:url(/x/*y*/z.webp)}`, STYLES_OPTIONS);
+		expect(code).toContain(`"/* kept */"`);
+		expect(code).toContain("url(/x/*y*/z.webp)");
+	});
+
+	it("means exactly what the source means: nothing is lowered for an older target", async () => {
+		// Compared minified, so formatting can't count. A line break after "(" in a custom property's
+		// value prints as a space there, which is insignificant whitespace, so it is folded away first.
+		const parsed = async (text) => (await esbuild.transform(text, {
+			loader: "css", minify: true, legalComments: "none", logLevel: "silent",
+		})).code.replace(/\(\s+/g, "(");
+		expect(await parsed(css) === await parsed(source)).toBe(true);
+		expect(STYLES_OPTIONS).not.toHaveProperty("target");
+	});
+
+	it("keeps non-ASCII content as written", () => {
+		expect(esbuild.transformSync(`a{content:"—"}`, STYLES_OPTIONS).code).toContain(`"—"`);
 	});
 });

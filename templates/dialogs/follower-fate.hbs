@@ -5,7 +5,7 @@
   <div class="stonetop-guide-main">
 
     <div class="stonetop-guide-banner">
-      <i class="fas fa-heart-crack stonetop-guide-banner-icon"></i>
+      <i class="fas fa-heart-crack stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{this.followerName}} is at 0 HP</div>
         <div class="stonetop-guide-banner-sub">{{this.sub}}</div>
@@ -17,7 +17,7 @@
       {{!-- Ranger's animal companion: Loyal to the End replaces the standard fate
             choice — roll +0 (advantage if it holds Loyalty) for its fate. --}}
       <button type="button" class="stonetop-ff-option stonetop-ff-option--save" data-action="roll">
-        <span class="stonetop-ff-option-title"><i class="fas fa-dice-d6"></i> Roll Loyal to the End</span>
+        <span class="stonetop-ff-option-title"><i class="fas fa-dice-d6" aria-hidden="true"></i> Roll Loyal to the End</span>
         <span class="stonetop-ff-option-desc">Roll +0{{#if hasLoyalty}} with <strong>advantage</strong> ({{this.loyalty}} Loyalty held){{/if}}: 10+ it'll be fine once it heals; 7&ndash;9 it takes the <em>injured</em> tag; 6&ndash; it's dying unless someone saves it.</span>
       </button>
       {{else}}
@@ -25,16 +25,16 @@
             `full`) only Dead and the spare below are left: they "would die" (SIR, PERMISSION TO DIE, SIR). --}}
       {{#if full}}
       <button type="button" class="stonetop-ff-option" data-action="deathsdoor">
-        <span class="stonetop-ff-option-title"><i class="fas fa-skull"></i> Death's Door</span>
+        <span class="stonetop-ff-option-title"><i class="fas fa-skull" aria-hidden="true"></i> Death's Door</span>
         <span class="stonetop-ff-option-desc">{{this.deathsDoorDesc}}</span>
       </button>
       <button type="button" class="stonetop-ff-option" data-action="dying">
-        <span class="stonetop-ff-option-title"><i class="fas fa-heart-pulse"></i> Dying</span>
+        <span class="stonetop-ff-option-title"><i class="fas fa-heart-pulse" aria-hidden="true"></i> Dying</span>
         <span class="stonetop-ff-option-desc">Out of the action; they'll die or trigger Death's Door soon if no one intervenes.</span>
       </button>
       {{/if}}
       <button type="button" class="stonetop-ff-option stonetop-ff-option--dead" data-action="dead">
-        <span class="stonetop-ff-option-title"><i class="fas fa-skull-crossbones"></i> Dead</span>
+        <span class="stonetop-ff-option-title"><i class="fas fa-skull-crossbones" aria-hidden="true"></i> Dead</span>
         <span class="stonetop-ff-option-desc">{{this.deadDesc}}</span>
       </button>
       {{/if}}
@@ -42,14 +42,14 @@
             they survive, out of the action. See follower-fate.js. --}}
       {{#if canSpare}}
       <button type="button" class="stonetop-ff-option stonetop-ff-option--save" data-action="spare">
-        <span class="stonetop-ff-option-title"><i class="fas fa-hand-holding-heart"></i> {{this.spareLabel}}</span>
+        <span class="stonetop-ff-option-title"><i class="fas fa-hand-holding-heart" aria-hidden="true"></i> {{this.spareLabel}}</span>
         <span class="stonetop-ff-option-desc">{{this.spareDesc}}</span>
       </button>
       {{/if}}
       {{!-- Front Line Leader: the same spare, paid with the Marshal's Presence in the crew's Loyalty's place. --}}
       {{#if canSparePresence}}
       <button type="button" class="stonetop-ff-option stonetop-ff-option--save" data-action="sparePresence">
-        <span class="stonetop-ff-option-title"><i class="fas fa-flag"></i> {{this.sparePresenceLabel}}</span>
+        <span class="stonetop-ff-option-title"><i class="fas fa-flag" aria-hidden="true"></i> {{this.sparePresenceLabel}}</span>
         <span class="stonetop-ff-option-desc">{{this.sparePresenceDesc}}</span>
       </button>
       {{/if}}

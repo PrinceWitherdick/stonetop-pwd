@@ -154,10 +154,9 @@ describe("the loaded bands", () => {
 		// Same pair on the row edge, the face and the pips, so one PC's row never says two
 		// different things about them.
 		for (const [band, token] of [["heavy", "--st-red-border"], ["over", "--st-red-text"]]) {
-			// `--photo` rules are excluded: they turn the band fill OFF behind a portrait
-			// (`background: none`) rather than painting the band.
-			const painted = bandRules(band).filter(r => /background|border-left-color/.test(r))
-				.filter(r => !r.includes("--photo"));
+			// The face's fill is a custom property on the row (`--stonetop-exp-ava-fill`) that the
+			// disc reads, so a band rule that sets it is painting the face.
+			const painted = bandRules(band).filter(r => /background|border-left-color|--stonetop-exp-ava-fill/.test(r));
 			expect(painted.length, band).toBeGreaterThan(2);
 			for (const r of painted) {
 				// The overloaded row's own wash is the one exception: --st-red-bg at half

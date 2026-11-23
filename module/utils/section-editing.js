@@ -1,5 +1,6 @@
 import {getSheetSectionsCollapsed, setSheetSectionsCollapsed} from "../settings.js";
 import { wireKeyboardButtons } from "./keyboard-buttons.js";
+import { setTooltip } from "./set-tooltip.js";
 
 /**
  * Mixin for actor sheets that expose per-section edit pencils alongside the
@@ -165,7 +166,9 @@ export function withSectionEditing(Base) {
 				}
 				caret.classList.toggle("stonetop-section-collapsed", collapsed);
 				caret.setAttribute("aria-expanded", String(!collapsed));
-				caret.setAttribute("title", collapsed ? "Expand section" : "Collapse section");
+				// The tooltip the template gives it (section-collapse.hbs), and the name a screen
+				// reader says for a control that is only a caret.
+				setTooltip(caret, collapsed ? "Expand section" : "Collapse section", { name: true });
 			};
 			for (const caret of root.querySelectorAll(".stonetop-section-collapse")) {
 				apply(caret, this._isSectionCollapsed(caret));

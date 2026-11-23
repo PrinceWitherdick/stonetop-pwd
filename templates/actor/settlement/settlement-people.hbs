@@ -72,14 +72,14 @@
 							      the wrench on, a pencil that opens the shared pop-up editor. --}}
 							{{#if (or cellsEditable notes)}}
 							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">{{localize "stonetop.settlement.col.notes"}}</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{this.notesHtml}}}</div>{{#if cellsEditable}}<button type="button" class="steading-member-notes-edit" data-action="editResidentNotes" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
-							        data-tooltip="{{localize "stonetop.settlement.editNotes"}}" aria-label="{{localize "stonetop.settlement.editNotes"}}" tabindex="-1"><i class="fas fa-pen" inert></i></button>{{/if}}</div>
+							        data-tooltip="{{localize "stonetop.settlement.editNotes"}}" aria-label="{{localize "stonetop.settlement.editNotes"}}" tabindex="-1"><i class="fas fa-pencil" aria-hidden="true"></i></button>{{/if}}</div>
 							{{/if}}
 						</div>
 						<div class="steading-residents-col-actions">
 							{{#if @root.editable}}
 							<button type="button" class="steading-list-delete" data-action="deleteRow"
 							        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}" tabindex="-1">
-								<i class="fas fa-times" inert></i>
+								<i class="fas fa-xmark" aria-hidden="true"></i>
 							</button>
 							{{/if}}
 						</div>
@@ -92,7 +92,7 @@
 			{{/if}}
 			{{#if canWrite}}
 			<button type="button" class="steading-list-add" data-action="addResident">
-				<i class="fas fa-plus" inert></i> {{localize "stonetop.settlement.addResident"}}
+				<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.settlement.addResident"}}
 			</button>
 			{{/if}}
 		</div>

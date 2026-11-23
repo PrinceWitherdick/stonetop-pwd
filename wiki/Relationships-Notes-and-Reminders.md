@@ -32,7 +32,10 @@ Your gear's tags that matter in play (such as *cumbersome*) are added to the lis
 
 ## Notes
 
-The **Notes** tab holds your character's notes. Only you and the GM can change them; while **Players See Every Character Sheet** is on (the default), other players can read them.
+The **Notes** tab holds your character's plans and notes. Only you and the GM can change them; while **Players See Every Character Sheet** is on (the default), other players can read them.
+
+- **Plans**: when you Make a Plan, click **New plan** and write what you hope to achieve, each requirement the GM names, and what goes undone meanwhile. Tick a requirement's box as you meet it; hover a plan for its pencil (edit) and trash (remove). Using the Seeker's **Arcane Adept**, or the **Make a Plan** move once you've dragged it onto your sheet from the compendium, opens the same window. Plans the whole village shares are kept on the steading's Notes tab instead; the button under your plans takes you there.
+- **Notes**: anything else you want to keep.
 
 ## Love letters
 

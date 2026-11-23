@@ -14,7 +14,7 @@
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
 					<button type="button" class="stonetop-guide-toc-btn stonetop-custom-move-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
 						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
@@ -27,7 +27,7 @@
 			{{!-- Banner: the active section's icon + title + count (updated in JS on tab
 			      switch, so panels never re-render and keep what's been typed). --}}
 			<div class="stonetop-guide-banner">
-				<i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-custom-move-banner-icon"></i>
+				<i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-custom-move-banner-icon" aria-hidden="true"></i>
 				<div class="stonetop-guide-banner-info">
 					<div class="stonetop-guide-banner-title stonetop-custom-move-banner-title">{{active.title}}</div>
 					<div class="stonetop-guide-banner-sub">{{localize "stonetop.character.moves.custom.bannerSub"}}</div>

@@ -26,7 +26,7 @@ import { followerOwnershipFrom } from "./shared-sheets.js";
 import { followerActorFromLink } from "./follower-actors.js";
 import { nextFollowerOrder } from "../../data/follower-build.js";
 import { askGMClient, deletionEntry, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../../utils/primary-gm.js";
 
 export const FOLLOWER_HANDOFF_QUERY = "stonetop.followerHandoff";
 
@@ -97,7 +97,7 @@ export async function requestHandOff(from, to, slug, deps = {}) {
 /** The GM's side of FOLLOWER_HANDOFF_QUERY: the asker must own the follower's current leader. */
 export async function handleFollowerHandoffQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, resolve = resolveSync } = deps;
-	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	if (!isActingPrimaryGM()) return null;
 	const asker = queryAsker(data, context, users);
 	const from = data?.fromUuid ? resolve(data.fromUuid) : null;
 	const to = data?.toUuid ? resolve(data.toUuid) : null;

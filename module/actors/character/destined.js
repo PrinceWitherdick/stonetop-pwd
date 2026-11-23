@@ -19,7 +19,7 @@ import { resolvedFlagProperty } from "./StonetopFlags.js";
 import { writeSetupResource } from "./background-tracks.js";
 import { actorTookBackground } from "./took-background.js";
 import { WBH_PLAYBOOK_NAME } from "./WouldBeHeroAsterisk.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 
 export const DESTINED_BACKGROUND    = "destined";
 export const OMENS_OF_FATE          = "Omens of Fate";

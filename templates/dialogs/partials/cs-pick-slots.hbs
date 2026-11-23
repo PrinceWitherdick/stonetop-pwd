@@ -34,13 +34,13 @@
           <option value="">(choose or roll)</option>
           {{#each rows}}<option value="{{this.text}}"{{#if selected}} selected{{/if}}>{{this.text}}</option>{{/each}}
         </select>
-        <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="{{this.rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
-        {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}
+        <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="{{this.rollTip}}" aria-label="{{this.rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d6" aria-hidden="true"></i></button>
+        {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="Drop this one" aria-label="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark" aria-hidden="true"></i></button>{{/if}}
       </div>
     </div>
     {{/each}}
     </div>
-    {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-key="{{this.key}}"><i class="fas fa-plus"></i> Combine another</button>{{/if}}
+    {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-key="{{this.key}}"><i class="fas fa-plus" aria-hidden="true"></i> Combine another</button>{{/if}}
     {{#if note}}<p class="stonetop-cs-note">{{this.note}}</p>{{/if}}
   </div>
 </div>

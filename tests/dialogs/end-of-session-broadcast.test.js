@@ -31,9 +31,10 @@ vi.mock("../../module/dialogs/EndOfSessionDialog.js", () => ({
 }));
 
 import {
-	EOS_SOCKET, EOS_SHOW, EOS_CLOSE, EOS_ASK,
+	EOS_SHOW, EOS_CLOSE, EOS_ASK,
 	sendEndOfSession, sendEndOfSessionClosed, registerEndOfSessionBroadcast, requestEndOfSession, _resetEndOfSessionBroadcast, EOS_ASK_WAIT_MS,
 } from "../../module/dialogs/end-of-session-broadcast.js";
+import { SYSTEM_SOCKET } from "../../module/utils/system-socket.js";
 
 let handler;
 // The receiver queues each message and lazily imports the window, so let both settle.
@@ -60,7 +61,7 @@ describe("the GM's window", () => {
 	it("tells the table what it shows, on the system's channel", () => {
 		asUser(true);
 		expect(sendEndOfSession({ run: "r1" }, { learnedWorld: true })).toBe(true);
-		expect(game.socket.emit).toHaveBeenCalledWith(EOS_SOCKET, {
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, {
 			action: EOS_SHOW, run: "r1", checks: { learnedWorld: true }, userId: "gm",
 		});
 	});
@@ -68,7 +69,7 @@ describe("the GM's window", () => {
 	it("tells the table when it closes", () => {
 		asUser(true);
 		sendEndOfSessionClosed({ run: "r1" });
-		expect(game.socket.emit).toHaveBeenCalledWith(EOS_SOCKET, { action: EOS_CLOSE, run: "r1", userId: "gm" });
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, { action: EOS_CLOSE, run: "r1", userId: "gm" });
 	});
 
 	// A player's client opening the window by hand drives nobody's screen.
@@ -86,7 +87,7 @@ describe("the GM's window", () => {
 		sendEndOfSession(win, win.groupChecks);
 		game.socket.emit.mockClear();
 		await deliver({ action: EOS_ASK, userId: "player" });
-		expect(game.socket.emit).toHaveBeenCalledWith(EOS_SOCKET, expect.objectContaining({
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, expect.objectContaining({
 			action: EOS_SHOW, run: "r1", checks: { defeatedThreat: true },
 		}));
 	});
@@ -105,7 +106,7 @@ describe("the GM's window", () => {
 describe("a player's copy", () => {
 	it("asks at ready whether a GM already has the window open", () => {
 		asUser(false);
-		expect(game.socket.emit).toHaveBeenCalledWith(EOS_SOCKET, { action: EOS_ASK, userId: "player" });
+		expect(game.socket.emit).toHaveBeenCalledWith(SYSTEM_SOCKET, { action: EOS_ASK, userId: "player" });
 	});
 
 	it("opens on the GM's first draw and follows each tick in the same window", async () => {

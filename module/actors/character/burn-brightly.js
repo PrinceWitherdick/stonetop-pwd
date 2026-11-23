@@ -1,7 +1,7 @@
 // Burn Brightly: "When you have enough XP to Level Up, you may spend 2 XP after any roll you
 // make to add +1 to that roll (max +1 per roll)."
 //
-// The Would-Be Hero's Driven background loosens the first half: "You always have the option to Burn Brightly;
+// The Would-Be Hero's Driven background loosens the first half: "You always have the option of Burning Brightly;
 // you can spend 2 XP after you roll to add +1, even if you don't have enough XP to level." So a Driven hero
 // needs only the 2 XP the spend costs, and never goes below 0 for it (adjustXp floors at 0, which would
 // otherwise let a hero with 1 XP buy the +1 for 1).

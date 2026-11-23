@@ -59,6 +59,8 @@ The **Improvements** tab lists the improvements the book offers and the ones you
 
 Homebrew improvements can be made with the improvement builder (see [Homebrew Content](Homebrew-Content)), and improvement cards in journals can be **dragged onto this tab**. Tick **Hide improvements not started** to shorten the list.
 
+A project that isn't one of these improvements is a plan: the button at the top of the tab, **Plans on the Notes tab**, takes you to Stonetop's **Plans** (see [Notes](#notes)).
+
 ## Relationship Map and Timeline
 
 The steading has its own **Relationship Map** tab (the table's shared boards) and **Timeline** tab (Stonetop's own history). See [The Relationship Map](The-Relationship-Map) and [The Timeline](The-Timeline). Your GM can turn either feature off for the whole world.
@@ -67,7 +69,7 @@ The steading has its own **Relationship Map** tab (the table's shared boards) an
 
 The **Notes** tab holds, in this order:
 
-- **Plans**: **New plan** records something the village hopes to achieve and what the GM says it requires (Make a Plan), with a checkbox per requirement.
+- **Plans**: **New plan** records something the village hopes to achieve and what the GM says it requires (Make a Plan), with a checkbox per requirement. Each character also has plans of their own, on their sheet's **Notes** tab.
 - **Notes**: free notes for the GM.
 - **Content guidelines**: excluded content, veiled content, special requests and the line, to review at the start of each session.
 

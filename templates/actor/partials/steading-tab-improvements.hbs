@@ -5,6 +5,13 @@
 		<p class="steading-improvements-intro">
 			Known, available improvements you can make to Stonetop. The GM may present others in the course of play.
 		</p>
+		{{!-- A project that is no improvement is a plan (Make a Plan, Book I p.530), kept on the Notes tab. Not
+		      among the category chips below: those are filter toggles, and this one leaves the tab.
+		      StonetopSteadingSheet#_showPlans. --}}
+		<p class="steading-improvements-intro stonetop-plans-pointer">
+			For any other project, Make a Plan:
+			<button type="button" class="stonetop-inline-btn stonetop-plans-pointer-btn" data-steading-open-plans data-tooltip="Projects that are not improvements: what you hope to achieve, and what the GM says it requires" data-tooltip-direction="UP"><i class="fas fa-list-check" aria-hidden="true"></i> Plans on the Notes tab</button>
+		</p>
 
 		<div class="steading-improvements-controls">
 			<label class="steading-hide-unearned-improvements-label">
@@ -59,7 +66,7 @@
 					<button type="button" class="steading-improvement-edit" data-slug="{{this.slug}}"
 					        data-tooltip="Edit this added improvement" data-tooltip-direction="UP"
 					        aria-label="Edit {{this.label}}">
-						<i class="fas fa-pen" aria-hidden="true"></i>
+						<i class="fas fa-pencil" aria-hidden="true"></i>
 					</button>
 					<button type="button" class="steading-improvement-remove" data-slug="{{this.slug}}"
 					        data-tooltip="Remove this added improvement" data-tooltip-direction="UP"

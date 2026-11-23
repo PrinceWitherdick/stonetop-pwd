@@ -233,7 +233,7 @@ describe("FGT-3: the 7-9 Confirm against a foe killed since the dice", () => {
 
 	function pressConfirm(message) {
 		const listeners = [];
-		const btn = { disabled: false, title: "", dataset: { counter: "1" }, innerHTML: "", addEventListener: (type, fn) => listeners.push(fn) };
+		const btn = { disabled: false, dataset: { counter: "1" }, innerHTML: "", addEventListener: (type, fn) => listeners.push(fn) };
 		const root = { querySelectorAll: sel => (sel === ".stonetop-attack-confirm" ? [btn] : []), querySelector: () => null };
 		attackFlow.wireAttackConfirm(message, root);
 		return { btn, listeners };

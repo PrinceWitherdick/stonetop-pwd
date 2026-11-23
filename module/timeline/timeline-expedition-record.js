@@ -22,7 +22,7 @@ import { findOpenApp } from "../utils/open-windows.js";
 import { charactersInPlay } from "../utils/characters-in-play.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { takesMissingFrom } from "../utils/requisition-asset.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { localize } from "../utils/i18n.js";
@@ -132,7 +132,7 @@ export async function clearTripHome(opts = {}) {
  * @returns {Promise<number>} how many trips gained a line
  */
 export async function recordExpeditionTakes(steading, { store = null } = {}) {
-	if (!game.user?.isGM || !isPrimaryGM() || !steading?.getAssetsOnExpedition) return 0;
+	if (!isActingPrimaryGM() || !steading?.getAssetsOnExpedition) return 0;
 	store ??= tripLogStore();
 	let wrote = 0;
 	for (const trip of store.read().list) {

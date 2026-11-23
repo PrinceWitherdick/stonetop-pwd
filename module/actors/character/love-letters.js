@@ -13,7 +13,7 @@ import { STONETOP_SCOPE } from "./StonetopFlags.js";
 import { normalizeRollType, STAT_KEYS } from "../../utils/roll-types.js";
 import { formatCustomMoveDescription } from "../../utils/custom-move-text.js";
 import { buildMoveTierResults, parseTierInput } from "../../utils/move-results.js";
-import { clampInt } from "../../utils/custom-move-data.js";
+import { clampInt } from "../../utils/clamp-int.js";
 import { personOptionLabel } from "../../utils/people-groups.js";
 
 export const LOVE_LETTER_FLAG = "loveLetter";

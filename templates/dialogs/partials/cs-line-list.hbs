@@ -24,7 +24,7 @@
   {{#each rows}}
   <div class="stonetop-cf-gear-row stonetop-field-btns">
     <input type="text" class="stonetop-cf-input stonetop-cs-line stonetop-cs-body" data-list="{{this.list}}" data-index="{{this.index}}" value="{{this.text}}" placeholder="{{../placeholder}}">
-    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
+    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}" aria-label="Remove this line"><i class="fas fa-xmark" aria-hidden="true"></i></button>
   </div>
   {{/each}}
 {{/"stonetop.cs-list-frame"}}

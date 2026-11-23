@@ -105,7 +105,7 @@
 						<button type="button"
 						        class="stonetop-item-resource-check stonetop-bg-resource-check{{#if checked}} is-checked{{/if}}"
 						        data-key="{{../key}}"
-						        data-index="{{this.index}}"></button>
+						        data-index="{{this.index}}" aria-label="{{this.name}}"></button>
 						{{/each}}
 					</span>
 				</div>
@@ -176,7 +176,7 @@
 			    insert brings it straight back — but it is the insert's that the sheet reads out. }}
 			{{#if stonetop.postDeathInsert.activeInsert.instinct.selected}}
 			<p class="stonetop-instinct-replaced-note">
-				<i class="fas fa-skull"></i> {{localize "stonetop.postDeath.instinctRetired"}}
+				<i class="fas fa-skull" aria-hidden="true"></i> {{localize "stonetop.postDeath.instinctRetired"}}
 			</p>
 			{{/if}}
 			{{! "Until you Level Up, your instinct becomes ..." (Book II p.370, p.523): it sits over the
@@ -439,7 +439,7 @@
 		{{#if (and stonetop.playbook stonetop.hasIncompleteBackgroundQuestions)}}
 		<div class="details-section stonetop-details-onboarding-actions">
 			<button type="button" class="stonetop-answer-character-questions-btn" data-onboarding-start="first-incomplete">
-				<i class="fas fa-question-circle" aria-hidden="true"></i>
+				<i class="fas fa-circle-question" aria-hidden="true"></i>
 				{{localize "stonetop.newCharacter.answerQuestionsButtonLabel"}}
 			</button>
 		</div>

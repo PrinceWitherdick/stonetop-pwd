@@ -8,6 +8,7 @@ import { isOutOfPlaySafe } from "../deaths-door-actor.js";
 import { hasLeftPlay } from "../../../campaign/left-play.js";
 import { shippedPlaybookInfo, homebrewPickerRows, isHomebrewPlaybookItem, isHomebrewPublished } from "../../../playbooks/playbook-catalog.js";
 import { escHtml } from "../../../utils/strings.js";
+import { touchesFlag } from "../../../utils/touches-flag.js";
 
 /**
  * The player a character belongs to: whoever holds it as their assigned character, else the
@@ -115,8 +116,7 @@ export class PlaybookPickerDialog extends StonetopDialog {
 			["updateActor", Hooks.on("updateActor", (actor, changes) => {
 				if (actor?.type !== "character" || actor.id === this._actorId) return;
 				if ("ownership" in (changes ?? {}) || changes?.system?.playbook !== undefined) { refresh(); return; }
-				const stFlags = changes?.flags?.[STONETOP_SCOPE];
-				if (stFlags && Object.keys(stFlags).some(k => k.replace(/^-=/, "") === "onboardingProgress")) refresh();
+				if (touchesFlag(changes, "onboardingProgress")) refresh();
 			})],
 			["updateUser", Hooks.on("updateUser", (_user, changes) => { if (changes && "character" in changes) refresh(); })],
 			["createItem", Hooks.on("createItem", ifHomebrew)],

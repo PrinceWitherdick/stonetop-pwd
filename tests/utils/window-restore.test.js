@@ -236,7 +236,25 @@ describe("restoring the edit/lock mode", () => {
 		};
 		await restore();
 		expect(gone._tabs[0].activate).not.toHaveBeenCalled();
-		expect(kept._tabs[0].activate).toHaveBeenCalledWith("notes");
+		expect(kept._tabs[0].activate).toHaveBeenCalledWith("notes", { triggerCallback: true });
+	});
+
+	// The GM Toolkit's Encounters and Expeditions were rail tabs once and are views of its Prep tab
+	// now. A sheet that rearranged its tabs maps the saved names itself, so the window reopens where
+	// it was left rather than on its default tab.
+	it("maps the saved tabs through the sheet's own _mapSavedTabs", async () => {
+		const nav = names => ({ querySelectorAll: () => names.map(tab => ({ dataset: { tab } })) });
+		const sheet = fakeSheet({ uuid: "Actor.moved" });
+		sheet._tabs = [
+			{ active: "moves", _nav: nav(["moves", "prep"]), activate: vi.fn() },
+			{ active: "encounters", _nav: nav(["encounters", "expeditions", "sites"]), activate: vi.fn() },
+		];
+		sheet._mapSavedTabs = ([rail]) => (rail === "expeditions" ? ["prep", "expeditions"] : null);
+		sheet.render = vi.fn(() => fire("renderActorSheet", sheet));
+		settings.openWindowsState = { "Actor.moved": { left: 10, top: 20, tabs: ["expeditions"] } };
+		await restore();
+		expect(sheet._tabs[0].activate).toHaveBeenCalledWith("prep", { triggerCallback: true });
+		expect(sheet._tabs[1].activate).toHaveBeenCalledWith("expeditions", { triggerCallback: true });
 	});
 
 	it("leaves a sheet this user cannot edit in play mode", async () => {

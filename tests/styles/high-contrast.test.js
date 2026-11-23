@@ -378,7 +378,10 @@ describe("the paper", () => {
 			.toMatch(/--st-card-wash:\s*([\d.]+)/);
 		const alpha = /--st-card-wash:\s*([\d.]+)/.exec(card)[1];
 		expect(card, "the card's own fill does not read the shared alpha")
-			.toMatch(new RegExp(`background:\\s*rgb\\(0 0 0 / var\\(--st-card-wash\\)`));
+			.toMatch(new RegExp(`background:\\s*rgb\\(var\\(--st-ink-rgb\\) / var\\(--st-card-wash\\)`));
+		// And the resolved colour is mixed from the same ink, so the two turn over together.
+		expect(card, "the resolved surface is not mixed from the ink the wash is")
+			.toMatch(/--st-surface:\s*color-mix\(in srgb, rgb\(var\(--st-ink-rgb\)\) calc\(var\(--st-card-wash\) \* 100%\), var\(--st-page\)\)/);
 		expect(Number(alpha)).toBeGreaterThan(0);
 	});
 

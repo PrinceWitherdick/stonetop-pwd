@@ -2,6 +2,7 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { normalizePlaybookGlyphs } from "../../../utils/strings.js";
 import { STONETOP_SCOPE } from "../StonetopFlags.js";
 import { crewWriteInTags, crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
+import { togglePick, suggestionView, paintPickLimit, bindInstinctAndCost } from "./pick-with-writein.js";
 
 // ── CrewSetupDialog ──────────────────────────────────────────────────────────
 // Set up a crew the character is owed but has never been given: the Crew insert's tags, instinct,
@@ -46,11 +47,7 @@ export function crewSetupInitial(stored = {}, bgTag = null) {
  * past the limit; the caller puts the box back.
  */
 export function crewSetupToggleTag(sel, tag, checked, limit) {
-	const tags = sel.tags ?? [];
-	if (!checked) return { ok: true, sel: { ...sel, tags: tags.filter(t => t !== tag) } };
-	if (tags.includes(tag)) return { ok: true, sel };
-	if (tags.length >= limit) return { ok: false, sel };
-	return { ok: true, sel: { ...sel, tags: [...tags, tag] } };
+	return togglePick(sel, "tags", tag, checked, limit);
 }
 
 /**
@@ -90,10 +87,8 @@ export function crewSetupView(crewDef, sel, { bgTag = null, limit = 2 } = {}) {
 	const atLimit = chosen.size >= limit;
 	const knownTags = new Set(crewDef?.availableTags ?? []);
 	const customTag = [...chosen].find(t => !knownTags.has(t)) ?? "";
-	const instinctValues = (crewDef?.instincts ?? []).map(v => normalizePlaybookGlyphs(v));
-	const costValues     = (crewDef?.costs ?? []).map(v => normalizePlaybookGlyphs(v));
-	const isCustomInstinct = !!sel.instinct && !instinctValues.includes(sel.instinct);
-	const isCustomCost     = !!sel.cost && !costValues.includes(sel.cost);
+	const instinct = suggestionView(crewDef?.instincts, sel.instinct);
+	const cost     = suggestionView(crewDef?.costs, sel.cost);
 	return {
 		name:               sel.name ?? "",
 		bgTag:              bgTag ? normalizePlaybookGlyphs(bgTag) : "",
@@ -108,10 +103,10 @@ export function crewSetupView(crewDef, sel, { bgTag = null, limit = 2 } = {}) {
 			const isSelected = isAuto || chosen.has(tag);
 			return { slug: tag, label: normalizePlaybookGlyphs(tag), isAuto, isSelected, disabled: isAuto || (!isSelected && atLimit) };
 		}),
-		instincts: instinctValues.map(value => ({ value, selected: sel.instinct === value })),
-		costs:     costValues.map(value => ({ value, selected: sel.cost === value })),
-		customInstinct: isCustomInstinct ? sel.instinct : "",
-		customCost:     isCustomCost ? sel.cost : "",
+		instincts:      instinct.options,
+		costs:          cost.options,
+		customInstinct: instinct.custom,
+		customCost:     cost.custom,
 		ready:          crewSetupReady(sel, limit),
 	};
 }
@@ -150,14 +145,14 @@ export class CrewSetupDialog extends StonetopDialog {
 
 	activateListeners(html) {
 		super.activateListeners(html);
-		const refresh = () => {
-			const picked = this._sel.tags.length;
-			const atLimit = picked >= this._limit;
-			html.find(".stonetop-onboarding-crew-tag-count").text(picked);
-			html.find("[name='crew-setup-tag']:not([data-auto])").each((_, el) => { if (!el.checked) el.disabled = atLimit; });
-			html.find(".crew-setup-tag-custom").each((_, el) => { el.disabled = atLimit && !String(el.value ?? "").trim(); });
-			html.find(".stonetop-crew-setup-create").prop("disabled", !crewSetupReady(this._sel, this._limit));
+		// Looked up once: the markup only changes on a re-render, which binds afresh.
+		const pickEls = {
+			count:  html.find(".stonetop-onboarding-crew-tag-count"),
+			boxes:  html.find("[name='crew-setup-tag']:not([data-auto])"),
+			custom: html.find(".crew-setup-tag-custom"),
+			create: html.find(".stonetop-crew-setup-create"),
 		};
+		const refresh = () => paintPickLimit(pickEls, this._sel.tags.length, this._limit, crewSetupReady(this._sel, this._limit));
 
 		html.find(".crew-setup-name").on("input", ev => { this._sel = { ...this._sel, name: ev.currentTarget.value }; });
 
@@ -173,24 +168,7 @@ export class CrewSetupDialog extends StonetopDialog {
 			refresh();
 		});
 
-		// A suggestion radio saves its value and clears the write-in; typing a write-in saves it and
-		// clears the radios, as onboarding's crew step does.
-		const bindSuggestionOrCustom = (radioName, customClass, key) => {
-			html.find(`[name='${radioName}']`).on("change", ev => {
-				this._sel = { ...this._sel, [key]: ev.currentTarget.value };
-				html.find(customClass).val("");
-				html.find(`[name='${radioName}']`).each((_, el) => el.closest(".stonetop-onboarding-card")?.classList.toggle("is-selected", el.checked));
-				refresh();
-			});
-			html.find(customClass).on("input", ev => {
-				this._sel = { ...this._sel, [key]: ev.currentTarget.value.trim() };
-				html.find(`[name='${radioName}']`).prop("checked", false)
-					.closest(".stonetop-onboarding-card").removeClass("is-selected");
-				refresh();
-			});
-		};
-		bindSuggestionOrCustom("crew-setup-instinct", ".crew-setup-instinct-custom", "instinct");
-		bindSuggestionOrCustom("crew-setup-cost", ".crew-setup-cost-custom", "cost");
+		bindInstinctAndCost(this, html, "crew-setup", refresh);
 
 		html.find(".stonetop-crew-setup-create").on("click", () => {
 			if (!crewSetupReady(this._sel, this._limit)) return;

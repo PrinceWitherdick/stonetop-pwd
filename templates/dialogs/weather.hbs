@@ -7,7 +7,7 @@
 
   {{#if clock}}
   <p class="stonetop-weather-clock">
-    <i class="fas fa-hourglass-half"></i>
+    <i class="fas fa-hourglass-half" aria-hidden="true"></i>
     Stonetop is in <strong>{{clock.label}}</strong>, {{clock.yearLabel}}{{#if clock.followed}}: its table is selected below{{else}}, but you&rsquo;ve chosen a different table{{/if}}.
   </p>
   {{/if}}
@@ -18,7 +18,7 @@
         same ones the card prints under the result. --}}
   {{#if rollHint}}
   <p class="stonetop-weather-clock stonetop-weather-blessing">
-    <i class="fas fa-sun"></i>
+    <i class="fas fa-sun" aria-hidden="true"></i>
     {{this.rollHint}}
   </p>
   {{/if}}
@@ -59,21 +59,21 @@
   <div class="stonetop-weather-roll-wrap">
     {{#if picked}}
     <button type="button" class="stonetop-weather-reroll-btn">
-      <i class="fas fa-rotate-right"></i> Re-roll
+      <i class="fas fa-rotate-right" aria-hidden="true"></i> Re-roll
     </button>
     <button type="button" class="stonetop-weather-post-btn">
-      <i class="fas fa-cloud-sun-rain"></i> Post the weather
+      <i class="fas fa-cloud-sun-rain" aria-hidden="true"></i> Post the weather
     </button>
     {{else if choosing}}
     {{!-- Tor's blessing: two rows are lit and neither is taken yet, so there is nothing to post.
           The click on a lit row is the "take your pick". --}}
     <button type="button" class="stonetop-weather-reroll-btn">
-      <i class="fas fa-rotate-right"></i> Re-roll
+      <i class="fas fa-rotate-right" aria-hidden="true"></i> Re-roll
     </button>
     <span class="stonetop-weather-choose">Click the lit row you&rsquo;d rather keep.</span>
     {{else}}
     <button type="button" class="stonetop-weather-roll-btn">
-      <i class="fas fa-cloud-sun-rain"></i> Roll the weather
+      <i class="fas fa-cloud-sun-rain" aria-hidden="true"></i> Roll the weather
     </button>
     {{/if}}
   </div>
@@ -89,13 +89,13 @@
   {{#if fx}}
   <div class="stonetop-weather-fx">
     <button type="button" class="stonetop-weather-fx-btn{{#if fx.paused}} is-paused{{/if}}">
-      <i class="fas {{#if fx.paused}}fa-play{{else}}fa-pause{{/if}}"></i> {{fx.label}}
+      <i class="fas {{#if fx.paused}}fa-play{{else}}fa-pause{{/if}}" aria-hidden="true"></i> {{fx.label}}
     </button>
     {{!-- Text, not a button: it does nothing to the weather, it leaves for core's Configure
           Settings, where the same switch lives permanently alongside the rest of Stonetop's
           options. The window stays open behind it. --}}
     <button type="button" class="stonetop-weather-fx-link"
-            title="Open Configure Settings at Stonetop&rsquo;s weather options">Weather settings</button>
+            data-tooltip="Open Configure Settings at Stonetop&rsquo;s weather options">Weather settings</button>
     <span class="stonetop-weather-fx-hint">{{fx.hint}}</span>
   </div>
   {{/if}}

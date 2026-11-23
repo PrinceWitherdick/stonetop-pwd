@@ -351,7 +351,7 @@ function fakeCard({ selfHarm, results, canUserModify }) {
 }
 
 function fakeButton() {
-	const btn = { disabled: false, style: {}, title: "", innerHTML: "", listeners: [] };
+	const btn = { disabled: false, style: {}, dataset: {}, innerHTML: "", listeners: [] };
 	btn.addEventListener = (_, fn) => btn.listeners.push(fn);
 	return { btn, root: { querySelector: () => btn } };
 }
@@ -438,7 +438,7 @@ describe("wireApplyDamage: exactly one live button per card", () => {
 		wireApplyDamage(fakeCard({ selfHarm: true, results }), root);
 
 		expect(btn.disabled).toBe(true);
-		expect(btn.title).toContain("Pim");
+		expect(btn.dataset.tooltipText).toContain("Pim");
 	});
 
 	it("leaves that same card live for the player it belongs to", () => {
@@ -464,7 +464,7 @@ describe("wireApplyDamage: exactly one live button per card", () => {
 		wireApplyDamage(fakeCard({ selfHarm: true, results }), forAlys.root);
 
 		expect(forPim.btn.disabled).toBe(true);
-		expect(forPim.btn.title).toBe("Another player will take this damage");
+		expect(forPim.btn.dataset.tooltipText).toBe("Another player will take this damage");
 		expect(forAlys.btn.disabled).toBe(false);
 	});
 
@@ -542,7 +542,7 @@ describe("wireApplyDamage: a player takes a GM's card through the GM's client", 
 		wireApplyDamage(gmCard(results), root);
 
 		expect(btn.disabled).toBe(true);
-		expect(btn.title).toBe("Ask the GM to apply this damage");
+		expect(btn.dataset.tooltipText).toBe("Ask the GM to apply this damage");
 	});
 
 	it("gives one of two co-owners the button, whether or not they could write the card", () => {
@@ -555,7 +555,7 @@ describe("wireApplyDamage: a player takes a GM's card through the GM's client", 
 		wireApplyDamage(gmCard(results), forAlys.root);
 
 		expect(forPim.btn.disabled).toBe(true);
-		expect(forPim.btn.title).toBe("Another player will take this damage");
+		expect(forPim.btn.dataset.tooltipText).toBe("Another player will take this damage");
 		expect(forAlys.btn.disabled).toBe(false);
 	});
 });

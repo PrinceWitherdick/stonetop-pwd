@@ -103,6 +103,7 @@ describe("the Inventory tab's Reset Inventory", () => {
 describe("the who-to-clear ticks in a DialogV2 window", () => {
 	it("draw only the shared skin, not core's glyph", () => {
 		const css = readRepo("styles/stonetop.css");
-		expect(css).toMatch(/\.stonetop-check::before,\s*\.stonetop-check::after\s*{\s*content: none !important;/);
+		// Other skins drawn in DialogV2 windows share the rule (the camp radio, after these two).
+		expect(css).toMatch(/\.stonetop-check::before,\s*\.stonetop-check::after\s*(,[^{]*)?{\s*content: none !important;/);
 	});
 });

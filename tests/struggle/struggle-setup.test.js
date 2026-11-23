@@ -40,6 +40,19 @@ describe("the rows a struggle is called with", () => {
 		expect(vahid.owns).toEqual([MOVE.BUNDLE_OF_STICKS]);
 	});
 
+	// Slippery: "When you roll to escape being caught or controlled" (p.111), any roll, a group Defy Danger
+	// too; the GM ticks it per row like Stone Cold, and only a character who has it learned is offered it.
+	it("offers and carries Slippery as a GM-ticked half-miss", () => {
+		const r = [...roster(), { actorId: "wren", name: "Wren", img: "", owns: [MOVE.SLIPPERY], load: "light", overloaded: false, followers: [] }];
+		const draft = newSetupDraft(r);
+		const view = setupView(r, draft);
+		const wren = view.pcs.find(p => p.actorId === "wren");
+		expect(wren.ticks).toEqual([{ name: MOVE.SLIPPERY, label: "Slippery: they are escaping being caught or controlled, so a 6- counts as a 7-9", checked: false }]);
+		expect(view.pcs.find(p => p.actorId === "vahid").ticks.map(t => t.name)).toEqual([MOVE.STONE_COLD]);
+		draft.pcs.wren.ticks = [MOVE.SLIPPERY];
+		expect(setupRows(r, draft).find(row => row.actorId === "wren").halfMisses).toEqual([MOVE.SLIPPERY]);
+	});
+
 	it("carries the GM's stats, mode and outside Aid", () => {
 		const r = roster();
 		const draft = newSetupDraft(r);

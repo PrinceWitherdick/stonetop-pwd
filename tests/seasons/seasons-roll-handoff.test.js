@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { readRepo as read, readCss, declarations } from "../fakes/css.js";
+import { readRepo as read, readCss, declarations, hiddenHides } from "../fakes/css.js";
 import { pbtaDiceFormula, postSeasonsRollPrompt } from "../../module/utils/roll-engine.js";
 
 // ── Handing the spring roll to the table ────────────────────────────────────────
@@ -111,11 +111,9 @@ describe("reopening a winter whose consumption is settled", () => {
 	});
 
 	// `.stonetop-season-actions` sets `display: flex`, which out-specifies the UA's
-	// `[hidden] { display: none }` — the same trap `.stonetop-roll-tier-action[hidden]` is in
-	// the stylesheet for. Step 1 IS an action row, so without this rule the dead roll button
-	// stayed on screen above the result the whole time, hidden attribute and all.
+	// `[hidden] { display: none }`. Step 1 IS an action row, so without the stylesheet's own
+	// `hidden` rule the dead roll button stayed on screen above the result, hidden attribute and all.
 	it("can actually hide an action row", () => {
-		expect(declarations(readCss(), ".stonetop-season-actions[hidden]"))
-			.toMatch(/display:\s*none/);
+		expect(hiddenHides(readCss(), "stonetop-season-actions")).toBe(true);
 	});
 });

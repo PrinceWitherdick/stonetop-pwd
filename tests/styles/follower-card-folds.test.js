@@ -136,7 +136,7 @@ describe("a closed section reports its own state", () => {
 		const summary = TPL.match(/<summary[^>]*>Details[\s\S]*?<\/summary>/)?.[0];
 		expect(summary).toBeTruthy();
 		expect(summary).not.toContain("stonetop-follower-section-state");
-		expect(summary).toContain('<i class="fas fa-caret-down stonetop-follower-section-caret"></i>');
+		expect(summary).toContain('<i class="fas fa-caret-down stonetop-follower-section-caret" aria-hidden="true"></i>');
 		expect(SHEET).not.toContain("detailsSummary");
 	});
 
@@ -221,7 +221,7 @@ describe("folding the whole card", () => {
 describe("every fold on the card opens from the same edge", () => {
 	it("gives each section summary its own caret, on the RIGHT", () => {
 		// Details, Inventory, the crew's Roster and Group Fight, and the custom group's pair.
-		expect(TPL.match(/<i class="fas fa-caret-down stonetop-follower-section-caret"><\/i>/g)).toHaveLength(6);
+		expect(TPL.match(/<i class="fas fa-caret-down stonetop-follower-section-caret" aria-hidden="true"><\/i>/g)).toHaveLength(6);
 		expect(declarations(CSS, ".stonetop-follower-section-caret")).toMatch(/margin-left:\s*auto/);
 		// And the arrow that used to sit at the HEAD of the heading is gone, or the fold would
 		// carry two.
@@ -237,7 +237,7 @@ describe("every fold on the card opens from the same edge", () => {
 
 	it("draws the card fold with the same caret, sized through the same chain", () => {
 		const anchor = TPL.match(/<a class="stonetop-follower-card-fold"[\s\S]*?<\/a>/)?.[0];
-		expect(anchor).toContain('<i class="fas fa-caret-down">');
+		expect(anchor).toContain('<i class="fas fa-caret-down" aria-hidden="true">');
 		// 0.9em of --st-fs-sm in both places: read off the band's own font-size instead, the
 		// glyph came out ~3px wider than the four below it.
 		expect(declarations(CSS, ".stonetop-follower-card-fold")).toMatch(/font-size:\s*var\(--st-fs-sm\)/);

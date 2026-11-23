@@ -10,7 +10,7 @@
 // touched. The once-only marker is a flag on the Timeline journal, as timeline-backfill.js does.
 
 import { SYSTEM_ID } from "../system-id.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { findTimelineJournal, allTracks, mutateTrack } from "../timeline/timeline-store.js";
 
 /** The flag on the Timeline journal that says the prefix has been taken off in this world. */
@@ -41,7 +41,7 @@ export function withoutExpeditionPrefix(entries = []) {
  * @returns {Promise<number>} how many tracks were rewritten
  */
 export async function stripExpeditionTitlePrefixesOnce() {
-	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	if (!isActingPrimaryGM()) return 0;
 	const journal = findTimelineJournal();
 	if (!journal || journal.getFlag?.(SYSTEM_ID, EXPEDITION_TITLE_FLAG)) return 0;
 	const results = await Promise.allSettled(allTracks().map(track => mutateTrack(track, withoutExpeditionPrefix)));

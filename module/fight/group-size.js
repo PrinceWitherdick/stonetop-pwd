@@ -3,10 +3,16 @@
 // Book I "Dangers" gives every monster an organization, and two of them are numbers: a GROUP is found
 // "in small groups (2-5)", a HORDE "in large groups (6 or more)" (data/monster-builder.js). A GM adding
 // one crinwin to a fight almost always means a horde of them, so when a group or horde monster joins,
-// the GM is asked how many, with a button for each likely size and "Just one" beside them, and at
-// which scale: that many TOKENS, each a creature with its own HP, or ONE token fighting as a group of
-// that many (p.416's "Abstracting groups", group-scale.js), for a fight against another group. A
-// monster already set to fight as a group is not asked about.
+// the GM is asked how many: a strip of the likely sizes, a box for any other (a horde has no top end,
+// and p.416's own example is 20 crinwin), and one button that says what it will do ("6 tokens"), with
+// "Just one" beside it. A monster already set to fight as a group is not asked about.
+//
+// THE SCALE IS ONLY ASKED WHEN IT CAN APPLY. p.416's "Abstracting groups" is for "if the PCs have a group
+// of followers": damage rolled once per side when a group fights another group. So the choice between
+// that many TOKENS and ONE token fighting as a group of that many (group-scale.js) is shown only when the
+// heroes bring a group (`offerGroup`); against the PCs alone, "foes that are engaged by individual PCs
+// aren't really part of a group", and every crinwin is a token. The Fight tab's Merge still turns them
+// into one group later, if a crew joins.
 //
 // NOT ASKED when the stat block's own count is 1 (a bandit chief is tagged "group" and comes alone), or
 // when the GM has already ticked two or more of the same monster: they have said how many already.
@@ -32,8 +38,8 @@ const GROUP_SIZES = Object.freeze({
  * What to ask about one monster, or null when there is nothing to ask.
  *
  * @param {{organization?: string, count?: number, fightAsGroup?: boolean}} info  the stat block's
- * @returns {null|{organization: "group"|"horde", sizes: number[], usual: number}}
- *   `sizes` ascending, always including `usual`: the stat block's count, else the smallest size
+ * @returns {null|{organization: "group"|"horde", sizes: number[], usual: number, fromSheet: boolean}}
+ *   `sizes` ascending, always including `usual`: the stat block's count (`fromSheet`), else the smallest size
  */
 export function groupSizeQuestion({ organization = "", count = 0, fightAsGroup = false } = {}) {
 	const org = String(organization ?? "").trim().toLowerCase();
@@ -43,7 +49,7 @@ export function groupSizeQuestion({ organization = "", count = 0, fightAsGroup =
 	if (recorded === 1) return null;
 	const usual = recorded > 1 ? recorded : offered[0];
 	const sizes = [...new Set([...offered, usual])].sort((a, b) => a - b);
-	return { organization: org, sizes, usual };
+	return { organization: org, sizes, usual, fromSheet: recorded > 1 };
 }
 
 /**
@@ -53,7 +59,7 @@ export function groupSizeQuestion({ organization = "", count = 0, fightAsGroup =
  * @param {(pick) => null|{kind: string, organization?: string, count?: number, fightAsGroup?: boolean}} infoFor
  *   what a pick is: `kind` is the same for every pick of one monster (its actor), whether it is a
  *   token already on the map or an actor still to be placed
- * @returns {Array<{kind: string, name: string, pickId: string, organization: string, sizes: number[], usual: number}>}
+ * @returns {Array<{kind: string, name: string, pickId: string, organization: string, sizes: number[], usual: number, fromSheet: boolean}>}
  *   `pickId` is the first pick of that monster, which the extra ones are copies of
  */
 export function groupSizeQuestions(picks = [], infoFor = () => null) {
@@ -150,42 +156,140 @@ export function numberedNames(base, existing = [], count = 0) {
 }
 
 export const SCALE_FIELD = "stonetopGroupScale";
+export const COUNT_FIELD = "stonetopGroupCount";
+export const OTHER_FIELD = "stonetopGroupOther";
+
+/** The most the box takes: a slip of 60 for 6 would put sixty tokens on the map. */
+const MOST = 99;
+
+/** The main button's words for an answer, the outcome it commits: "6 tokens", "1 group token of 6". */
+export function countLabel({ size, asGroup = false }) {
+	return format(`${KEY}.confirm.${asGroup ? "group" : "tokens"}`, { count: size });
+}
+
+/** A size as the window takes one: a whole number from 2 to MOST, else null (1 is "Just one"). */
+export function typedSize(value) {
+	const text = String(value ?? "").trim();
+	if (!/^\d+$/.test(text)) return null;
+	const n = Number(text);
+	return n >= 2 && n <= MOST ? n : null;
+}
 
 /**
- * The window's words and choices: a line on the monster, the two scales as a radio pair (separate
- * tokens first, and chosen), and the buttons, "Just one" then each size, the usual size the default.
- * PURE, so the markup is tested as it is shown.
+ * The answer the window's fields hold. ONE READING for the button's press and for its label following
+ * the choice, so the button never says one number and commits another. A size typed in the box wins
+ * over the strip; with neither, the usual size. The group scale only counts where it was offered.
  *
- * @param {{name: string, organization: string, sizes: number[], usual: number}} question
+ * @param {(name: string) => string|null} valueOf  a field's value (a radio group's checked one), or null
+ * @param {{usual: number, offerGroup?: boolean}} question
  */
-export function groupSizeWindow({ name, organization, sizes, usual }) {
-	const choice = (value, key, checked) => `<label class="stonetop-fight-group-size-scale">
-			<input type="radio" name="${SCALE_FIELD}" value="${value}"${checked ? " checked" : ""}>
-			<span>${escHtml(localize(`${KEY}.scale.${key}`))}</span>
-		</label>`;
+export function answerFrom(valueOf, { usual, offerGroup = false }) {
+	const size = typedSize(valueOf(OTHER_FIELD)) ?? typedSize(valueOf(COUNT_FIELD)) ?? usual;
+	return { size, asGroup: !!offerGroup && valueOf(SCALE_FIELD) === "group" };
+}
+
+/** A form's field values by name, as answerFrom reads them; a radio group gives its checked value. */
+function fieldsOf(form) {
+	return name => {
+		const field = form?.elements?.namedItem?.(name);
+		if (!field) return null;
+		if (typeof field.value === "string") return field.value;
+		return [...field].find(input => input.checked)?.value ?? null;
+	};
+}
+
+/**
+ * The window's words and choices: a line on the monster; how many, as a strip of the likely sizes (the
+ * usual one chosen) and a box for any other; the two scales where `offerGroup` (see the note at the top),
+ * else a line saying why there is no choice; and two buttons, the count's own label first (the
+ * affirmative, on the left, and what Enter presses) then "Just one". PURE, so the markup is tested as
+ * it is shown.
+ *
+ * @param {{name: string, organization: string, sizes: number[], usual: number, fromSheet?: boolean, offerGroup?: boolean}} question
+ */
+export function groupSizeWindow({ name, organization, sizes, usual, fromSheet = false, offerGroup = false }) {
+	const say = (key, data) => escHtml(data ? format(`${KEY}.${key}`, data) : localize(`${KEY}.${key}`));
+	const size = n => `<label class="stonetop-segmented-picker-option stonetop-fight-group-size-option">
+					<input type="radio" name="${COUNT_FIELD}" value="${n}"${n === usual ? " checked" : ""}>
+					<span>${n}</span>
+				</label>`;
+	const scale = (value, checked) => `<label class="stonetop-camp-check stonetop-fight-group-size-scale">
+				<input type="radio" class="stonetop-camp-radio" name="${SCALE_FIELD}" value="${value}"${checked ? " checked" : ""}>
+				<span>${say(`scale.${value}`)}</span>
+			</label>`;
+	const lead = [say(`body.${organization}`, { name }), fromSheet ? say("usual", { count: usual }) : ""].filter(Boolean).join(" ");
+	const scales = offerGroup
+		? `<fieldset class="stonetop-fight-group-size-scales">
+			<legend>${say("scale.legend")}</legend>
+			${scale("tokens", true)}
+			${scale("group", false)}
+		</fieldset>`
+		: `<p class="stonetop-fight-group-size-hint">${say("scale.only")}</p>`;
 	return {
 		title: format(`${KEY}.title`, { name }),
 		content: `<div class="stonetop-fight-group-size">
-		<p>${escHtml(format(`${KEY}.body.${organization}`, { name }))} ${escHtml(format(`${KEY}.usual`, { count: usual }))}</p>
-		<fieldset class="stonetop-fight-group-size-scales">
-			<legend>${escHtml(localize(`${KEY}.scale.legend`))}</legend>
-			${choice("tokens", "tokens", true)}
-			${choice("group", "group", false)}
+		<p>${lead}</p>
+		<fieldset class="stonetop-fight-group-size-counts">
+			<legend>${say("count.legend")}</legend>
+			<div class="stonetop-fight-group-size-count-row">
+				<div class="stonetop-segmented-picker stonetop-fight-group-size-picker">
+				${sizes.map(size).join("")}
+				</div>
+				<label class="stonetop-fight-group-size-other">
+					<span>${say("count.other")}</span>
+					<input class="stonetop-cf-input" type="number" name="${OTHER_FIELD}" min="2" max="${MOST}" step="1" inputmode="numeric" aria-label="${say("count.otherLabel")}">
+				</label>
+			</div>
 		</fieldset>
+		${scales}
 	</div>`,
 		buttons: [
-			{ size: 1, label: localize(`${KEY}.justOne`), default: false },
-			...sizes.map(size => ({ size, label: String(size), default: size === usual })),
+			{ action: "count", label: countLabel({ size: usual }), default: true },
+			{ action: "one", label: localize(`${KEY}.justOne`), default: false },
 		],
 	};
 }
 
 /**
- * Ask the GM how many of one monster join the fight, and at which scale. Resolves to
+ * Keep the window's fields and its count button agreeing as the GM chooses: a size typed in the box
+ * clears the strip, a size picked on the strip clears the box, a box left holding no size (blank, 1,
+ * 500) is emptied and the usual size picked again, and the button says what it will now do.
+ */
+function followChoice(root, question) {
+	const form = root?.matches?.("form") ? root : root?.querySelector?.("form");
+	const button = root?.querySelector?.('button[data-action="count"]');
+	const other = form?.elements?.namedItem?.(OTHER_FIELD);
+	if (!form || !button || !other) return;
+	const strip = [...form.querySelectorAll(`input[name="${COUNT_FIELD}"]`)];
+	const relabel = () => {
+		const label = countLabel(answerFrom(fieldsOf(form), question));
+		(button.querySelector("span") ?? button).textContent = label;
+	};
+	form.addEventListener("input", event => {
+		if (event.target === other) {
+			if (typedSize(other.value)) for (const input of strip) input.checked = false;
+		} else if (event.target?.name === COUNT_FIELD) {
+			other.value = "";
+		}
+		relabel();
+	});
+	other.addEventListener("change", () => {
+		if (typedSize(other.value)) return;
+		other.value = "";
+		if (!strip.some(input => input.checked)) {
+			const usual = strip.find(input => Number(input.value) === question.usual);
+			if (usual) usual.checked = true;
+		}
+		relabel();
+	});
+}
+
+/**
+ * Ask the GM how many of one monster join the fight, and at which scale where that is asked. Resolves to
  * `{size, asGroup}`, or null when the window is closed without an answer (which leaves the fight as it
- * was ticked). "Just one" is one creature whichever scale is chosen.
+ * was ticked). "Just one" is one creature, never a group.
  *
- * @param {{name: string, organization: string, sizes: number[], usual: number}} question
+ * @param {{name: string, organization: string, sizes: number[], usual: number, fromSheet?: boolean, offerGroup?: boolean}} question
  */
 export async function askGroupSize(question, { DialogV2 = globalThis.foundry?.applications?.api?.DialogV2, document = globalThis.document } = {}) {
 	if (!DialogV2 || !question || !document) return null;
@@ -197,21 +301,14 @@ export async function askGroupSize(question, { DialogV2 = globalThis.foundry?.ap
 		window: { title: view.title },
 		content,
 		buttons: view.buttons.map(button => ({
-			action: `size-${button.size}`,
+			action: button.action,
 			label: button.label,
 			default: button.default,
-			callback: (_event, pressed) => {
-				const scale = pressed?.form?.elements?.namedItem?.(SCALE_FIELD);
-				const value = scale?.value ?? [...(scale ?? [])].find(input => input.checked)?.value;
-				return { size: button.size, asGroup: button.size > 1 && value === "group" };
-			},
+			callback: (_event, pressed) => (button.action === "one"
+				? { size: 1, asGroup: false }
+				: answerFrom(fieldsOf(pressed?.form), question)),
 		})),
-		// Enter on a radio would submit through the FIRST button, "Just one", not the default size.
-		render: (_event, dialog) => {
-			(dialog?.element ?? dialog)?.addEventListener?.("keydown", event => {
-				if (event.key === "Enter" && !event.target?.closest?.("button")) event.preventDefault();
-			});
-		},
+		render: (_event, dialog) => followChoice(dialog?.element ?? dialog, question),
 		rejectClose: false,
 	}).catch(() => null).then(answer => (answer && typeof answer === "object" ? answer : null));
 }
