@@ -17,7 +17,7 @@ Open it from the **Run an Expedition** macro (hotbar slot 2), or with **Run the 
 | **Player moves on the road** | What the players might do: Have What You Need, Recover, Struggle as One, Keep Company, Make Camp, Forage. |
 | **Going home** | Questions for the homecoming, Return Triumphant, what is still out with the trip, **Reset Inventory** for the party, and **Save to the Chronicle**. |
 
-![The Run an Expedition window on The route step: the Vicinity map with a red dotted route from Stonetop to The Tower on the Heath and the travel time on each leg, and the Put a site on the map, Draw it on the scene and Show players buttons](images/expeditions-and-sites-route.webp)
+![The Run an Expedition window on The route step, its banner marked Planning: the Vicinity map with a red dotted route from Stonetop to The Tower on the Heath and the travel time on each leg, and the Put a site on the map, Draw it on the scene and Show players buttons](images/expeditions-and-sites-route.webp)
 
 > **Did you know?**
 > - The walkthrough reopens where you left it after a reload.
@@ -100,7 +100,7 @@ Sites are the places the party explores: a barrow, a ruined tower, a cave. They 
 - Drag a site card from the toolkit onto a scene to pin it.
 - Click a site pin to run the way through it; `Shift`-click to add it as another stop; right-click to take the pin off the map (the write-up stays). Dragging a pin on the scene moves the site on the map too.
 
-![The GM Toolkit's Expeditions tab: two prepared expeditions, the Call for Struggle as One button, and the Sites section with two site cards, one marked visited](images/expeditions-and-sites-sites.webp)
+![The GM Toolkit's Prep tab with Sites chosen in the switcher: the New site button and two site cards, one marked visited](images/expeditions-and-sites-sites.webp)
 
 ## Preparing expeditions ahead of time
 

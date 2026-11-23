@@ -79,7 +79,7 @@ Each view starts with a one-line description and its button: **New encounter**, 
 
 An encounter is a named bundle of pointers to things you mean to use in one session or one scene: the monsters, the battle map, the page you will read aloud, the table you will roll on.
 
-![The GM Toolkit's Encounters tab with two prepared encounters, a Completed section, and the Start a new encounter button](images/the-gm-toolkit-encounters.webp)
+![The GM Toolkit's Prep tab on Encounters, with one encounter card open: its notes, what was gathered listed by kind with a note on each, the Deploy and Deploy & fight buttons, and Mark complete](images/the-gm-toolkit-encounters.webp)
 
 Each encounter is a card. Shut, it is one line: the name, the start of its notes, and a small count of what is in it by kind (monsters, arcana, journals, maps, tables, macros). Click anywhere on that line, or the arrow at its end, to open it.
 
