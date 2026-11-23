@@ -62,7 +62,7 @@ Each **Travel on** moves the party on every map that shows the route:
 
 A short banner crosses every screen at the big beats of a trip: **The expedition sets out** and **Home again** when you mark either end, and **The party arrives** with **Reached (stop)** at each stop of a route the players can see. A trip you haven't shown the players moves only in your own window, and its stop names stay yours. **A fight breaks out** plays for everyone who can see a fighter when a fight starts, with **On the road to (stop)** under it during a shared journey.
 
-The banner lasts a couple of seconds, lets clicks through to whatever is under it, and is read out by screen readers. Players with **Reduce Motion** on (or their computer set to reduce motion) see it without movement. The world setting **Table moments** turns it off for everyone.
+The banner stays up for about four seconds and is read out by screen readers. Click it to dismiss it sooner; during **A fight breaks out**, which darkens the screen behind it, a click anywhere does. Around the smaller **The party arrives** card, clicks still reach whatever is under it. Players with **Reduce Motion** on (or their computer set to reduce motion) see it without movement. The world setting **Table moments** (Configure Settings, GM only) turns all of these banners off for everyone; there is no per-player switch.
 
 ## Setting out and coming home
 

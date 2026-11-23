@@ -6,10 +6,10 @@ import { momentView, MOMENT_KINDS, MOMENT_TEXT_MAX } from "../../module/moments/
 
 describe("momentView", () => {
 	it.each([
-		["fight", "fa-swords", true, false, 1200, "A fight breaks out"],
-		["setOut", "fa-person-hiking", false, false, 1600, "The expedition sets out"],
-		["home", "fa-house-chimney", false, false, 1600, "Home again"],
-		["arrive", "fa-signs-post", false, true, 1400, "The party arrives"],
+		["fight", "fa-swords", true, false, 3200, "A fight breaks out"],
+		["setOut", "fa-person-hiking", false, false, 3600, "The expedition sets out"],
+		["home", "fa-house-chimney", false, false, 3600, "Home again"],
+		["arrive", "fa-signs-post", false, true, 3400, "The party arrives"],
 	])("shows a %s moment with its icon, veil, size, hold and fallback title", (kind, icon, veil, small, hold, title) => {
 		expect(momentView({ kind })).toEqual({ kind, icon, veil, small, title, sub: "", holdMs: hold });
 		expect(MOMENT_KINDS[kind].holdMs).toBe(hold);

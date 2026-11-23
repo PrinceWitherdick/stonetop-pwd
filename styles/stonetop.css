@@ -20437,8 +20437,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* ── TABLE MOMENTS ─────────────────────────────────────────────────────────────────────────────
    The brief band every screen shows when a fight begins, an expedition sets out or comes home, or
    the party reaches a stop (moments/moment-overlay.js). On <body> above the windows, so it is
-   fixed and takes no pointer: a click lands on whatever is beneath it. Guarded by
-   tests/styles/moments.test.js.
+   fixed and the root takes no pointer: a click lands on whatever is beneath it, except on the
+   band itself and the veil (a kind that dims the screen), which take a click to dismiss it early.
+   Guarded by tests/styles/moments.test.js.
 
    Self-coloured, so it reads the same in every palette: bone on a near-black umber, over 15:1. */
 #stonetop-moment {
@@ -20567,12 +20568,33 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	animation: stonetop-moment-settle 0.35s ease-out 0.15s both;
 }
 
+/* CLICK TO DISMISS, while the band is shown and not already leaving: the band, and the veil where
+   the kind dims the whole screen (a click there is plainly aimed at the curtain, not at the map
+   under it). The root stays `pointer-events: none`, so round the small band clicks still pass. */
+#stonetop-moment:is(.is-playing, .is-still):not(.is-leaving) :is(.stonetop-moment-band, .stonetop-moment-veil) {
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+/* The early fade a click starts (moment-overlay.js#dismissMoment, MOMENT_DISMISS_S). A keyframes
+   name OF ITS OWN: keeping `stonetop-moment-out` and only shortening it does not restart it, and a
+   band up longer than 0.25s counts that fade as already over, so it vanished with no fade at all.
+   The script waits for this name's end as well as the timed one's. */
+:root:not(.stonetop-less-motion) #stonetop-moment.is-playing.is-leaving {
+	animation: stonetop-moment-dismiss 0.25s ease-in forwards;
+}
+
 @keyframes stonetop-moment-in {
 	from { opacity: 0; }
 	to   { opacity: 1; }
 }
 
 @keyframes stonetop-moment-out {
+	from { opacity: 1; }
+	to   { opacity: 0; }
+}
+
+@keyframes stonetop-moment-dismiss {
 	from { opacity: 1; }
 	to   { opacity: 0; }
 }

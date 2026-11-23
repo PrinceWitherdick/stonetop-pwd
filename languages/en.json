@@ -1466,7 +1466,7 @@
       },
       "tableMoments": {
         "name": "Table moments",
-        "hint": "Show a brief banner on everyone's screen when a fight begins, when an expedition sets out or comes home, and when the party reaches a stop on a route the players can see. A player's own Reduce Motion setting stills it."
+        "hint": "Show a brief banner on everyone's screen when a fight begins, when an expedition sets out or comes home, and when the party reaches a stop on a route the players can see. Click a banner to dismiss it early. A player's own Reduce Motion setting stills it."
       },
       "weatherSceneFx": {
         "name": "Weather on the Scene (FXMaster)",

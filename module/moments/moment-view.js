@@ -8,12 +8,16 @@ import { clipText } from "../utils/strings.js";
 /**
  * Per kind: its icon, whether the screen dims behind the band, whether it is the small band, and
  * how long it holds fully visible, in ms, between its entrance and its fade.
+ *
+ * THE HOLDS ARE LONG ON PURPOSE (two seconds were added to each at the user's ask, 2026-11-23): a
+ * table reads them aloud and the low-vision player hears them through a screen reader, so they stay up
+ * long enough to land, and anyone done with one clicks it away (moment-overlay.js#dismissMoment).
  */
 export const MOMENT_KINDS = Object.freeze({
-	fight: Object.freeze({ icon: "fa-swords", veil: true, small: false, holdMs: 1200 }),
-	setOut: Object.freeze({ icon: "fa-person-hiking", veil: false, small: false, holdMs: 1600 }),
-	home: Object.freeze({ icon: "fa-house-chimney", veil: false, small: false, holdMs: 1600 }),
-	arrive: Object.freeze({ icon: "fa-signs-post", veil: false, small: true, holdMs: 1400 }),
+	fight: Object.freeze({ icon: "fa-swords", veil: true, small: false, holdMs: 3200 }),
+	setOut: Object.freeze({ icon: "fa-person-hiking", veil: false, small: false, holdMs: 3600 }),
+	home: Object.freeze({ icon: "fa-house-chimney", veil: false, small: false, holdMs: 3600 }),
+	arrive: Object.freeze({ icon: "fa-signs-post", veil: false, small: true, holdMs: 3400 }),
 });
 
 /** The longest title or sub a payload may carry. A socket is open to anyone, so this is a cap, not a style. */

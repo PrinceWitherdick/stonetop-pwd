@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { momentView } from "../../module/moments/moment-view.js";
 import {
-	playMoment, _resetMoments, momentLifeMs, MOMENT_ID, MOMENT_VOICE_DELAY_MS, MOMENT_EXIT_S,
+	playMoment, dismissMoment, _resetMoments, momentLifeMs, MOMENT_ID, MOMENT_VOICE_DELAY_MS, MOMENT_EXIT_S, MOMENT_DISMISS_S,
 } from "../../module/moments/moment-overlay.js";
 
 // The table moment on this screen (module/moments/moment-overlay.js): one band at a time, words
@@ -112,11 +112,61 @@ describe("playMoment", () => {
 		playMoment(momentView({ kind: "home" }));
 		expect(document.querySelectorAll(`#${MOMENT_ID}`).length).toBe(1);
 		shown();
-		vi.advanceTimersByTime(1200);
+		vi.advanceTimersByTime(momentView({ kind: "fight" }).holdMs);
 		shown();
 		expect(band().classList.contains("stonetop-moment--home")).toBe(true);
-		vi.advanceTimersByTime(1600);
+		vi.advanceTimersByTime(momentView({ kind: "home" }).holdMs);
 		expect(band()).toBeNull();
+	});
+
+	// The user's ask (2026-11-23): longer holds, and a click to be done with one sooner.
+	describe("dismissed by a click", () => {
+		const click = el => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		const fadeEnds = el => {
+			const done = new Event("animationend");
+			Object.defineProperty(done, "animationName", { value: "stonetop-moment-dismiss" });
+			el.dispatchEvent(done);
+		};
+
+		it("starts the quick fade on a click on the band, and is gone at its end", () => {
+			playMoment(momentView({ kind: "setOut" }));
+			shown();
+			const el = band();
+			click(el.querySelector(".stonetop-moment-title"));
+			expect(el.classList.contains("is-leaving")).toBe(true);
+			fadeEnds(el);
+			expect(band()).toBeNull();
+		});
+
+		it("takes a click on the fight's veil too", () => {
+			playMoment(momentView({ kind: "fight" }));
+			shown();
+			click(band().querySelector(".stonetop-moment-veil"));
+			expect(band().classList.contains("is-leaving")).toBe(true);
+		});
+
+		it("comes down by the timer when the quick fade's end never comes", () => {
+			playMoment(momentView({ kind: "setOut" }));
+			shown();
+			dismissMoment();
+			vi.advanceTimersByTime(MOMENT_DISMISS_S * 1000 + 500);
+			expect(band()).toBeNull();
+		});
+
+		it("goes at once for a reader who asked for stillness, and plays the one waiting next", () => {
+			motion(true);
+			playMoment(momentView({ kind: "fight" }));
+			playMoment(momentView({ kind: "home" }));
+			shown();
+			click(band().querySelector(".stonetop-moment-band"));
+			expect(document.querySelectorAll(`#${MOMENT_ID}`).length).toBe(1);
+			shown();
+			expect(band().classList.contains("stonetop-moment--home")).toBe(true);
+		});
+
+		it("answers false with nothing up", () => {
+			expect(dismissMoment()).toBe(false);
+		});
 	});
 
 	it("does nothing for a null view", () => {

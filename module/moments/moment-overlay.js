@@ -1,6 +1,8 @@
 // Draws a table moment (moment-view.js) on this client: a full-width band on <body>, above the
-// windows, that plays once and removes itself. It takes no clicks and no focus, so it never
-// interrupts the person at the keyboard. Guarded by tests/moments/moment-overlay.test.js.
+// windows, that plays once and removes itself. It takes no focus, so it never interrupts the person
+// at the keyboard. A CLICK ON IT takes it down early (dismissMoment): the band itself, and the veil on
+// a kind that dims the screen; a click anywhere else still lands on whatever is beneath. Guarded by
+// tests/moments/moment-overlay.test.js and tests/styles/moments.test.js.
 import { prefersReducedMotion } from "../utils/reduced-motion.js";
 import { warn } from "../utils/logger.js";
 
@@ -17,6 +19,12 @@ export const MOMENT_EXIT_S = 0.4;
  * page first and then filled is. A real player at this table reads by ear.
  */
 export const MOMENT_VOICE_DELAY_MS = 100;
+
+/** The quick fade a click starts, in seconds, as the stylesheet's `.is-leaving` rule runs it. */
+export const MOMENT_DISMISS_S = 0.25;
+
+/** The root's animations whose end takes the band down: the timed fade, and the one a click starts. */
+const ENDS = new Set(["stonetop-moment-out", "stonetop-moment-dismiss"]);
 
 /** Past the end of its life, when a band whose `animationend` never came (a hidden tab) is taken down anyway. */
 const STRANDED_MS = 500;
@@ -87,6 +95,10 @@ function start(view) {
 	root.style.setProperty("--stonetop-moment-out-at", `${(life - MOMENT_EXIT_S * 1000) / 1000}s`);
 	document.body.append(root);
 	current = { el: root, timers: [] };
+	// The stylesheet lets a click reach only the band and the veil, and only while the band is shown.
+	root.addEventListener("click", ev => {
+		if (ev.target?.closest?.(".stonetop-moment-band, .stonetop-moment-veil")) dismissMoment();
+	});
 	current.timers.push(setTimeout(() => {
 		try {
 			fill(words, view);
@@ -100,7 +112,7 @@ function start(view) {
 			void root.offsetWidth;
 			root.classList.add("is-playing");
 			root.addEventListener("animationend", ev => {
-				if (ev.target === root && ev.animationName === "stonetop-moment-out") finish(root);
+				if (ev.target === root && ENDS.has(ev.animationName)) finish(root);
 			});
 			current?.timers.push(setTimeout(() => finish(root), life + STRANDED_MS));
 		} catch (err) {
@@ -108,6 +120,30 @@ function start(view) {
 			finish(root);
 		}
 	}, MOMENT_VOICE_DELAY_MS));
+}
+
+/**
+ * Take the band down early, as a click on it does: a quick fade with motion, at once for a
+ * reader who asked for stillness (or before it has shown). The moment waiting behind it plays next.
+ * Never throws. Answers whether there was a band to take down.
+ */
+export function dismissMoment() {
+	try {
+		const el = current?.el;
+		if (!el || el.classList.contains("is-leaving")) return false;
+		if (!el.classList.contains("is-playing")) {
+			finish(el);
+			return true;
+		}
+		// `stonetop-moment-dismiss` (its own name, so the fade restarts) ends it through the same
+		// animationend listener; the timer covers a tab where that end never comes.
+		el.classList.add("is-leaving");
+		current.timers.push(setTimeout(() => finish(el), MOMENT_DISMISS_S * 1000 + STRANDED_MS));
+		return true;
+	} catch (err) {
+		warn("A table moment could not be taken down.", err);
+		return false;
+	}
 }
 
 /**

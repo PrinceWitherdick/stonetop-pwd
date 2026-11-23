@@ -5,7 +5,9 @@ import { contrastRatio } from "../fakes/contrast.js";
 // The table moment band (module/moments/moment-overlay.js, the TABLE MOMENTS block). It sits on
 // <body>, outside `.stonetop`, so the blanket Reduce Motion rule never reaches it: every animation
 // has to gate itself on `stonetop-less-motion` (on when the OS or the setting asks), or a reader who
-// asked for stillness gets a curtain sweeping across their screen. It also must never eat a click.
+// asked for stillness gets a curtain sweeping across their screen. The root never eats a click: only
+// the band, and the veil where the screen is dimmed, take one, to dismiss it while it is shown. The
+// click's fade has a keyframes name of its own, or shortening the running fade would end it at once.
 
 const CSS = readCss();
 
@@ -66,6 +68,14 @@ describe("the table moment's box", () => {
 		expect(declared(root, "pointer-events")).toBe("none");
 		expect(declared(root, "z-index")).toBe("var(--st-z-above-windows)");
 		expect(declared(root, "position")).toBe("fixed");
+	});
+
+	// The root passes every click through; only the band (and the veil, where the screen is dimmed)
+	// takes one, to dismiss it, and only while it is shown and not already leaving.
+	it("takes a click on the band and the veil only, to dismiss it", () => {
+		expect(CSS).toMatch(/#stonetop-moment:is\(\.is-playing, \.is-still\):not\(\.is-leaving\) :is\(\.stonetop-moment-band, \.stonetop-moment-veil\)\s*\{\s*pointer-events:\s*auto;\s*cursor:\s*pointer;/);
+		expect(MOMENT_ANIMATIONS.some(d => d.scope.at(-1).includes(".is-leaving") && /^stonetop-moment-dismiss\b/.test(d.value))).toBe(true);
+		expect(MOMENT_ANIMATIONS.some(d => d.scope.at(-1).includes(".is-leaving") && /\bstonetop-moment-out\b/.test(d.value))).toBe(false);
 	});
 
 	it("writes no four-digit z-index of its own anywhere in its rules", () => {
