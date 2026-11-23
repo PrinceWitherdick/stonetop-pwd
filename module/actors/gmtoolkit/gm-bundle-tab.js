@@ -1243,13 +1243,6 @@ export class GmBundleTab {
 	/* ── listeners ───────────────────────────────────────────────────────────── */
 
 	/**
-	 * The tab's interactions, delegated on the sheet root: the add bar, the per-row buttons,
-	 * the two text fields, the keyboard reorder, and both halves of the drag.
-	 *
-	 * Delegated rather than bound per element because every one of these nodes is re-emitted
-	 * whenever the tab re-renders, which a structural write does on purpose.
-	 */
-	/**
 	 * Open or shut the card this caret belongs to, IN PLACE.
 	 *
 	 * Expanding is a CLASS TOGGLE, not a render. The body is in the DOM either way, so there is
@@ -1269,6 +1262,13 @@ export class GmBundleTab {
 		if (collapsed) this.openIds.delete(id); else this.openIds.add(id);
 	}
 
+	/**
+	 * The tab's interactions, delegated on the sheet root: the add bar, the per-row buttons,
+	 * the two text fields, the keyboard reorder, and both halves of the drag.
+	 *
+	 * Delegated rather than bound per element because every one of these nodes is re-emitted
+	 * whenever the tab re-renders, which a structural write does on purpose.
+	 */
 	activateListeners(root) {
 		if (!root) return;
 

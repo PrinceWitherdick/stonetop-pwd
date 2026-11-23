@@ -14,8 +14,7 @@ export function tripProgress(trip, route) {
 	const total = route?.legs?.length ?? 0;
 	const stored = trip?.progress;
 	const fresh = total > 0 && stored?.key === journeyKey(trip?.journey);
-	const raw = fresh ? Math.trunc(Number(stored.reached)) : 0;
-	const reached = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), total) : 0;
+	const reached = fresh ? clampInt(stored.reached, 0, total, 0) : 0;
 	return { reached, total, started: reached > 0, arrived: total > 0 && reached === total };
 }
 
@@ -23,7 +22,7 @@ export function tripProgress(trip, route) {
 export function steppedProgress(trip, route, step) {
 	const { reached, total } = tripProgress(trip, route);
 	if (!total || !Number.isInteger(step)) return null;
-	const next = Math.min(Math.max(reached + step, 0), total);
+	const next = clampInt(reached + step, 0, total);
 	return next === reached ? null : { reached: next, key: journeyKey(trip?.journey) };
 }
 

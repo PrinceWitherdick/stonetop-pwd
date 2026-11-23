@@ -1903,7 +1903,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// against (the herd's foals and the Inn read the same note). Read before the gains below,
 			// which write the steading. Nothing noted means the window never saw the roll made nor the
 			// reset taken, so Fortunes has not been reset and the live figure is still the season's own.
-			const opening = this._stonetopSteading.openingFortunes?.(year, seasonId) ?? null;
+			const opening = this._stonetopSteading.openingFortunes(year, seasonId) ?? null;
 			const chronicleFortunes = opening ?? this._stonetopSteading.getStatValue("fortunes");
 			const checkedKeys = Array.from(root.querySelectorAll(".stonetop-season-gain-check:checked"))
 				.map(el => el.dataset.gainKey);
@@ -3894,7 +3894,7 @@ export function createStonetopSteadingSheetClass(Base) {
 		_disableIfSeasonStepDone(btn, step, year, seasonId) {
 			if (!btn || !this._stonetopSteading.seasonStepApplied(step, year, seasonId)) return false;
 			btn.disabled = true;
-			btn.dataset.tooltip = "Already done this season: reopening won't repeat it.";
+			setTooltip(btn, "Already done this season: reopening won't repeat it.");
 			return true;
 		}
 

@@ -167,6 +167,16 @@
 	   stay quick, because those answer the pointer on the button rather than on the picture.
 	   Zeroed under reduced motion, just below this block. */
 	--st-popout-fade: 250ms;
+	/* THE TWO QUICK DURATIONS, for a transition that answers the pointer: a hover colour, a rule
+	   lighting, a control fading in. Named on a scale like the radii (`-sm`, then the plain one),
+	   because both carry colour changes and reveals alike. They used to be four spellings (0.15s,
+	   0.12s, 120ms, 0.1s); the 1.8.5 style pass folded 0.1s and 120ms into 0.12s by hand, rule by
+	   rule, and these hold that. A duration that is deliberately different (the pop-out fade
+	   above, a 0.18s or 0.25s ease, an animation) stays its own. Not zeroed under less motion: a
+	   colour change is not movement, and the Reduce Motion setting's blanket already stops them.
+	   tests/styles/token-literals.test.js ("a quick transition"). */
+	--st-duration-sm: 0.12s;
+	--st-duration:    0.15s;
 	--font-size-display: 42px;
 	/* THE PANEL TONE. Not the page: read the note on --st-page below before changing it.
 	   This is the fill of the things that sit ON the page and want to read as slightly inset from
@@ -893,10 +903,11 @@
 
 /* `hidden` hides, on anything of ours. The UA's `[hidden] { display: none }` loses to ANY author
    `display`, so a flex or grid element that JS hides stayed on screen until it got a re-hide of its
-   own. `!important` so no `display` rule can beat it; `:where()` so its weight is only `[hidden]`'s,
-   and the one element that keeps its space while hidden (the timeline's colour reset) can still win
-   with a class-named `!important` of its own. An element with no `stonetop-` class (a `.wd-section`,
-   a `.cm-next`) still needs its own re-hide. tests/styles/hidden-hides.test.js. */
+   own. `!important` so no `display` rule can beat it; `:where()` so its weight is only `[hidden]`'s.
+   Nothing out-weighs it: `hidden` means gone. An element that has to keep its space while it is
+   out of use wears a state class with `visibility: hidden` instead (the timeline's colour reset,
+   `.is-idle`). An element with no `stonetop-` class (a `.wd-section`, a `.cm-next`) still needs its
+   own re-hide. tests/styles/hidden-hides.test.js. */
 :where([class*="stonetop-"])[hidden] { display: none !important; }
 
 /* Whole-app base font (sidebar, chat, hotbar, everything). This is intentional
@@ -2153,7 +2164,7 @@ body :is(.app, .window-app).stonetop-height-resized {
 	background-color: var(--st-levelup-accent);
 	-webkit-mask: url('/systems/stonetop-pwd/assets/icons/upgrade.svg') center / contain no-repeat;
 	mask: url('/systems/stonetop-pwd/assets/icons/upgrade.svg') center / contain no-repeat;
-	transition: background-color 0.12s, transform 0.12s;
+	transition: background-color var(--st-duration-sm), transform var(--st-duration-sm);
 }
 
 .stonetop-levelup-icon:hover {
@@ -2610,7 +2621,7 @@ input.stonetop-name-field {
 	background: var(--st-wound-add-ink, #000) !important;
 	cursor: pointer;
 	opacity: 0.6;
-	transition: opacity 0.12s, transform 0.12s;
+	transition: opacity var(--st-duration-sm), transform var(--st-duration-sm);
 	-webkit-mask: url('/systems/stonetop-pwd/assets/icons/broken-heart.svg') center / contain no-repeat;
 	mask: url('/systems/stonetop-pwd/assets/icons/broken-heart.svg') center / contain no-repeat;
 }
@@ -2667,7 +2678,7 @@ input.stonetop-name-field {
 	align-items: center;
 	gap: 4px;
 	opacity: 0;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-wound:hover .stonetop-wound-actions,
@@ -2972,7 +2983,7 @@ input.stonetop-name-field {
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
-	transition: border-color 0.15s ease, background 0.15s ease;
+	transition: border-color var(--st-duration) ease, background var(--st-duration) ease;
 }
 
 .stonetop .wound-dialog .wd-tile input { position: absolute; opacity: 0; pointer-events: none; }
@@ -3560,7 +3571,7 @@ input.stonetop-name-field {
 	/* It lies over the tab's top rows: clicks, drags and the wheel must pass through. */
 	pointer-events: none;
 	opacity: 0;
-	transition: opacity 0.15s ease-out;
+	transition: opacity var(--st-duration) ease-out;
 	/* Deliberately light: the band only has to say "this is passing under something", and a
 	   heavier radius smears a whole line of text into an unreadable smudge before it reaches
 	   the header. */
@@ -3609,7 +3620,7 @@ input.stonetop-name-field {
    border: toggling the border itself moves the layout a pixel, per the note above.) */
 .stonetop-sheet-layout:not(.stonetop-sheet-layout--own-seam) {
 	border-top: 1px solid transparent;
-	transition: border-top-color 0.15s ease-out;
+	transition: border-top-color var(--st-duration) ease-out;
 }
 
 .stonetop-sheet-layout:not(.stonetop-sheet-layout--own-seam):has(> .sheet-body.is-scrolled) {
@@ -4069,7 +4080,7 @@ input.stonetop-name-field {
 .stonetop-sidebar-toggle i {
 	font-size: 0.8em;
 	opacity: 0.6;
-	transition: transform 0.15s, opacity 0.12s;
+	transition: transform var(--st-duration), opacity var(--st-duration-sm);
 }
 
 .stonetop-moves-sidebar:hover .stonetop-sidebar-toggle i,
@@ -4117,7 +4128,7 @@ input.stonetop-name-field {
 	border-top-left-radius: var(--st-radius-lg);
 	overflow: hidden;
 	/* The seam's own fade, so the two hand over in step (see below). */
-	transition: border-top-color 0.15s ease-out, border-top-left-radius 0.15s ease-out;
+	transition: border-top-color var(--st-duration) ease-out, border-top-left-radius var(--st-duration) ease-out;
 }
 
 /* ...except where something else already rules that line. Once the tab scrolls, the frosted
@@ -4253,7 +4264,7 @@ input.stonetop-name-field {
 	flex: none;
 	background: center / contain no-repeat var(--stonetop-playbook-arrow-icon);
 	transform: rotate(90deg); /* expanded: arrow points down */
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 
 .stonetop-moves-collapsible.is-collapsed > .stonetop-moves-summary::after {
@@ -6083,7 +6094,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: inherit;
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 .stonetop-weather-season:hover { background: var(--st-on-dark-hover, hsl(40 25% 85%)); }
@@ -6148,7 +6159,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
 	line-height: 1.4;
 	cursor: pointer;
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 .stonetop-weather-row:hover { background: var(--st-slate-hover-bg); }
@@ -6215,7 +6226,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	border-radius: var(--st-radius-sm);
 	background: var(--st-btn-primary-bg);
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-weather-roll-btn:hover,
@@ -6243,7 +6254,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: inherit;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-weather-reroll-btn:hover,
@@ -6265,7 +6276,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-weather-fx-btn {
 	padding: 4px 10px;
 	font-size: var(--st-fs-floor);
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 /* Paused wears the gold caution tone rather than the red one. Nothing is broken and nothing has
@@ -6424,7 +6435,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	border-radius: var(--st-radius-sm);
 	background: var(--st-btn-primary-bg);
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-open-welcome:hover,
@@ -7171,7 +7182,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	display: block;
 	width: auto;
 	background: currentColor;
-	transition: background-color 0.15s ease;
+	transition: background-color var(--st-duration) ease;
 }
 
 .stonetop-burn-brightly-icon {
@@ -7646,7 +7657,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	pointer-events: auto;
 	cursor: pointer;
 	/* Core's buttons transition everything over half a second, font size included. */
-	transition: border-color 0.15s, box-shadow 0.15s;
+	transition: border-color var(--st-duration), box-shadow var(--st-duration);
 }
 
 #stonetop-fight-ring .stonetop-fight-ring-button:hover,
@@ -8724,14 +8735,14 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--color-text-dark-secondary, #666);
 	font-size: var(--st-fs-xs);
 	opacity: 0.55;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 .stonetop-inv-lore-toggle:hover { opacity: 1; }
 /* The caret points at what it opens, like the section headings and the arcanum card's corner:
    down while the write-up is showing, right while it is folded away. */
 .stonetop-inv-lore-toggle > i {
 	display: inline-block;
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 .stonetop-inv-artifact-fold.is-collapsed .stonetop-inv-lore-toggle > i { transform: rotate(-90deg); }
 
@@ -8741,7 +8752,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	cursor: pointer;
 	color: var(--color-text-dark-secondary, #666);
 	opacity: 0.55;
-	transition: opacity 0.12s ease, color 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease, color var(--st-duration-sm) ease;
 }
 .stonetop-inv-artifact-identify:hover,
 .stonetop-inv-artifact-gm:hover { opacity: 1; }
@@ -9210,7 +9221,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	background: var(--stonetop-bg, #f5f0e8);
 	color: var(--st-text-body);
 	cursor: pointer;
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 .stonetop-camp-step:hover:not(:disabled),
@@ -9487,7 +9498,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	cursor: pointer;
 	font-weight: 600;
 	color: var(--st-text-body);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-struggle-chip:hover { background: var(--st-on-dark-hover, hsl(210 12% 85%)); }
@@ -9720,7 +9731,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	border: 1px solid var(--st-btn-primary-border);
 	border-radius: var(--st-radius-sm);
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-special-picker-close:hover {
 	background: var(--st-btn-primary-bg-hover);
@@ -9776,7 +9787,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	border: 1px solid var(--st-btn-primary-border);
 	border-radius: var(--st-radius-sm);
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-requisition-roll-btn:hover,
 .stonetop-requisition-take:hover,
@@ -9921,7 +9932,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	cursor: pointer;
 	font-weight: bold;
 	border-radius: var(--st-radius-sm);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-custom-move-save {
 	background: var(--st-btn-primary-bg);
@@ -9978,7 +9989,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	font-size: var(--st-fs-xs);
 	border: 1px dashed var(--color-border-light, #ccc);
 	background: transparent;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-add-custom-move:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }
 
@@ -10104,7 +10115,7 @@ p.stonetop-pb-builder-read-note { margin: 0; }
    1.47px low in Signika at 1x; the whole nudge overshot at 1.25-1.5x (Font Awesome rounds its glyph to
    whole pixels). Half keeps it within 0.84px in all three faces at 1x-1.5x. The smaller headings need none. */
 .stonetop-pb-builder-identity-words .stonetop-pb-builder-read-edit > i { position: relative; top: calc(-0.5 * min(var(--st-caps-nudge, 0em), 0.08em)); }
-.stonetop-pb-builder-read-edit.stonetop-section-edit { opacity: 0; transition: opacity 0.12s; }
+.stonetop-pb-builder-read-edit.stonetop-section-edit { opacity: 0; transition: opacity var(--st-duration-sm); }
 :is(.stonetop-pb-builder-read, .stonetop-pb-builder-read-pagehead):hover .stonetop-pb-builder-read-edit.stonetop-section-edit { opacity: 0.5; transition-delay: var(--st-edit-reveal-delay); }
 :is(.stonetop-pb-builder-read, .stonetop-pb-builder-read-pagehead):hover .stonetop-pb-builder-read-edit.stonetop-section-edit:hover,
 .stonetop-pb-builder-read-edit.stonetop-section-edit:focus-visible { opacity: 1; transition-delay: 0s; }
@@ -10274,7 +10285,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
    green .stonetop-section-done check and stays visible, so there's always a way to close it. */
 .stonetop-pb-review-edit { margin-left: auto; line-height: 1; }
 .stonetop-pb-review-block.is-editing .stonetop-pb-review-edit { margin-left: 0; }
-.stonetop-pb-review-edit.stonetop-section-edit { opacity: 0; transition: opacity 0.12s; }
+.stonetop-pb-review-edit.stonetop-section-edit { opacity: 0; transition: opacity var(--st-duration-sm); }
 .stonetop-pb-review-block:hover .stonetop-pb-review-edit.stonetop-section-edit {
 	opacity: 0.5;
 	transition-delay: var(--st-edit-reveal-delay);
@@ -10650,7 +10661,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	border-radius: 999px;
 	background: rgb(var(--st-ink-rgb) / 0.04);
 	color: var(--color-text-dark-primary);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 .stonetop-add-item-chip:hover { background: rgb(var(--st-ink-rgb) / 0.1); border-color: rgb(var(--st-ink-rgb) / 0.35); }
 /* Selected chip = its term is in the note field; reads as a pressed toggle so the
@@ -10805,7 +10816,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	background: var(--ll-accent);
 	border: 1px solid rgba(20, 14, 6, 0.35);
 	color: var(--ll-seal-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-love-letter-read:hover,
 .stonetop-love-letter-resend:hover,
@@ -11441,7 +11452,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	cursor: pointer;
 	position: relative;
 	top: 1px;
-	transition: color 0.15s;
+	transition: color var(--st-duration);
 }
 
 .stonetop-open-book:hover,
@@ -11613,7 +11624,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	font-size: var(--st-fs-xs);
 	border: 1px dashed var(--color-border-light, #ccc);
 	background: transparent;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-arcana-add-btn:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }
 
@@ -11696,7 +11707,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
    edited so there's always a way to lock it back. */
 .stonetop-arcana-summary > .stonetop-section-edit {
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-arcana-summary:hover > .stonetop-section-edit {
 	opacity: 0.5;
@@ -11783,7 +11794,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	flex: none;
 	background: center / contain no-repeat var(--stonetop-playbook-arrow-icon);
 	transform: rotate(90deg); /* expanded: arrow points down */
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 
 .stonetop-arcanum-foldable.is-collapsed > .stonetop-arcanum-foldable-summary::after {
@@ -11823,7 +11834,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	justify-content: center;
 	cursor: pointer;
 	opacity: 0.4;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-arcanum-card:hover > .stonetop-arcanum-collapse-btn { opacity: 0.7; }
 .stonetop-arcanum-collapse-btn:hover { opacity: 1; }
@@ -11835,7 +11846,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	height: 0.7em;
 	background: center / contain no-repeat var(--stonetop-playbook-arrow-icon);
 	transform: rotate(90deg); /* expanded: arrow points down */
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 .stonetop-arcanum-card.is-collapsed > .stonetop-arcanum-collapse-btn::after {
 	transform: rotate(-90deg); /* collapsed: arrow points up */
@@ -11976,7 +11987,7 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	object-position: center;
 	cursor: zoom-in;
 	opacity: 0.9;
-	transition: opacity 0.15s;
+	transition: opacity var(--st-duration);
 	flex-shrink: 0;
 }
 
@@ -12951,7 +12962,7 @@ form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-a
 	border-radius: var(--st-radius);
 	background: rgba(0, 0, 0, 0.03);
 	cursor: pointer;
-	transition: border-color 0.15s, box-shadow 0.15s;
+	transition: border-color var(--st-duration), box-shadow var(--st-duration);
 }
 
 .stonetop-lore-arcana-name {
@@ -13457,7 +13468,7 @@ form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-a
 	flex-shrink: 0;
 	align-self: flex-start;
 	cursor: pointer;
-	transition: border-color 0.15s, box-shadow 0.15s;
+	transition: border-color var(--st-duration), box-shadow var(--st-duration);
 }
 
 .stonetop-portrait:hover,
@@ -13481,7 +13492,7 @@ form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-a
 	font-family: var(--font-avara);
 	font-weight: bold;
 	line-height: 1;
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 .stonetop-instinct-badge {
@@ -13619,7 +13630,7 @@ form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-a
 	/* The line can wrap; the pill must not be broken across it. */
 	white-space: nowrap;
 	vertical-align: baseline;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-dead-tag i {
@@ -13712,7 +13723,7 @@ button.stonetop-holy-light:focus-visible,
    span inside it: a mask is applied AFTER filter, so a drop-shadow on the masked element
    is erased by its own mask. */
 .stonetop-holy-light {
-	transition: filter 0.15s ease, color 0.15s ease;
+	transition: filter var(--st-duration) ease, color var(--st-duration) ease;
 }
 
 /* Only the editable copy is a button, so only it says "press me". */
@@ -13797,7 +13808,7 @@ button.stonetop-holy-light.is-lit:hover {
 	line-height: 1.7;
 	letter-spacing: 0.04em;
 	color: var(--st-holy-light-ink);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-invocation-chip i { font-size: 0.95em; font-size: round(0.95em, 1px); }
@@ -13859,7 +13870,7 @@ button.stonetop-invocation-chip:focus-visible {
 	line-height: 1.7;
 	letter-spacing: 0.04em;
 	color: var(--st-gold-text);
-	transition: border-color 0.12s;
+	transition: border-color var(--st-duration-sm);
 }
 
 .stonetop-inspiration-chip i,
@@ -13968,7 +13979,7 @@ button.stonetop-preparation-chip:focus-visible {
 	padding: 1px 9px;
 	color: inherit;
 	opacity: 0.45;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 /* The chip's own line, not Font Awesome's `line-height: 1`: alone on an empty row it stood 5px
    shorter than a worded chip. */
@@ -14076,7 +14087,7 @@ button.stonetop-preparation-chip:focus-visible {
 .stonetop-blessed-marks {
 	position: relative;
 	cursor: pointer;
-	transition: color 0.15s ease;
+	transition: color var(--st-duration) ease;
 }
 
 .stonetop-condemn:hover,
@@ -14222,7 +14233,7 @@ button.stonetop-preparation-chip:focus-visible {
    40px against the scales' 38: the drawing is very nearly square (1.007) where the scales are
    1.15 wide, so the extra 2px is what keeps the two at the same painted area. */
 .stonetop-battle-joy {
-	transition: color 0.15s ease;
+	transition: color var(--st-duration) ease;
 }
 
 /* Only the editable copy is a button, so only it says "press me". */
@@ -14257,7 +14268,7 @@ button.stonetop-battle-joy:not(.is-raging):hover { color: var(--st-text-body); }
 .stonetop-roiling,
 .stonetop-unseen,
 .stonetop-insert-form {
-	transition: color 0.15s ease;
+	transition: color var(--st-duration) ease;
 }
 
 button.stonetop-nerves,
@@ -14338,7 +14349,7 @@ button.stonetop-insert-form:not(.is-transformed):hover { color: var(--st-text-bo
 .stonetop-held-advantage,
 .stonetop-held-disadvantage {
 	color: var(--st-quiet-ink);
-	transition: color 0.15s ease;
+	transition: color var(--st-duration) ease;
 }
 
 /* Only the editable copy is a button, so only it says "press me". */
@@ -14947,7 +14958,7 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 	color: var(--st-text-faint);
 	line-height: 1;
 	cursor: pointer;
-	transition: background 0.12s, color 0.12s;
+	transition: background var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 .stonetop-condemned-dismiss:hover,
@@ -15078,7 +15089,7 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 	/* Same inset-ring trick as the body above: appearing and disappearing must cost no layout, or
 	   every row below shuffles as the pointer crosses the section. */
 	box-shadow: inset 0 0 0 2px transparent;
-	transition: box-shadow 0.12s ease;
+	transition: box-shadow var(--st-duration-sm) ease;
 }
 
 /* Subordinate to nothing above them but the title block, so they read as labels rather than as
@@ -15354,7 +15365,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 .stonetop-create-character-btn:hover {
@@ -15864,7 +15875,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid var(--color-border-light-primary, #ccc);
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb) / 0.8);
-	transition: border-color 0.12s;
+	transition: border-color var(--st-duration-sm);
 }
 
 .asm-input:hover {
@@ -15899,7 +15910,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	line-height: 1;
 	background: rgb(var(--st-paper-rgb) / 0.8);
 	color: var(--color-text-dark-secondary);
-	transition: background 0.12s, border-color 0.12s, color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 .asm-info:hover,
@@ -15958,7 +15969,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	cursor: pointer;
 	font-size: var(--st-fs-base);
 	background: rgb(var(--st-paper-rgb) / 0.8);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .asm-confirm {
@@ -16066,7 +16077,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-xs);
 	line-height: 1.3;
 	opacity: 0.5;
-	transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease, background var(--st-duration-sm) ease, border-color var(--st-duration-sm) ease;
 }
 
 .stonetop-outfit-load-option.is-active {
@@ -16148,7 +16159,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	/* The seam's hairline, as the character sheet draws it under its header: always there but
 	   transparent, so it appearing never moves the list a pixel. */
 	border-top: 1px solid transparent;
-	transition: border-top-color 0.15s ease-out;
+	transition: border-top-color var(--st-duration) ease-out;
 }
 
 /* The frosted seam at each list's top edge, the character sheet's (`.stonetop-sheet-layout
@@ -16169,7 +16180,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	z-index: 2;
 	pointer-events: none;
 	opacity: 0;
-	transition: opacity 0.15s ease-out;
+	transition: opacity var(--st-duration) ease-out;
 	backdrop-filter: blur(1.5px);
 	-webkit-backdrop-filter: blur(1.5px);
 	mask-image: linear-gradient(to bottom, rgb(0 0 0) 0%, rgb(0 0 0 / 0.55) 55%, transparent 100%);
@@ -16532,7 +16543,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgb(var(--st-ink-rgb) / 0.02);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-levelup-move-option:hover,
@@ -16605,7 +16616,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgb(var(--st-ink-rgb) / 0.02);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-levelup-stat-option:hover {
@@ -17045,7 +17056,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 :where(.deaths-door-dialog-buttons) .is-primary,
 .deaths-door-cancel-btn {
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 /* The roll is the whole point of the step, so it takes whatever the footer has left over rather
@@ -17124,7 +17135,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: inherit;
 	font-size: var(--st-fs-base);
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .deaths-door-choice-back:hover:not(:disabled),
@@ -17156,7 +17167,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: inherit;
 	font-size: var(--st-fs-base);
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .deaths-door-skip-roll-btn:hover,
@@ -18601,7 +18612,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius-sm);
 	background: var(--dd-surface);
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 /* Follows the card's cursor rather than declaring its own, so a blocked option reads
@@ -19574,7 +19585,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgb(var(--st-ink-rgb) / 0.02);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 	font-size: var(--st-fs-base);
 	line-height: 1.4;
 }
@@ -19976,7 +19987,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: 2.75em;
 	line-height: 1;
 	color: var(--st-text-body);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 /* The drawing, worn as a MASK over currentColor rather than painted as an <img> — the same way
@@ -20376,7 +20387,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	line-height: 1;
 	/* Only the hover eases. Core's button transition would otherwise slide it in sideways from
 	   its default spot to the one the script places it at, across the bar. */
-	transition: filter 0.15s ease;
+	transition: filter var(--st-duration) ease;
 	pointer-events: auto;
 	cursor: pointer;
 }
@@ -20645,7 +20656,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: 2.25em;
 	line-height: 1;
 	color: var(--st-text-body);
-	transition: background 0.15s, color 0.15s;
+	transition: background var(--st-duration), color var(--st-duration);
 }
 
 /* The drawing, worn as a MASK over currentColor, exactly as the weather glyph above is and for
@@ -21119,7 +21130,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--st-btn-primary-bg);
 	cursor: pointer;
 	text-shadow: none;
-	transition: background-color 0.12s, color 0.12s;
+	transition: background-color var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 .stonetop .sheet-tabs.stonetop-tab-rail .item:hover,
@@ -21858,7 +21869,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border-radius: var(--st-radius-sm);
 	cursor: pointer;
 	background: rgb(var(--st-slate-rgb) / 0.15);
-	transition: background 0.12s;
+	transition: background var(--st-duration-sm);
 }
 
 /* Hover to signal interactivity (only fires in editable sections; read-only
@@ -22043,7 +22054,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 2px solid var(--st-slate-rule) !important;
 	background: rgb(var(--st-slate-rgb) / 0.15) !important;
 	cursor: pointer;
-	transition: background 0.12s;
+	transition: background var(--st-duration-sm);
 }
 
 .steading-debility-check:hover {
@@ -22266,7 +22277,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	display: inline-flex;
 	gap: 4px;
 	opacity: 0;
-	transition: opacity 0.15s ease;
+	transition: opacity var(--st-duration) ease;
 }
 .steading-plan:is(:hover, :focus-within) .steading-plan-tools { opacity: 1; }
 @media (hover: none) { .steading-plan-tools { opacity: 1; } }
@@ -22547,7 +22558,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 2px 0;
 	break-inside: avoid;
 	color: var(--color-text-dark-secondary);
-	transition: color 0.15s ease;
+	transition: color var(--st-duration) ease;
 }
 
 .steading-list-item.is-checked {
@@ -22633,7 +22644,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding: 2px 8px;
 	margin-top: 4px;
 	width: 100%;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .steading-list-add:hover,
@@ -22700,7 +22711,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 .steading-edit-section > .steading-section-edit-toggle.stonetop-section-edit {
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .steading-edit-section:hover > .steading-section-edit-toggle.stonetop-section-edit {
 	opacity: 0.5;
@@ -22967,7 +22978,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-base);
 	opacity: 0.6;
 	color: var(--st-on-dark-danger, #c00);
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 
 .steading-residents-col-actions .steading-list-delete:hover {
@@ -24043,7 +24054,7 @@ a.steading-player-open:hover {
 .steading-improvement-chevron {
 	margin: 0;
 	font-size: var(--st-fs-xs);
-	transition: transform 0.15s ease;
+	transition: transform var(--st-duration) ease;
 }
 
 .steading-improvement.is-open .steading-improvement-chevron {
@@ -25795,7 +25806,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	text-decoration: underline;
 	text-underline-offset: 2px;
 	white-space: nowrap;
-	transition: color 0.15s;
+	transition: color var(--st-duration);
 }
 
 .stonetop-playbook-picker-setting-overview:hover { color: var(--st-quiet-ink); }
@@ -25828,7 +25839,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	border: 2px solid transparent;
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
-	transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+	transition: border-color var(--st-duration), box-shadow var(--st-duration), transform var(--st-duration-sm);
 	box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
@@ -26374,7 +26385,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border: 1px solid var(--st-on-dark-rule-soft, #ccc);
 	border-radius: 20px;
 	cursor: pointer;
-	transition: border-color 0.12s, background 0.12s;
+	transition: border-color var(--st-duration-sm), background var(--st-duration-sm);
 }
 
 .onboard-name-chip:hover {
@@ -26471,7 +26482,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border: 1.5px solid var(--st-quiet-ink);
 	background: transparent;
 	color: var(--st-quiet-ink);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 	white-space: nowrap;
 	flex: 0 0 auto;
 }
@@ -26517,7 +26528,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border: 1.5px solid var(--st-red-border);
 	background: transparent;
 	color: var(--st-red-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 	white-space: nowrap;
 	flex: 0 0 auto;
 }
@@ -26613,7 +26624,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border: 2px solid rgb(var(--st-slate-rgb) / 0.2);
 	border-radius: var(--st-radius-lg);
 	background: rgb(var(--st-paper-rgb));
-	transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration), box-shadow var(--st-duration);
 }
 
 .stonetop-onboarding-stat-box.is-filled {
@@ -26736,7 +26747,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	border: 1px solid var(--st-on-dark-rule-soft, #ccc);
 	border-radius: 999px;
 	cursor: pointer;
-	transition: border-color 0.12s, background 0.12s, color 0.12s;
+	transition: border-color var(--st-duration-sm), background var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 .stonetop-onboarding-move-chip:hover,
@@ -27636,7 +27647,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-size: var(--st-fs-sm);
 	line-height: 1;
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s, color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 /* A whole-px glyph on an even step, so it has an even margin to sit in: measured with the other
@@ -28257,7 +28268,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	line-height: 1;
 	cursor: help;
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-	transition: background 0.12s, transform 0.12s, box-shadow 0.12s;
+	transition: background var(--st-duration-sm), transform var(--st-duration-sm), box-shadow var(--st-duration-sm);
 }
 
 .stonetop-onboarding-faq-badge:hover {
@@ -28433,7 +28444,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	line-height: 1.7;
 	color: var(--st-holy-light-ink);
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-invocation-concentrating .stonetop-invocation-end:hover {
@@ -28609,7 +28620,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	background: transparent;
 	overflow: hidden;
 	vertical-align: middle;
-	transition: height 0.16s ease, margin-top 0.16s ease, background-color 0.15s, border-color 0.15s;
+	transition: height 0.16s ease, margin-top 0.16s ease, background-color var(--st-duration), border-color var(--st-duration);
 }
 .stonetop-tab-search-toggle {
 	flex: 0 0 auto;
@@ -28663,7 +28674,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	pointer-events: none;
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-floor);
-	transition: width 0.18s ease, opacity 0.12s, padding 0.18s;
+	transition: width 0.18s ease, opacity var(--st-duration-sm), padding 0.18s;
 }
 /* Kill the focus "aura": Foundry core adds `box-shadow: 0 0 5px var(--color-shadow-primary)`
    (renders red) + an outline to focused form controls. Suppress it in every state so the
@@ -28999,7 +29010,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-xs);
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-follower-add-btn:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }
 .stonetop-follower-add-hint {
@@ -29151,7 +29162,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-xs);
 	cursor: pointer;
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 .stonetop-follower-order:hover {
 	background: var(--st-btn-primary-bg-hover);
@@ -29218,7 +29229,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-xs);
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 .stonetop-order-followers-dialog .stonetop-of-tag.is-help {
 	border-color: var(--st-green-border);
@@ -29639,7 +29650,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	font-family: var(--font-stonetop);
 	text-align: left;
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 .stonetop-follower-fate-dialog .stonetop-ff-option:hover { background: hsl(210 10% 94%); }
 .stonetop-follower-fate-dialog .stonetop-ff-option--save {
@@ -29981,7 +29992,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	   it (see --st-pip-advance), and a silent change to core's margin would slide
 	   the two Spend buttons out of line with each other again. */
 	margin: 0 1px;
-	transition: background 0.12s;
+	transition: background var(--st-duration-sm);
 	flex-shrink: 0;
 }
 
@@ -30080,7 +30091,7 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	color: var(--color-text-dark-secondary, #666);
 	font-size: 0.9em;
 	opacity: 0.55;
-	transition: transform 0.15s, opacity 0.12s ease;
+	transition: transform var(--st-duration), opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-follower-section-summary:hover .stonetop-follower-section-caret { opacity: 1; }
@@ -30200,7 +30211,7 @@ details.stonetop-crew-collapsible:not([open]) {
 	   carets reads as a different control rather than the same one. */
 	font-size: var(--st-fs-sm);
 	opacity: 0.55;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 	/* A caret is a small target for a control that folds the whole card, so it carries a
 	   hit area wider than its glyph. Both numbers are chosen to cost nothing: the top padding
 	   stays inside the tags row's own height, so the row does not grow, and the negative
@@ -30216,7 +30227,7 @@ details.stonetop-crew-collapsible:not([open]) {
 .stonetop-follower-card-fold > i {
 	display: inline-block;
 	font-size: 0.9em;
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 .stonetop-follower-card.is-collapsed .stonetop-follower-card-fold > i { transform: rotate(-90deg); }
 
@@ -30801,7 +30812,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 .stonetop-follower-field-row .stonetop-follower-edit,
 .stonetop-follower-section .stonetop-follower-edit {
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-follower-name-row:hover .stonetop-follower-edit,
 .stonetop-follower-field-row:hover .stonetop-follower-edit,
@@ -30853,7 +30864,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 .stonetop-follower-card > .stonetop-follower-edit {
 	opacity: 0;
 	pointer-events: none; /* while hidden, don't intercept clicks on the HP box below */
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-follower-card:hover > .stonetop-follower-edit { opacity: 0.5; pointer-events: auto; transition-delay: var(--st-edit-reveal-delay); }
 .stonetop-follower-card:hover > .stonetop-follower-edit:hover { opacity: 1; transition-delay: 0s; }
@@ -30870,7 +30881,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 }
 .stonetop-follower-stats-section > .stonetop-follower-edit {
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-follower-stats-section:hover > .stonetop-follower-edit { opacity: 0.5; transition-delay: var(--st-edit-reveal-delay); }
 .stonetop-follower-stats-section:hover > .stonetop-follower-edit:hover { opacity: 1; transition-delay: 0s; }
@@ -31526,7 +31537,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	width: 1em;
 	height: 1em;
 	line-height: 1;
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 
 .stonetop-follower-rules-toggle.is-expanded i {
@@ -31569,7 +31580,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	height: 0.65em;
 	background: center / contain no-repeat var(--stonetop-playbook-arrow-icon);
 	transform: rotate(-90deg); /* closed: arrow points up */
-	transition: transform 0.15s;
+	transition: transform var(--st-duration);
 }
 
 .stonetop-follower-rule[open] summary::before { transform: rotate(90deg); /* open: down */ }
@@ -32104,7 +32115,7 @@ li.question-bullet::before {
 	font-family: var(--font-stonetop);
 	border-radius: var(--st-radius);
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 	white-space: nowrap;
 }
 
@@ -32246,7 +32257,7 @@ li.question-bullet::before {
 	margin: 0 !important;
 	padding: 0;
 	cursor: pointer;
-	transition: background 0.12s;
+	transition: background var(--st-duration-sm);
 }
 .vtt .window-app input[type=checkbox].stonetop-follower-ammo-input:checked {
 	background: var(--st-accent-fill) !important;
@@ -32618,7 +32629,7 @@ li.question-bullet::before {
 	border: none;
 	border-bottom: 1px solid var(--st-on-dark-rule-soft, #ebebeb);
 	cursor: pointer;
-	transition: background 0.12s, color 0.12s;
+	transition: background var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 .stonetop-so-nav-entry:hover         { background: var(--st-on-dark-hover, hsl(210 12% 91%)); color: var(--st-text); }
@@ -32881,7 +32892,7 @@ li.question-bullet::before {
 	text-decoration: none;
 	border-bottom: 1px dashed currentColor;
 	cursor: pointer;
-	transition: background-color 0.12s ease, border-bottom-color 0.12s ease;
+	transition: background-color var(--st-duration-sm) ease, border-bottom-color var(--st-duration-sm) ease;
 }
 
 .stonetop-monster-ref:hover {
@@ -33426,7 +33437,7 @@ li.question-bullet::before {
 
 .stonetop-monster-notes-editor .toggle {
 	opacity: 0;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-monster-notes-editor:hover .toggle {
@@ -33988,11 +33999,11 @@ li.question-bullet::before {
 	font-size: var(--st-fs-xs);
 	line-height: 1;
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-section-collapse i {
 	display: inline-block;
-	transition: transform 0.12s;
+	transition: transform var(--st-duration-sm);
 }
 .stonetop-section-collapse.stonetop-section-collapsed i {
 	transform: rotate(180deg);
@@ -34044,7 +34055,7 @@ li.question-bullet::before {
 	font-size: var(--st-fs-xs);
 	line-height: 1;
 	opacity: 0;
-	transition: opacity 0.12s, transform 0.12s;
+	transition: opacity var(--st-duration-sm), transform var(--st-duration-sm);
 }
 .stonetop-move-group-title > .stonetop-section-caret {
 	position: absolute;
@@ -34102,7 +34113,7 @@ li.question-bullet::before {
 	   Measured against the rendered page — 0.55 paints rgb(151,148,144) on the parchment,
 	   2.66:1; 0.62 is 3.08:1 and reads no louder. */
 	opacity: 0.62;
-	transition: opacity 0.12s, background 0.12s, border-color 0.12s, color 0.12s;
+	transition: opacity var(--st-duration-sm), background var(--st-duration-sm), border-color var(--st-duration-sm), color var(--st-duration-sm);
 }
 
 .stonetop-section-randomize:hover,
@@ -34164,7 +34175,7 @@ li.question-bullet::before {
 .stonetop-bestiary-page .stonetop-section-edit,
 .stonetop-bestiary-page .stonetop-concept-edit {
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-bestiary-page .stonetop-monster-field:hover .stonetop-section-edit,
 .stonetop-bestiary-page .stonetop-monster-field:hover .stonetop-concept-edit {
@@ -34270,7 +34281,7 @@ li.question-bullet::before {
 .stonetop-details-heading-row .stonetop-section-edit,
 .stonetop-lore-section-wrapper > .stonetop-section-edit {
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 .stonetop-details-heading-row:hover .stonetop-section-edit,
 .stonetop-lore-section-wrapper:hover > .stonetop-section-edit {
@@ -34788,7 +34799,7 @@ body.game .sheet.app.stonetop-bestiary-page .stonetop-bestiary-page-edit .editor
 	border-left: 4px solid var(--st-cell-accent);
 	border-radius: var(--st-radius);
 	background: color-mix(in srgb, currentColor 6%, transparent);
-	transition: background-color 0.12s ease, border-color 0.12s ease;
+	transition: background-color var(--st-duration-sm) ease, border-color var(--st-duration-sm) ease;
 }
 
 /* Only a cell that actually carries the drag advertises the grab affordance —
@@ -35211,7 +35222,7 @@ ul:has(> li.st-treasure-line:only-child) {
 	line-height: 1.25;
 	border: 1px solid var(--color-border-dark, #7a7971);
 	border-radius: var(--st-radius-sm);
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 /* Rollable die in a random table's "Roll" header (module/utils/journal-roll-tables.js).
@@ -35408,7 +35419,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: inherit;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-guide-nav button:hover:not(:disabled) { background: var(--st-on-dark-hover, hsl(40 25% 85%)); }
@@ -35484,7 +35495,7 @@ th:has(> .stonetop-roll-table-btn) {
 	   each flicker restarts the transition: the footer jitters and the text beside it walks up and
 	   down while nobody is moving the mouse. Naming the properties leaves every metric to settle
 	   instantly, as `.stonetop-guide-nav button` has always done. */
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 /* The fill and its two state rules are the primary's, above. Only the dimming is the CTA's own. */
@@ -35596,7 +35607,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb) / 0.55);
 	color: var(--st-green-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-intros-shuffle:hover { background: var(--st-green-bg-hover); }
@@ -35638,7 +35649,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb) / 0.55);
 	color: var(--st-green-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 .stonetop-intros-move:hover:not(:disabled) { background: var(--st-green-bg-hover); }
 .stonetop-intros-move:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -35742,7 +35753,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border: 1px solid transparent;
 	border-radius: var(--st-radius-sm);
 	cursor: pointer;
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 /* Checkbox-SVG marker shared by the interactive button (GM) and the read-only row
@@ -36007,7 +36018,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb) / 0.55);
 	color: inherit;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 /* Sized by padding round a normal line box, like the nav buttons, rather than squeezed into a fixed
@@ -36344,7 +36355,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: inherit;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-welcome-action:hover { background: var(--st-on-dark-hover, hsl(40 25% 85%)); }
@@ -36388,7 +36399,7 @@ th:has(> .stonetop-roll-table-btn) {
 	opacity: 0;
 	transform: translateX(-50%) scale(0.4);
 	transform-origin: bottom center;
-	transition: opacity 0.12s ease, transform 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease, transform var(--st-duration-sm) ease;
 	pointer-events: none;
 	z-index: 100;
 }
@@ -36579,7 +36590,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--st-btn-primary-bg);
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-welcome-create:hover { background: var(--st-btn-primary-bg-hover); }
@@ -36954,7 +36965,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--st-btn-primary-bg);
 	color: var(--st-btn-primary-text);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-charintro-create:hover { background: var(--st-btn-primary-bg-hover); }
@@ -37071,7 +37082,7 @@ th:has(> .stonetop-roll-table-btn) {
 	line-height: round(1.25em, 1px);
 	color: inherit;
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-guide-toc-btn:hover { background: var(--st-on-dark-hover, hsl(40 25% 85%)); }
@@ -37510,7 +37521,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: inherit;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-spring-roll-btn:hover,
@@ -37601,7 +37612,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-ink-rgb) / 0.02);
 	opacity: 0.65;
-	transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+	transition: opacity var(--st-duration), border-color var(--st-duration), background var(--st-duration);
 }
 
 .stonetop-spring-tiers--cards .stonetop-spring-tier.is-active {
@@ -37826,7 +37837,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: inherit;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 .stonetop-exp-new:hover { background: var(--st-slate-hover-bg); }
@@ -37848,7 +37859,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
 	color: var(--st-text-secondary);
-	transition: background 0.15s, color 0.15s;
+	transition: background var(--st-duration), color var(--st-duration);
 }
 
 .stonetop-exp-delete:hover {
@@ -38389,7 +38400,7 @@ th:has(> .stonetop-roll-table-btn) {
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-sm);
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 .stonetop-cf-tag:hover,
 .stonetop-cf-chip:hover { background: var(--st-on-dark-hover, hsl(210 12% 85%)); }
@@ -39001,7 +39012,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-radius: var(--st-radius);
 	background: rgb(var(--st-ink-rgb) / 0.02);
 	cursor: pointer;
-	transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+	transition: opacity var(--st-duration), border-color var(--st-duration), background var(--st-duration);
 }
 
 /* No per-row checkbox override: .stonetop-share-visible / .stonetop-share-owner are
@@ -39236,7 +39247,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: inherit;
 	box-shadow: none;
 	cursor: pointer;
-	transition: background 0.15s, border-color 0.15s;
+	transition: background var(--st-duration), border-color var(--st-duration);
 }
 
 .stonetop-arcanum-edit :is(
@@ -39264,7 +39275,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: none;
 	color: var(--st-text-muted);
 	cursor: pointer;
-	transition: color 0.15s;
+	transition: color var(--st-duration);
 }
 
 .stonetop-arcanum-edit :is(.stonetop-arc-req-remove, .stonetop-arc-foll-remove):hover {
@@ -39557,7 +39568,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 1.5px solid var(--st-quiet-ink);
 	background: transparent;
 	color: var(--st-quiet-ink);
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 	white-space: nowrap;
 	/* Never shrink below the label: the whole button wraps to a new line rather
 	   than breaking its text across lines. */
@@ -40048,12 +40059,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1;
 	cursor: pointer;
 	opacity: 0.6;
-	transition: opacity 0.15s ease, color 0.15s ease;
+	transition: opacity var(--st-duration) ease, color var(--st-duration) ease;
 }
 .stonetop .steading-prep-cards .threat-collapse-btn:hover { opacity: 1; color: var(--threat-accent); }
 .stonetop .steading-prep-cards .threat-collapse-btn i {
 	display: inline-block;
-	transition: transform 0.15s ease;
+	transition: transform var(--st-duration) ease;
 }
 /* Open: the chevron rests pointing down. Collapsed: a half-turn to up. */
 .stonetop .steading-prep-cards .threat-card.is-collapsed .threat-collapse-btn i { transform: rotate(180deg); }
@@ -40268,7 +40279,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   raised the sheet font got a fold whose caret alone stayed put. */
 	font-size: 0.8em;
 	color: var(--threat-accent);
-	transition: transform 0.12s ease;
+	transition: transform var(--st-duration-sm) ease;
 }
 .stonetop .site-group[open] > .site-group__summary .site-group__caret { transform: rotate(90deg); }
 .stonetop .site-group__title {
@@ -40535,7 +40546,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1.1;
 	color: var(--st-text);
 	opacity: 0.8;
-	transition: transform 0.12s ease, opacity 0.12s ease;
+	transition: transform var(--st-duration-sm) ease, opacity var(--st-duration-sm) ease;
 }
 .stonetop .steading-threat-type-toggle:hover::after {
 	opacity: 1;
@@ -40592,7 +40603,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: flex;
 	gap: 0.3rem;
 	opacity: 0;
-	transition: opacity 0.15s ease;
+	transition: opacity var(--st-duration) ease;
 }
 .stonetop .threat-card-wrap:hover .threat-card-tools,
 .stonetop .threat-card-wrap:focus-within .threat-card-tools { opacity: 1; }
@@ -40737,7 +40748,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
-	transition: border-color 0.15s ease, background 0.15s ease;
+	transition: border-color var(--st-duration) ease, background var(--st-duration) ease;
 }
 .stonetop .create-threat .ct-type-tile input { position: absolute; opacity: 0; pointer-events: none; }
 .stonetop .create-threat .ct-type-tile.is-selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
@@ -40987,7 +40998,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 1px solid var(--tc-rule-hard, #8f7f63);
 	border-radius: var(--st-radius-lg);
 	cursor: pointer;
-	transition: border-color 0.15s ease, background 0.15s ease;
+	transition: border-color var(--st-duration) ease, background var(--st-duration) ease;
 }
 .stonetop .create-monster .cm-tile input { position: absolute; opacity: 0; pointer-events: none; }
 .stonetop .create-monster .cm-tile:has(input:checked) {
@@ -41008,7 +41019,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-radius: 999px;
 	cursor: pointer;
 	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
-	transition: border-color 0.15s ease, background 0.15s ease;
+	transition: border-color var(--st-duration) ease, background var(--st-duration) ease;
 }
 .stonetop .create-monster .cm-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .stonetop .create-monster .cm-chip:has(input:checked) {
@@ -41095,7 +41106,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	cursor: pointer;
 	opacity: 0.6;
 	box-shadow: none;
-	transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+	transition: opacity var(--st-duration) ease, background var(--st-duration) ease, color var(--st-duration) ease;
 }
 .stonetop .create-monster .cm-move-remove:hover,
 .stonetop .create-monster .cm-attack-remove:hover {
@@ -41270,7 +41281,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: transparent; border: 0; cursor: pointer;
 	color: var(--st-text-secondary, #4a4034);
 }
-.stonetop .threat-editor-more-toggle i { transition: transform 0.15s ease; }
+.stonetop .threat-editor-more-toggle i { transition: transform var(--st-duration) ease; }
 /* Closed: the chevron rests pointing up (the template ships fa-chevron-up).
    Open: a half-turn to down. */
 .stonetop .threat-editor:has(.threat-editor-more.is-open) .threat-editor-more-toggle i { transform: rotate(180deg); }
@@ -41412,17 +41423,32 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    pill/chip fill and is too loud across a whole row. */
 .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  { border-left-color: var(--st-red-text); background: color-mix(in srgb, var(--st-red-bg) 50%, transparent); }
 
+/* The disc's colours are set on the ROW, one set per band, and the plain disc reads them. A
+   palette that letters the disc another way re-points these three on the row (the dark section,
+   the high-contrast block), and a portrait paints over all three at the disc's own weight
+   (--photo below). So no rule restates the disc at a band's weight, and none has to exclude the
+   photo with a :not() to stay off a face. Paper letters the initial in the primary button's
+   label, which is white on paper and in high contrast, on the band's solid fill with no ring.
+   Guarded by expedition-polish.test.js. */
+.stonetop-expedition-dialog .stonetop-exp-load-row {
+	--stonetop-exp-ava-ink:  var(--st-btn-primary-text);
+	--stonetop-exp-ava-fill: var(--st-accent-fill);
+	--stonetop-exp-ava-ring: transparent;
+}
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light { --stonetop-exp-ava-fill: var(--st-green-border); }
+/* Light red for heavy, deep red for overloaded below it: the same pair the pips and the edge
+   use, so a face, a diamond and a row edge all say the same thing about one PC. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy { --stonetop-exp-ava-fill: var(--st-red-border); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  { --stonetop-exp-ava-fill: var(--st-red-text); }
+
 .stonetop-expedition-dialog .stonetop-exp-load-ava {
 	width: 26px; height: 26px; flex: 0 0 auto; border-radius: 50%;
 	display: grid; place-items: center;
 	font-family: var(--font-stonetop); font-weight: 700; font-size: var(--st-fs-xs);
-	color: #fff; background: var(--st-accent-fill);
+	color: var(--stonetop-exp-ava-ink);
+	background: var(--stonetop-exp-ava-fill);
+	box-shadow: inset 0 0 0 1px var(--stonetop-exp-ava-ring);
 }
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava { background: var(--st-green-border); }
-/* Light red for heavy, deep red for overloaded below it: the same pair the pips and the edge
-   use, so a face, a diamond and a row edge all say the same thing about one PC. */
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava { background: var(--st-red-border); }
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava { background: var(--st-red-text); }
 .stonetop-expedition-dialog .stonetop-exp-load-row.is-follower .stonetop-exp-load-ava { width: 22px; height: 22px; font-size: var(--st-fs-2xs); }
 
 /* Anyone with a portrait wears their own face here instead of an initial: the disc becomes a
@@ -41440,20 +41466,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    Hovering enlarges it, through the shared avatar preview every other small face in the system
    uses (module/utils/avatar-preview.js, wired in ExpeditionDialog).
 
-   This sits after the plain-disc rules above on purpose: same specificity, later wins — which
-   is enough for the base disc, and not enough for the per-band fills (see the block below it). */
+   This sits after the plain disc above on purpose: same specificity, later wins. The band
+   colours are custom properties on the row, not fills at a band's weight, so `background: none`
+   and `box-shadow: none` here are all it takes to keep the fill and the dark pages' ring off a
+   face, in every band and every palette. */
 .stonetop-expedition-dialog .stonetop-exp-load-ava--photo {
 	display: block; position: relative; overflow: hidden;
-	box-sizing: border-box; border: none; background: none;
+	box-sizing: border-box; border: none; background: none; box-shadow: none;
 	cursor: zoom-in;
-}
-/* The band fills above are written `.row.lvl-x .ava` — three classes to this rule's two, so
-   they outrank `background: none` no matter how late it sits. Said again at their weight, once
-   per band, which is the only thing that actually turns them off. */
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava--photo,
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava--photo,
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava--photo {
-	background: none;
 }
 
 .stonetop-expedition-dialog .stonetop-exp-load-name {
@@ -41960,7 +41980,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   meant for whatever is under it, and on this map a click is how a destination gets chosen — so
 	   the fade takes the pointer with it. */
 	opacity: 0; pointer-events: none;
-	transition: opacity var(--st-popout-fade, 250ms) ease, color 0.12s ease, border-color 0.12s ease;
+	transition: opacity var(--st-popout-fade, 250ms) ease, color var(--st-duration-sm) ease, border-color var(--st-duration-sm) ease;
 }
 /* Later than the base rule, per the modifier-ordering house rule. Focus stands beside hover
    because a keyboard has no pointer to reveal it with, and a control that can be tabbed to but
@@ -42142,7 +42162,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* A halo so a dot stays legible over the maps' tree-line hatching. box-shadow, not a
 	   filter: a drop-shadow is erased by any mask, and these sit near masked glyphs. */
 	box-shadow: var(--stonetop-route-mark-shadow);
-	transition: transform 0.12s ease;
+	transition: transform var(--st-duration-sm) ease;
 }
 .stonetop-journey-canvas .stonetop-journey-pick:hover .stonetop-journey-dot { transform: scale(1.35); }
 .stonetop-journey-canvas .stonetop-journey-arrow {
@@ -42173,7 +42193,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: 9px; color: var(--stonetop-route-case);
 	background: var(--site-accent, #5a5f6b); border: 2px solid var(--stonetop-route-case);
 	box-shadow: var(--stonetop-route-mark-shadow);
-	transition: transform 0.12s ease;
+	transition: transform var(--st-duration-sm) ease;
 }
 .stonetop-journey-canvas .stonetop-journey-site:hover .stonetop-journey-sitemark { transform: scale(1.2); }
 /* Its name is set in the same stone, so a pin and its label read as one mark and neither is
@@ -42927,7 +42947,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-body);
 	box-shadow: none;
 	cursor: pointer;
-	transition: background 0.12s, border-color 0.12s, color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm), color var(--st-duration-sm);
 }
 .stonetop-people-gallery .stonetop-people-footer button:not([disabled]):hover,
 .stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover,
@@ -44002,7 +44022,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	-webkit-mask: url("../assets/icons/hearts.svg") center / contain no-repeat;
 	mask: url("../assets/icons/hearts.svg") center / contain no-repeat;
 	background-color: color-mix(in srgb, var(--color-text-dark-secondary, #4b4a44) 28%, transparent);
-	transition: background-color 0.12s ease;
+	transition: background-color var(--st-duration-sm) ease;
 }
 .stonetop-rel-heart.is-filled {
 	background-color: var(--st-heart, #c0473b);
@@ -45276,7 +45296,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* Closed: up. Open: a half-turn to down — the same way round as every other
 	   fold on these sheets, so one glance reads the same everywhere. */
 	transform: rotate(180deg);
-	transition: transform 0.12s ease;
+	transition: transform var(--st-duration-sm) ease;
 }
 
 .stonetop-rel-card-note-wrap.is-open .stonetop-rel-note-caret {
@@ -46880,7 +46900,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	cursor: pointer;
 	position: relative;
 	top: 1px;
-	transition: color 0.15s;
+	transition: color var(--st-duration);
 }
 
 /* Core's button hover is a fill and a glow, which would box the glyph on the way to clicking
@@ -47392,7 +47412,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1;
 	color: var(--st-text);
 	opacity: 0.8;
-	transition: transform 0.12s ease, opacity 0.12s ease;
+	transition: transform var(--st-duration-sm) ease, opacity var(--st-duration-sm) ease;
 }
 .stonetop-gm-toolkit-moves .stonetop-gm-move-toggle:hover::after {
 	opacity: 1;
@@ -47885,13 +47905,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* Every square transparent icon button on this sheet: the two tool rows, the encounter's own
-   disclosure caret, and the cross on a collected row. One rule, so the shape, the reset and the
-   hover ground cannot drift apart between two tabs of the same sheet; the two outside a tool row
-   keep only their own size and ink below, which is all they actually differ by. */
+   disclosure caret, the cross on a collected row, and the Prep pane bar's round "?". One rule, so
+   the shape, the reset and the hover ground cannot drift apart between two tabs of the same sheet;
+   the ones outside a tool row keep only their own size, shape and ink below, which is all they
+   actually differ by. */
 .stonetop-gm-wonder-tools > button,
 .stonetop-gm-encounter-tools > button,
 .stonetop-gm-encounter-toggle,
-.stonetop-gm-encounter-entry-remove {
+.stonetop-gm-encounter-entry-remove,
+.stonetop-gm-pane-help {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -47910,7 +47932,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-wonder-tools > button:hover,
 .stonetop-gm-encounter-tools > button:hover,
 .stonetop-gm-encounter-toggle:hover,
-.stonetop-gm-encounter-entry-remove:hover {
+.stonetop-gm-encounter-entry-remove:hover,
+.stonetop-gm-pane-help:hover {
 	background: var(--st-slate-hover-bg);
 	box-shadow: none;
 }
@@ -48657,32 +48680,21 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* THE "?": a quiet round 22px button, in the lead's own muted ink, that answers "what is this
-   view for?" with the full intro. It states its whole look, as everything in this block does,
-   because core gives a <button> a border, a fill and a min-height of its own. */
+   view for?" with the full intro. The sheet's icon-button rule gives it the 22px shape, the reset
+   and the hover ground; here is only what differs, plus the two resets core's <button> needs that
+   the tool rows' buttons get from their own row (a min-height and a margin). */
 .stonetop-gm-pane-help {
-	flex: 0 0 auto;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
 	min-height: 0;
 	margin: 0;
-	padding: 0;
-	border: 0;
 	border-radius: 50%;
-	background: transparent;
 	box-shadow: none;
 	font-size: var(--st-fs-sm);
-	line-height: 1;
 	color: var(--st-text-muted);
-	cursor: pointer;
 }
 
 .stonetop-gm-pane-help:hover,
 .stonetop-gm-pane-help[aria-expanded="true"] {
 	background: var(--st-slate-hover-bg);
-	box-shadow: none;
 	color: var(--st-heading-ink);
 }
 
@@ -48828,8 +48840,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* --- The list and the card ------------------------------------------------------------------ */
-.stonetop-gm-encounter-list,
-.stonetop-gm-encounter-entries {
+.stonetop-gm-encounter-list {
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -48848,7 +48859,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-radius: var(--st-radius-lg);
 	background: linear-gradient(180deg, var(--st-prep-card-paper), var(--st-prep-card-paper-lo));
 	box-shadow: var(--st-prep-card-shadow);
-	transition: border-color 0.15s, box-shadow 0.15s;
+	transition: border-color var(--st-duration), box-shadow var(--st-duration);
 }
 
 .stonetop-gm-encounter:hover {
@@ -48902,7 +48913,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: var(--st-fs-sm);
 	opacity: 0.45;
 	cursor: grab;
-	transition: opacity 0.15s;
+	transition: opacity var(--st-duration);
 }
 
 .stonetop-gm-encounter:hover .stonetop-gm-encounter-grip,
@@ -49123,7 +49134,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-gm-encounter-toggle > i {
 	font-size: 14px;
 	line-height: 1;
-	transition: transform 0.12s ease;
+	transition: transform var(--st-duration-sm) ease;
 }
 
 .stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-toggle > i {
@@ -49175,10 +49186,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	min-width: 0;
 }
 
-.stonetop-gm-encounter-notes-block {
-	margin-bottom: 4px;
-}
-
 .stonetop-gm-encounter-body > .stonetop-gm-encounter-dropzone {
 	margin-top: 4px;
 }
@@ -49192,6 +49199,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    prose clear of the pencil parked in the corner. */
 .stonetop-gm-encounter-notes-block {
 	position: relative;
+	margin-bottom: 4px;
 }
 
 .stonetop-gm-encounter-notes {
@@ -49374,7 +49382,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	white-space: nowrap;
 	color: var(--st-text-secondary);
 	cursor: pointer;
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 .stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy:hover,
@@ -49422,6 +49430,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* The thumbnail's side, grown with the reader's sheet font so a picture never sits smaller than
 	   the name beside it at the larger sizes. Read by the narrow layout's indent too. */
 	--st-entry-thumb: calc(28px * var(--stonetop-font-scale, 1));
+	list-style: none;
+	margin: 0;
+	padding: 0;
 	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: subgrid;
@@ -49588,7 +49599,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	grid-column: 3;
 	grid-row: 1;
 	opacity: 0;
-	transition: opacity 0.12s;
+	transition: opacity var(--st-duration-sm);
 }
 
 .stonetop-gm-encounter-entry:hover .stonetop-gm-encounter-entry-remove,
@@ -49667,7 +49678,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-style: italic;
 	color: var(--st-text-secondary);
 	text-align: center;
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 .stonetop-gm-encounter-dropzone > i {
@@ -50013,7 +50024,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-gm-encounter.is-used :is(.stonetop-gm-encounter-name, .stonetop-gm-encounter-peek, .stonetop-gm-encounter-count) {
 	opacity: 0.75;
-	transition: opacity 0.15s;
+	transition: opacity var(--st-duration);
 }
 
 .stonetop-gm-encounter.is-used:hover :is(.stonetop-gm-encounter-name, .stonetop-gm-encounter-peek, .stonetop-gm-encounter-count),
@@ -50243,7 +50254,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    class-named transition of ours (the zoom button's fade) still wins. Guarded by
    expedition-polish.test.js. */
 :where(.stonetop-expedition-dialog, .stonetop-journey) button {
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 /* Each new step of a walkthrough slides in from the side it came from (StepperDialog `enterStep`,
    which adds the class only for a stepper whose `_stepMotion` is on and a reader who has not asked
@@ -51325,7 +51336,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
 	opacity: 0;
 	pointer-events: none;
-	transition: opacity var(--st-popout-fade, 250ms) ease, background 0.12s ease, color 0.12s ease;
+	transition: opacity var(--st-popout-fade, 250ms) ease, background var(--st-duration-sm) ease, color var(--st-duration-sm) ease;
 }
 
 /* Later than the base rule, per the modifier-ordering house rule. Focus stands beside hover
@@ -51529,7 +51540,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	border-radius: var(--st-radius-sm);
 	color: var(--st-text-secondary);
 	line-height: 1;
-	transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+	transition: background var(--st-duration-sm) ease, color var(--st-duration-sm) ease, border-color var(--st-duration-sm) ease;
 }
 
 /* The glyph inside it loses core's label gap (`body.game .app button > i` carries a
@@ -51595,7 +51606,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	font-variant-numeric: tabular-nums;
 	line-height: 1.35;
 	text-align: center;
-	transition: background 0.12s ease, border-color 0.12s ease;
+	transition: background var(--st-duration-sm) ease, border-color var(--st-duration-sm) ease;
 }
 
 /* Later than the base rule. Only where there is somewhere to go back to: at the base this is a
@@ -53086,7 +53097,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	outline: 1px dashed rgb(var(--st-ink-rgb) / 0.45);
 	outline-offset: -1px;
 	color: var(--st-text-body);
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-relmap-node:hover .stonetop-relmap-subtitle.is-empty,
@@ -53195,7 +53206,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	   portraits and lines rather than a rash of buttons. Focus is what keeps it reachable from a
 	   keyboard, where there is no hover to give. */
 	opacity: 0;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-relmap-node:hover .stonetop-relmap-handle,
@@ -54664,7 +54675,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	border-radius: 999px;
 	background: var(--st-btn-primary-bg, #3b4252);
 	color: var(--st-btn-primary-text, #f5f5f5);
-	transition: background 0.12s, border-color 0.12s;
+	transition: background var(--st-duration-sm), border-color var(--st-duration-sm);
 }
 
 .stonetop-person-picker-chip:hover {
@@ -55151,7 +55162,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	font-family: var(--font-stonetop);
 	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
 	line-height: 1.25;
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 .stonetop-timeline-show-summary::-webkit-details-marker,
@@ -55821,7 +55832,7 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 	font-size: var(--st-fs-xs);
 	color: var(--st-text-body);
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background var(--st-duration);
 }
 
 :is(.application, .window-app).stonetop-themed.stonetop-timeline-ages-dialog .window-content button.stonetop-timeline-ages-add:hover {
@@ -56186,7 +56197,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	gap: 2px;
 	margin-top: 6px;
 	opacity: 0;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-timeline-card:hover .stonetop-timeline-card-actions,
@@ -56222,7 +56233,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	border-radius: var(--st-radius-sm);
 	background: transparent;
 	color: var(--st-text-muted);
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 .stonetop-timeline-card-actions button > i {
@@ -56259,7 +56270,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 .stonetop-timeline-add-slot {
 	display: flex;
 	opacity: 0;
-	transition: opacity 0.12s ease;
+	transition: opacity var(--st-duration-sm) ease;
 }
 
 .stonetop-timeline-period:hover .stonetop-timeline-add-slot,
@@ -56292,7 +56303,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-sm);
 	line-height: 1;
-	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+	transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration);
 }
 
 /* Core gives every icon in an app button a 3px right margin; the gap spaces it here. */
@@ -57223,7 +57234,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	cursor: pointer;
 }
 
-/* Hidden takes the button out of the grid's third column without the picker shifting left. */
+/* Idle (below) leaves the button in the grid's third column, so the picker never shifts left. */
 .stonetop-timeline-colours-reset {
 	grid-column: 3;
 	display: inline-flex;
@@ -57241,10 +57252,13 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	cursor: pointer;
 }
 
-/* Hidden but keeping its space, so the row doesn't shift when a colour is repainted. `!important`
-   to win over the stylesheet's own `hidden` rule near the top. */
-.stonetop-timeline-colours-reset[hidden] {
-	display: inline-flex !important;
+/* Idle (the kind wears its shipped colour, so there is nothing to put back) but keeping its space,
+   so the row doesn't shift when a colour is repainted. A state class rather than `hidden`, which
+   means gone everywhere else and would need an `!important` to out-weigh the rule near the top.
+   `visibility: hidden` already takes it out of the tab order and the accessibility tree; the
+   template and repaintRow also set `aria-hidden` and `tabindex="-1"` with the class, so neither
+   rests on this rule alone (tests/timeline/timeline-colours-menu.test.js). */
+.stonetop-timeline-colours-reset.is-idle {
 	visibility: hidden;
 }
 
@@ -58085,25 +58099,27 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 }
 
 /* The load disc's initial. White on the band fills measured 2.4 to 4.8:1 here (these pages lift
-   the fills toward bone), so each band wears its whole family: wash, ring and ink. Overloaded keeps
-   a solid fill and letters it in the page. Portraits wear no band. Guarded by expedition-polish.test.js. */
-:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
-	color: var(--st-btn-primary-text);
-	background: var(--st-btn-primary-bg);
-	box-shadow: inset 0 0 0 1px var(--st-btn-primary-border);
+   the fills toward bone), so each band wears its whole family: wash, ring and ink. The plain disc
+   is the primary button's pair, whose label the paper rule already reads. Overloaded keeps its
+   solid fill (the paper rule's) and letters it in the page, inside the primary ring. Portraits
+   wear no band. Re-pointed on the row, which is where the disc reads them; guarded by
+   expedition-polish.test.js. */
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row {
+	--stonetop-exp-ava-fill: var(--st-btn-primary-bg);
+	--stonetop-exp-ava-ring: var(--st-btn-primary-border);
 }
-:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
-	color: var(--st-green-text);
-	background: var(--st-green-bg);
-	box-shadow: inset 0 0 0 1px var(--st-green-border);
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light {
+	--stonetop-exp-ava-ink:  var(--st-green-text);
+	--stonetop-exp-ava-fill: var(--st-green-bg);
+	--stonetop-exp-ava-ring: var(--st-green-border);
 }
-:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
-	color: var(--st-red-text);
-	background: var(--st-red-bg);
-	box-shadow: inset 0 0 0 1px var(--st-red-border);
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy {
+	--stonetop-exp-ava-ink:  var(--st-red-text);
+	--stonetop-exp-ava-fill: var(--st-red-bg);
+	--stonetop-exp-ava-ring: var(--st-red-border);
 }
-:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
-	color: var(--st-page);
+:where(:root.stonetop-dark) .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over {
+	--stonetop-exp-ava-ink: var(--st-page);
 }
 
 /* The route readout's leg arrow: the faint step is 4.47:1 on the gold wash here. */
@@ -58919,16 +58935,17 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 }
 
 /* The expedition's load disc, light and heavy bands: white on their fills was 6.1:1. They take
-   their whole family instead, as on the dark pages (see the Lamplit block). */
-:root.stonetop-high-contrast .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
-	color: var(--st-green-text);
-	background: var(--st-green-bg);
-	box-shadow: inset 0 0 0 1px var(--st-green-border);
+   their whole family instead, as on the dark pages (see the Lamplit block), re-pointed on the row
+   where the disc reads them. The plain and overloaded discs keep paper's white on a solid fill. */
+:root.stonetop-high-contrast .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light {
+	--stonetop-exp-ava-ink:  var(--st-green-text);
+	--stonetop-exp-ava-fill: var(--st-green-bg);
+	--stonetop-exp-ava-ring: var(--st-green-border);
 }
-:root.stonetop-high-contrast .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo) {
-	color: var(--st-red-text);
-	background: var(--st-red-bg);
-	box-shadow: inset 0 0 0 1px var(--st-red-border);
+:root.stonetop-high-contrast .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy {
+	--stonetop-exp-ava-ink:  var(--st-red-text);
+	--stonetop-exp-ava-fill: var(--st-red-bg);
+	--stonetop-exp-ava-ring: var(--st-red-border);
 }
 /* The route readout's leg arrow: the faint step is 6.7:1 on the gold wash. */
 :root.stonetop-high-contrast .stonetop-journey .stonetop-journey-legs .j-arw { color: var(--st-text-muted); }

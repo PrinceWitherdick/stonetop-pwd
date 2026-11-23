@@ -105,6 +105,6 @@ describe("the sweep's place in the load", () => {
 	it("runs for the primary GM once per version, and cannot take the load down with it", () => {
 		const READY = readRepo("module/hooks/Ready.js");
 		const gated = READY.slice(READY.indexOf("if (isActingPrimaryGM()) {"));
-		expect(gated).toContain(`bestEffort("Places of Interest map-line cleanup", () => oncePerVersion("placeMapLine", clearAllPlaceMapLines))`);
+		expect(gated).toContain(`sweepOnce("Places of Interest map-line cleanup", "placeMapLine", clearAllPlaceMapLines)`);
 	});
 });

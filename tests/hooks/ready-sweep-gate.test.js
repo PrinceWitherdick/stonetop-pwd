@@ -48,7 +48,7 @@ describe("onReady's primary-GM blocks", () => {
 
 	it("runs the world sweeps, the token-link question included, only for a connected GM", () => {
 		for (const sweep of [
-			`oncePerVersion("moveRefresh", refreshHeldMoves)`,
+			`sweepOnce("refreshing held moves", "moveRefresh", refreshHeldMoves)`,
 			"_repairCharacterTokenLinks",
 			"_migrateTokenNameplates",
 			"_migrateNpcPlaceholderPortraits",

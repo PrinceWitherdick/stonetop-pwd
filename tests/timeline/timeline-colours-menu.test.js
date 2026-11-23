@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readRepo } from "../fakes/css.js";
 
 // THE GM'S COLOURS MENU. What is pinned: each row opens on what its kind wears on THIS page, a
 // pick and a Default move only that row, a pick that lands back on the shipped colour is no pick,
@@ -26,10 +27,30 @@ function makeDraft(world = {}) {
 	return new TimelineColoursDraft();
 }
 
+/** The Default button: its classes and attributes, as repaintRow sets them. Opens idle, as drawn. */
+function fakeReset() {
+	const classes = new Set(["stonetop-timeline-colours-reset", "is-idle"]);
+	const attrs = new Map([["aria-hidden", "true"], ["tabindex", "-1"]]);
+	return {
+		classList: { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c), on), contains: c => classes.has(c) },
+		setAttribute: (k, v) => attrs.set(k, String(v)),
+		removeAttribute: k => attrs.delete(k),
+		getAttribute: k => attrs.get(k) ?? null,
+		hidden: false,
+		/** Out of use: invisible but in its cell, and out of the tab order and the accessibility tree. */
+		get idle() {
+			const states = [classes.has("is-idle"), attrs.get("aria-hidden") === "true", attrs.get("tabindex") === "-1"];
+			if (states.every(Boolean)) return true;
+			if (!states.some(Boolean)) return false;
+			throw new Error(`half idle: ${JSON.stringify({ classes: [...classes], attrs: [...attrs] })}`);
+		},
+	};
+}
+
 /** A row as the template draws it, enough for `_repaintRow`. */
 function fakeRow(kind) {
 	const props = new Map();
-	const reset = { hidden: true };
+	const reset = fakeReset();
 	const note = { hidden: true };
 	const pick = { value: "" };
 	return {
@@ -107,6 +128,8 @@ describe("picking and putting back", () => {
 		draft.pick("wound", "#aa3300");
 		draft.repaintRow(row);
 		expect(draft._chosen("wound")).toBe("#aa3300");
+		expect(row.reset.idle).toBe(false);
+		// Never `hidden`, which would take its grid cell and move the picker (hidden-hides.test.js).
 		expect(row.reset.hidden).toBe(false);
 		expect(row.prop("--tl-kind")).toBe(kindColourSet("#aa3300").light.hex);
 	});
@@ -121,11 +144,27 @@ describe("picking and putting back", () => {
 	it("puts a kind back to default, picker and all", () => {
 		const draft = makeDraft({ wound: "#aa3300" });
 		const row = fakeRow("wound");
+		draft.repaintRow(row);
+		expect(row.reset.idle, "the world's colour has a Default to press").toBe(false);
 		draft.reset("wound");
 		draft.repaintRow(row, { syncPicker: true });
 		expect(draft._chosen("wound")).toBeNull();
-		expect(row.reset.hidden).toBe(true);
+		expect(row.reset.idle).toBe(true);
+		expect(row.reset.hidden).toBe(false);
 		expect(row.pick.value).toBe(TIMELINE_KIND_PALETTE.wound.light);
+	});
+});
+
+describe("the Default button's first paint", () => {
+	// The template draws the idle state repaintRow keeps: the class that keeps its cell, and the
+	// two attributes that keep it out of the tab order and the accessibility tree, all three on
+	// the same condition. Never `hidden`, which would take the cell and move the picker.
+	it("is drawn idle exactly as setResetIdle leaves it", () => {
+		const button = readRepo("templates/dialogs/timeline.hbs").match(/<button type="button" class="stonetop-timeline-colours-reset[^>]*>/)?.[0];
+		expect(button, "the Default button is gone from timeline.hbs").toBeTruthy();
+		expect(button).toContain('class="stonetop-timeline-colours-reset{{#unless repainted}} is-idle{{/unless}}"');
+		expect(button).toContain('{{#unless repainted}} aria-hidden="true" tabindex="-1"{{/unless}}');
+		expect(button).not.toMatch(/\shidden(?=[\s{>])/);
 	});
 });
 

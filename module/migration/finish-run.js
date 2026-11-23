@@ -23,7 +23,7 @@ import { PRIOR_SYSTEM_IDS } from "./compat.js";
 import { finishDocuments, residualCount, rewriteSheetClasses, rewriteCompendiumConfiguration, walkTargets } from "./finish.js";
 import { allTargets } from "./run.js";
 import { getSetting, setSetting } from "../settings.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { isActingPrimaryGM } from "../utils/primary-gm.js";
 import { progressSlice } from "../utils/progress-slice.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 
@@ -149,9 +149,9 @@ export async function finishSystemIdMigration(game = globalThis.game) {
 		result = await runFinishOnce(game, {
 			read:   () => getSetting(FINISH_SETTING),
 			write:  (value) => setSetting(FINISH_SETTING, value),
-			// isPrimaryGM() alone is true when NO GM is connected, so a lone player would run
+			// Not isPrimaryGM() alone, which is true when NO GM is connected: a lone player would run
 			// the whole sweep on the awaited ready path and then fail on the world-setting write.
-			canRun: () => Boolean(game?.user?.isGM) && isPrimaryGM(),
+			canRun: isActingPrimaryGM,
 			onProgress: p => bar.update(p)
 		});
 	} catch (err) {

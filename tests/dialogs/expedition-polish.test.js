@@ -172,7 +172,7 @@ describe("the stylesheet", () => {
 		// keeps it at a bare `button`'s weight: core's rule is layered and loses anyway, and a
 		// class-named transition of ours still wins over this one.
 		expect(declarations(CSS, ":where(.stonetop-expedition-dialog, .stonetop-journey) button"))
-			.toMatch(/transition:\s*background-color 0\.15s, border-color 0\.15s, color 0\.15s/);
+			.toMatch(/transition:\s*background-color var\(--st-duration\), border-color var\(--st-duration\), color var\(--st-duration\)/);
 		for (const tpl of ["expedition-journey.hbs", "../travel-map.hbs", "../shared-route.hbs"]) {
 			expect(read(`templates/dialogs/partials/${tpl}`), tpl).toMatch(/class="[^"]*\bstonetop-journey\b/);
 		}
@@ -185,15 +185,43 @@ describe("the stylesheet", () => {
 	});
 
 	it("letters the load disc in its band's own family on the dark and high-contrast pages, never on a portrait", () => {
-		const disc = ".stonetop-exp-load-ava:not(.stonetop-exp-load-ava--photo)";
-		const dark = band => `:where(:root.stonetop-dark) .stonetop-expedition-dialog ${band}${disc}`;
-		const hc = band => `:root.stonetop-high-contrast .stonetop-expedition-dialog ${band}${disc}`;
-		expect(declarations(CSS, dark(""))).toMatch(/color:\s*var\(--st-btn-primary-text\)/);
-		expect(declarations(CSS, dark(".stonetop-exp-load-row.lvl-light "))).toMatch(/color:\s*var\(--st-green-text\)/);
-		expect(declarations(CSS, dark(".stonetop-exp-load-row.lvl-heavy "))).toMatch(/color:\s*var\(--st-red-text\)/);
-		expect(declarations(CSS, dark(".stonetop-exp-load-row.lvl-over "))).toMatch(/color:\s*var\(--st-page\)/);
-		expect(declarations(CSS, hc(".stonetop-exp-load-row.lvl-light "))).toMatch(/color:\s*var\(--st-green-text\)/);
-		expect(declarations(CSS, hc(".stonetop-exp-load-row.lvl-heavy "))).toMatch(/color:\s*var\(--st-red-text\)/);
+		// The band colours are custom properties on the ROW and the disc reads them, so a palette
+		// re-points three properties instead of restating the disc at a band's weight, and the
+		// portrait paints over them at the disc's own weight instead of being :not()-ed out of
+		// every band rule.
+		const row = band => `.stonetop-expedition-dialog .stonetop-exp-load-row${band}`;
+		const dark = band => `:where(:root.stonetop-dark) ${row(band)}`;
+		const hc = band => `:root.stonetop-high-contrast ${row(band)}`;
+		const disc = declarations(CSS, ".stonetop-expedition-dialog .stonetop-exp-load-ava");
+		expect(disc).toMatch(/color:\s*var\(--stonetop-exp-ava-ink\)/);
+		expect(disc).toMatch(/background:\s*var\(--stonetop-exp-ava-fill\)/);
+		expect(disc).toMatch(/box-shadow:\s*inset 0 0 0 1px var\(--stonetop-exp-ava-ring\)/);
+		// Paper: the primary label (white) on the band's solid fill, no ring.
+		expect(declarations(CSS, row(""))).toMatch(/--stonetop-exp-ava-ink:\s*var\(--st-btn-primary-text\)/);
+		expect(declarations(CSS, row(""))).toMatch(/--stonetop-exp-ava-ring:\s*transparent/);
+		expect(declarations(CSS, row(".lvl-light"))).toMatch(/--stonetop-exp-ava-fill:\s*var\(--st-green-border\)/);
+		expect(declarations(CSS, row(".lvl-heavy"))).toMatch(/--stonetop-exp-ava-fill:\s*var\(--st-red-border\)/);
+		expect(declarations(CSS, row(".lvl-over"))).toMatch(/--stonetop-exp-ava-fill:\s*var\(--st-red-text\)/);
+		// Dark: the primary pair, each band its whole family, overloaded lettered in the page.
+		expect(declarations(CSS, dark(""))).toMatch(/--stonetop-exp-ava-fill:\s*var\(--st-btn-primary-bg\)/);
+		expect(declarations(CSS, dark(""))).toMatch(/--stonetop-exp-ava-ring:\s*var\(--st-btn-primary-border\)/);
+		for (const [band, family] of [[".lvl-light", "green"], [".lvl-heavy", "red"]]) {
+			for (const pick of [dark, hc]) {
+				const body = declarations(CSS, pick(band));
+				expect(body, pick(band)).toMatch(new RegExp(`--stonetop-exp-ava-ink:\\s*var\\(--st-${family}-text\\)`));
+				expect(body, pick(band)).toMatch(new RegExp(`--stonetop-exp-ava-fill:\\s*var\\(--st-${family}-bg\\)`));
+				expect(body, pick(band)).toMatch(new RegExp(`--stonetop-exp-ava-ring:\\s*var\\(--st-${family}-border\\)`));
+			}
+		}
+		expect(declarations(CSS, dark(".lvl-over"))).toMatch(/--stonetop-exp-ava-ink:\s*var\(--st-page\)/);
+		// Nothing paints the disc per band any more: a band rule on the disc itself is the old
+		// weight race (and the per-band photo reset it needed) coming back.
+		const perBand = [...CSS.matchAll(/([^{}]+)\{[^{}]*\}/g)].map(m => m[1].trim())
+			.filter(sel => /lvl-[a-z]+[^,]*\.stonetop-exp-load-ava/.test(sel));
+		expect(perBand).toEqual([]);
+		const photo = declarations(CSS, ".stonetop-expedition-dialog .stonetop-exp-load-ava--photo");
+		expect(photo).toMatch(/background:\s*none/);
+		expect(photo).toMatch(/box-shadow:\s*none/);
 	});
 });
 
