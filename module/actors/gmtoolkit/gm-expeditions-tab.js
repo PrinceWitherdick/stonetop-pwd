@@ -21,10 +21,13 @@
 // a card pointing at nothing; the next Run mints a fresh trip and writes the new id back. That is
 // why nothing here watches the log for deletions, and why there is no reconciliation pass: the
 // pointer is repaired by being used. What it must NOT do is TALK as if the trip were there: the card's
-// "On the road" pill and its Run button's "Open" read `onTheRoad` (below), which asks the log, never
-// a bare non-empty `tripId`.
+// Run button's "Open" reads `tripLogged` and its "On the road" pill `onTheRoad` (below), which ask
+// the log, never a bare non-empty `tripId`. Those two words are the one thing here that does watch
+// the log (`redrawStaleTripMarks`), because setting out and coming home happen in the walkthrough,
+// where nothing else redraws this sheet.
 import { GmBundleTab, STONETOP_EXPEDITION_DRAG_TYPE, normalizeBundle } from "./gm-bundle-tab.js";
 import { ExpeditionDialog } from "../../dialogs/ExpeditionDialog.js";
+import { openApplications } from "../../utils/open-windows.js";
 
 /**
  * One prepped expedition, in the shape the schema and the sheet agree on.
@@ -67,17 +70,42 @@ async function runExpedition(tab, id) {
 }
 
 /**
- * Stamp `onTheRoad` on every card of a published Expeditions context: bound to a trip the log
- * STILL holds. A stale `tripId` is normal (see the head of this file), and a card that said "On the
- * road" or offered to "Open" a deleted trip would be promising a resume that Run is not going to
- * give: it mints a fresh trip at step 0.
+ * Stamp two flags on every card of a published Expeditions context. `tripLogged`: bound to a trip
+ * the log STILL holds, so Run says "Open". `onTheRoad`: that trip has also set out and is not yet
+ * home, so the card says "On the road". A stale `tripId` is normal (see the head of this file), and
+ * a card that offered to "Open" a deleted trip would be promising a resume that Run is not going to
+ * give: it mints a fresh trip at step 0. A trip still being charted, or one stamped home, is in the
+ * log but not under way.
  *
- * Read once per render, through `ExpeditionDialog.loggedTripIds`, off the same log `openOnTrip`
+ * Read once per render, through `ExpeditionDialog.loggedTrips`, off the same log `openOnTrip`
  * reads, so the words and the press agree.
  */
-export function markTripsOnTheRoad(published, ids = ExpeditionDialog.loggedTripIds()) {
+export function markTripsOnTheRoad(published, { ids, underWay } = ExpeditionDialog.loggedTrips()) {
 	for (const card of [...(published?.active ?? []), ...(published?.completed ?? [])]) {
-		card.onTheRoad = !!card.tripId && ids.has(card.tripId);
+		card.tripLogged = !!card.tripId && ids.has(card.tripId);
+		card.onTheRoad = card.tripLogged && underWay.has(card.tripId);
+	}
+}
+
+/** What the cards' "Open" and "On the road" are read from, as one comparable string. */
+export function tripMarksKey({ ids, underWay } = ExpeditionDialog.loggedTrips()) {
+	return JSON.stringify([[...ids].sort(), [...underWay].sort()]);
+}
+
+/**
+ * Redraw every open GM Toolkit sheet whose cards were drawn from a different `tripMarksKey`. Called
+ * on every write of the walkthrough's log (Ready.js `onExpeditionLog`), after the open window has
+ * folded it in, so a trip that sets out or comes home relabels its card. A write that moves neither
+ * set (a typed note) redraws nothing, so typing in the walkthrough does not repaint the Toolkit.
+ * Only sheets already drawn once are asked (`_tripMarksKey` is set by the context build).
+ * (gm-expeditions-tab.test.js, "relabels its card when the trip sets out")
+ */
+export function redrawStaleTripMarks(apps = openApplications()) {
+	let key;
+	for (const app of apps) {
+		if (!(app?._expeditions instanceof GmBundleTab) || !app.rendered || app._tripMarksKey === undefined) continue;
+		key ??= tripMarksKey();
+		if (app._tripMarksKey !== key) app.render(false);
 	}
 }
 
@@ -127,7 +155,9 @@ export function withGmExpeditionsTab(Base) {
 		 */
 		async _addGmExpeditionsContext(context) {
 			await this._expeditions.addContext(context);
-			markTripsOnTheRoad(context.stonetop?.[EXPEDITIONS_TAB.contextKey]);
+			const trips = ExpeditionDialog.loggedTrips();
+			markTripsOnTheRoad(context.stonetop?.[EXPEDITIONS_TAB.contextKey], trips);
+			this._tripMarksKey = tripMarksKey(trips);
 		}
 
 		/** The tab's interactions, delegated on the sheet root. Call from activateListeners. */

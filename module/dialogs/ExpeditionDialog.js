@@ -95,7 +95,7 @@ import {
 	legTimeLabel, readSharedRoute, shareRoute, sharedRequirementLines, sharedRoutePayload, sharedRouteState,
 	sharedRoutePlace, sharedStopName, shareRouteProgress, stopSharingRoute,
 } from "../utils/shared-route.js";
-import { roadLegs, roadWhere, steppedProgress, tripProgress, tripStatus } from "../utils/trip-progress.js";
+import { roadLegs, roadWhere, steppedProgress, tripProgress, tripStatus, tripUnderWay } from "../utils/trip-progress.js";
 import { postSharedRouteCard, sharedRouteNotice } from "./SharedRouteWindow.js";
 import { shareMapFor } from "./share-map.js";
 import { RoadRationsDialog } from "./RoadRationsDialog.js";
@@ -627,7 +627,11 @@ export class ExpeditionDialog extends StepperDialog {
 		const done = {
 			chart:       () => chartPicked(trip.chart).length > 0 || !!String(trip.chart?.route ?? "").trim(),
 			journey:     () => route?.legs?.length > 0,
-			requisition: () => trip.requisitioned?.length > 0,
+			// Surplus taken counts too: the step's own text says Surplus needs no roll, so a trip that
+			// borrowed no asset may still have settled it (expedition-polish.test.js, "Surplus alone").
+			// The note is read as words, so a cleared editor's empty "<p></p>" is no answer.
+			requisition: () => trip.requisitioned?.length > 0 || Number(trip.surplusOut) > 0
+				|| !!htmlToPlainText(trip.requisition),
 			running:     () => !!trip.setOut?.season,
 			home:        () => !!trip.timelineRecorded?.season,
 		};
@@ -723,20 +727,24 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
-	 * The trip ids `openOnTrip` would find right now: an open window's own copy of the log (its draft
-	 * may be ahead of the world, see below), else the setting. For the GM Toolkit's expedition cards,
-	 * whose "On the road" and "Open" must not promise a trip that Run would mint afresh. An empty set
-	 * when the log cannot be read at all (no `game` yet, or the setting unregistered: getObjectSetting
-	 * reads either as {}), which reads as "not under way", the answer Run then repairs.
+	 * The trips `openOnTrip` would find right now, read off an open window's own copy of the log (its
+	 * draft may be ahead of the world, see below), else the setting. For the GM Toolkit's expedition
+	 * cards: `ids` is every logged trip, which turns Run to "Open" (never promise a trip Run would
+	 * mint afresh); `underWay` is the ones set out and not yet home (`tripUnderWay`), which earn the
+	 * "On the road" chip. Both empty when the log cannot be read at all (no `game` yet, or the
+	 * setting unregistered: getObjectSetting reads either as {}), the answer Run then repairs.
 	 *
 	 * Here and not in the tab, so the tab keeps no second opinion of how a trip is stored.
 	 *
-	 * @returns {Set<string>}
+	 * @returns {{ids: Set<string>, underWay: Set<string>}}
 	 */
-	static loggedTripIds() {
+	static loggedTrips() {
 		const open = findOpenApp(w => w.id === "stonetop-expedition");
 		const log = open?.rendered ? open._log() : normalizeLog(getObjectSetting(EXPEDITION_LOG_SETTING));
-		return new Set(log.list.map(entry => entry?.id));
+		return {
+			ids:      new Set(log.list.map(entry => entry?.id)),
+			underWay: new Set(log.list.filter(tripUnderWay).map(entry => entry?.id)),
+		};
 	}
 
 	/**

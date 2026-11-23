@@ -5,7 +5,7 @@
 // written against, so a route changed since reads as 0 and an edit needs no reset code.
 // Pure over its arguments. Guarded by tests/utils/trip-progress.test.js.
 
-import { journeyKey } from "./travel-route.js";
+import { journeyKey, journeyRoute } from "./travel-route.js";
 import { format } from "./i18n.js";
 import { clampInt } from "./clamp-int.js";
 
@@ -55,6 +55,20 @@ export function roadWhere(legs, reached, { setOut = false } = {}) {
 	if (at === total) return format(`${key}.arrived`, { place: legs.at(-1).toName });
 	if (at > 0) return format(`${key}.onLeg`, { n: at + 1, total, place: legs[at].toName });
 	return format(`${key}.${setOut ? "atStart" : "notSetOut"}`, { place: legs[0].fromName });
+}
+
+/**
+ * Whether a trip is under way: "road" or "arrived" in `tripStatus`, for readers that hold the logged
+ * trip but not its solved route, such as the GM Toolkit's expedition cards. The route is solved
+ * (`journeyRoute`, the walkthrough's own) only for a trip neither set out nor home with a stored leg
+ * count, so a card can never call a trip "On the road" whose journey no longer solves.
+ */
+export function tripUnderWay(trip) {
+	if (trip?.timelineRecorded?.season) return false;
+	if (trip?.setOut?.season) return true;
+	const stored = trip?.progress;
+	if (!(Number(stored?.reached) > 0) || stored?.key !== journeyKey(trip?.journey)) return false;
+	return tripProgress(trip, journeyRoute(trip?.journey)).started;
 }
 
 /**

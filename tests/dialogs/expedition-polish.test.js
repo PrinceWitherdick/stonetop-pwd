@@ -131,6 +131,15 @@ describe("the rail's done ticks", () => {
 		expect(doneKeys(dialog([SETTLED]))).toEqual(["chart", "journey", "requisition", "running", "home"]);
 	});
 
+	it("tick Requisition for Surplus alone, or a stored note, with no asset borrowed", () => {
+		const bare = { id: "trip-1", title: "", createdAt: 0 };
+		expect(doneKeys(dialog([{ ...bare, surplusOut: 2 }]))).toEqual(["requisition"]);
+		expect(doneKeys(dialog([{ ...bare, requisition: "<p>The mule.</p>" }]))).toEqual(["requisition"]);
+		// A note field the GM cleared stores the editor's empty paragraph, which is no answer.
+		expect(doneKeys(dialog([{ ...bare, requisition: "<p></p>" }]))).toEqual([]);
+		expect(doneKeys(dialog([{ ...bare, requisition: "<p>&nbsp;</p>" }]))).toEqual([]);
+	});
+
 	it("are drawn from getData, so the nav's other callers never read the log for them", () => {
 		expect(read("module/dialogs/ExpeditionDialog.js")).toMatch(/steps:\s+this\._railTicks\(nav\.steps, route\)/);
 	});

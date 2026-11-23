@@ -46,6 +46,7 @@ import { redrawForSettlement } from "../actors/settlement/settlement-actor.js";
 import { isResidentsWriter, onCreateActorForResidents, onPreUpdateActorForResidents, onUpdateActorForResidents, sweepSettlementResidents } from "../actors/settlement/settlement-residents.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
+import { redrawStaleTripMarks } from "../actors/gmtoolkit/gm-expeditions-tab.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
 import { refreshWeatherFx } from "../seasons/current-weather.js";
 import { postFxMasterSuggestionOnce } from "../seasons/fxmaster-suggestion.js";
@@ -522,7 +523,11 @@ export async function onReady() {
 	// the console.
 	game.stonetop.saveChronicle     = () => writeChronicle().then(j => j?.sheet?.render(true));
 	game.stonetop.openExpedition    = () => ExpeditionDialog.open();
-	game.stonetop.onExpeditionLog   = (value, userId) => ExpeditionDialog.onLogChanged(value, userId);
+	// The open walkthrough folds the write in first, so the Toolkit's cards are relabelled from it.
+	game.stonetop.onExpeditionLog   = (value, userId) => {
+		ExpeditionDialog.onLogChanged(value, userId);
+		redrawStaleTripMarks();
+	};
 	// GM-only, here and again in WeatherDialog.open for any caller that reaches the class itself.
 	game.stonetop.openWeather       = () => (game.user?.isGM ? WeatherDialog.open() : null);
 	// Put the canvas weather back in step with the weather-effect settings. Registered here

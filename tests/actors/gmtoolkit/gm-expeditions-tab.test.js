@@ -24,11 +24,12 @@ vi.mock("../../../module/book2-art/travel-map-art.js", () => ({
 	resolveTravelMap:   () => Promise.resolve(null),
 }));
 
-const { withGmExpeditionsTab, normalizeExpedition, markTripsOnTheRoad, EXPEDITIONS_TAB } =
+const { withGmExpeditionsTab, normalizeExpedition, markTripsOnTheRoad, tripMarksKey, redrawStaleTripMarks, EXPEDITIONS_TAB } =
 	await import("../../../module/actors/gmtoolkit/gm-expeditions-tab.js");
 const { ENCOUNTERS_TAB, withGmEncountersTab } =
 	await import("../../../module/actors/gmtoolkit/gm-encounters-tab.js");
 const { ExpeditionDialog } = await import("../../../module/dialogs/ExpeditionDialog.js");
+const BUNDLE_TAB = await import("../../../module/actors/gmtoolkit/gm-bundle-tab.js");
 
 const CSS         = readCss();
 const STONETOP_JS = read("stonetop.js");
@@ -425,7 +426,8 @@ describe("the Expeditions tab: running one", () => {
 	});
 
 	// A GM who deletes a trip out of the walkthrough's own log leaves this card pointing at
-	// nothing. The pointer is repaired by being used, which is why nothing watches that log.
+	// nothing. The pointer is repaired by being used, which is why nothing watches that log for
+	// deletions.
 	it("takes a fresh trip when the one it named is gone from the log", async () => {
 		const { actor } = await press(
 			[{ id: "x1", name: "To the Barrier Pass", tripId: "deleted", entries: [] }],
@@ -438,7 +440,7 @@ describe("the Expeditions tab: running one", () => {
 	// lying about it.
 	it("turns from starting a trip into reopening one", () => {
 		expect(CARD_MARKUP).toMatch(/stonetop-gm-expedition-run/);
-		expect(CARD_MARKUP).toMatch(/\{\{#if this\.onTheRoad\}\}[\s\S]*?expeditions\.reopen"[\s\S]*?\{\{else\}\}[\s\S]*?expeditions\.run"/);
+		expect(CARD_MARKUP).toMatch(/\{\{#if this\.tripLogged\}\}[\s\S]*?expeditions\.reopen"[\s\S]*?\{\{else\}\}[\s\S]*?expeditions\.run"/);
 		expect(CARD_MARKUP).not.toMatch(/\{\{#if tripId\}\}/);
 		// It shares the foot with the complete toggle, and the body is a flex COLUMN — so the row
 		// is what keeps them side by side rather than stacked.
@@ -453,18 +455,53 @@ describe("the Expeditions tab: running one", () => {
 	// which is a different thing from what was gathered beforehand — and a second store for it
 	// here would be two records of one trip.
 	// A STALE `tripId` is normal (the GM deleted the trip from the walkthrough's log), and Run then
-	// mints a fresh trip at step 0. So "On the road" and "Open" follow the LOG, not the field.
-	it("says a card is on the road only while the log still holds its trip", () => {
+	// mints a fresh trip at step 0. So "Open" and "On the road" follow the LOG, not the field; and
+	// "On the road" further needs the trip set out and not yet home (trip-progress.js `tripUnderWay`).
+	// Setting out and coming home are pressed in the walkthrough, which redraws only itself. So
+	// every write of its log asks each drawn Toolkit whether its cards' words are now wrong.
+	it("relabels its card when the trip sets out, and stays still for a typed note", () => {
+		const { GmBundleTab } = BUNDLE_TAB;
+		const sheet = (key, rendered = true) => {
+			const app = new (withGmExpeditionsTab(class {}))();
+			Object.assign(app, { rendered, _tripMarksKey: key, render: vi.fn() });
+			expect(app._expeditions).toBeInstanceOf(GmBundleTab);
+			return app;
+		};
+		const spy = vi.spyOn(ExpeditionDialog, "loggedTrips")
+			.mockReturnValue({ ids: new Set(["t1"]), underWay: new Set(["t1"]) });
+		try {
+			const now = tripMarksKey({ ids: new Set(["t1"]), underWay: new Set(["t1"]) });
+			const before = tripMarksKey({ ids: new Set(["t1"]), underWay: new Set() });
+			const stale = sheet(before), current = sheet(now), closed = sheet(before, false), undrawn = sheet(undefined);
+			redrawStaleTripMarks([stale, current, closed, undrawn, { rendered: true, render: vi.fn() }]);
+			expect(stale.render).toHaveBeenCalledWith(false);
+			expect(current.render).not.toHaveBeenCalled();
+			expect(closed.render).not.toHaveBeenCalled();
+			expect(undrawn.render).not.toHaveBeenCalled();
+		} finally {
+			spy.mockRestore();
+		}
+		// Wired to the setting's change, after the walkthrough has folded the write in.
+		expect(read("module/hooks/Ready.js"))
+			.toMatch(/ExpeditionDialog\.onLogChanged\(value, userId\);\s*redrawStaleTripMarks\(\);/);
+		// Order of ids does not matter to the key.
+		expect(tripMarksKey({ ids: new Set(["b", "a"]), underWay: new Set() }))
+			.toBe(tripMarksKey({ ids: new Set(["a", "b"]), underWay: new Set() }));
+	});
+
+	it("says Open while the log holds a card's trip, and On the road only while that trip is under way", () => {
 		const published = {
-			active:    [{ id: "a", tripId: "t1" }, { id: "b", tripId: "gone" }, { id: "c", tripId: "" }],
+			active:    [{ id: "a", tripId: "t1" }, { id: "b", tripId: "t2" }, { id: "c", tripId: "gone" }, { id: "e", tripId: "" }],
 			completed: [{ id: "d", tripId: "t1" }],
 		};
-		markTripsOnTheRoad(published, new Set(["t1"]));
-		expect(published.active.map(c => c.onTheRoad)).toEqual([true, false, false]);
+		markTripsOnTheRoad(published, { ids: new Set(["t1", "t2"]), underWay: new Set(["t1"]) });
+		expect(published.active.map(c => c.tripLogged)).toEqual([true, true, false, false]);
+		expect(published.active.map(c => c.onTheRoad)).toEqual([true, false, false, false]);
 		expect(published.completed[0].onTheRoad).toBe(true);
 		// A log that cannot be read (no game yet) is an empty one: every card says Run.
 		const unread = { active: [{ id: "a", tripId: "t1" }], completed: [] };
 		markTripsOnTheRoad(unread);
+		expect(unread.active[0].tripLogged).toBe(false);
 		expect(unread.active[0].onTheRoad).toBe(false);
 	});
 
@@ -478,10 +515,10 @@ describe("the Expeditions tab: running one", () => {
 		// GM had just typed, whose write was still on its way when Run was pressed.
 		expect(DIALOG_JS).toMatch(/open\._switchExpedition\(tripId\)/);
 		expect(DIALOG_JS).not.toMatch(/open\._logDraft = null/);
-		// And the tab reaches that log ONLY through the dialog (`openOnTrip`, `loggedTripIds`): no
+		// And the tab reaches that log ONLY through the dialog (`openOnTrip`, `loggedTrips`): no
 		// settings read of its own, and no second opinion about the shape a trip is stored in.
 		const TAB_JS = read("module/actors/gmtoolkit/gm-expeditions-tab.js");
 		expect([...TAB_JS.matchAll(/^import .*?from "([^"]+)";$/gm)].map(m => m[1]))
-			.toEqual(["./gm-bundle-tab.js", "../../dialogs/ExpeditionDialog.js"]);
+			.toEqual(["./gm-bundle-tab.js", "../../dialogs/ExpeditionDialog.js", "../../utils/open-windows.js"]);
 	});
 });

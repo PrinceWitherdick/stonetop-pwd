@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { roadLegs, steppedProgress, tripProgress, tripStatus } from "../../module/utils/trip-progress.js";
-import { journeyKey } from "../../module/utils/travel-route.js";
+import { roadLegs, steppedProgress, tripProgress, tripStatus, tripUnderWay } from "../../module/utils/trip-progress.js";
+import { journeyKey, journeyRoute } from "../../module/utils/travel-route.js";
 
 // A trip's place on its route (Running the journey's road panel). The count is stored with the key of
 // the route it was counted on, so a route changed since reads as 0 and needs no reset.
@@ -65,5 +65,35 @@ describe("tripStatus", () => {
 
 	it("is on the road with no route at all once they have set out", () => {
 		expect(tripStatus({ setOut: { season: "summer", year: 1 } }, null)).toBe("road");
+	});
+});
+
+// The GM Toolkit's expedition cards hold the logged trip but not its solved route, and their "On
+// the road" chip must agree with tripStatus's "road" or "arrived".
+describe("tripUnderWay", () => {
+	it("agrees with tripStatus wherever the route is not needed to tell", () => {
+		const setOut = { setOut: { season: "summer", year: 1 } };
+		const home = { timelineRecorded: { season: "autumn", year: 1 } };
+		for (const t of [trip(undefined), trip(0), trip(0, setOut), trip(1), trip(3), trip(3, home), trip(0, { ...setOut, ...home })]) {
+			expect(tripUnderWay(t)).toBe(["road", "arrived"].includes(tripStatus(t, journeyRoute(journey))));
+		}
+	});
+
+	// A place on its journey was removed since a leg was counted: the walkthrough's banner says
+	// "Planning" (tripStatus over no route), so the card must not say "On the road".
+	it("does not count legs on a journey that no longer solves to a route", () => {
+		const gone = { origin: "stonetop", destination: "a-place-since-removed" };
+		const t = { journey: gone, progress: { reached: 2, key: journeyKey(gone) } };
+		expect(journeyRoute(gone)).toBeNull();
+		expect(tripStatus(t, null)).toBe("planning");
+		expect(tripUnderWay(t)).toBe(false);
+	});
+
+	it("does not count legs travelled on a route since changed", () => {
+		expect(tripUnderWay({ ...trip(2), journey: { origin: "stonetop", destination: "the-steplands" } })).toBe(false);
+	});
+
+	it("reads no trip as not under way", () => {
+		expect(tripUnderWay(undefined)).toBe(false);
 	});
 });

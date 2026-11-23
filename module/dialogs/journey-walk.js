@@ -13,8 +13,10 @@ import { clampInt } from "../utils/clamp-int.js";
 const WALK_SECONDS_PER_LEG = 0.9;
 const WALK_SECONDS_MAX = 1.6;
 
-// One walk per map surface: a second step before the first has finished starts from where the
-// mark is drawn now rather than racing the first.
+// One walk per map surface: a second step before the first has finished ends the first where it
+// was headed (`cancelWalk` puts the mark at that walk's end) and walks on from there, rather than
+// racing it. So a double press jumps the rest of the first leg; following the curve from a mark
+// stopped mid-leg would need the old walk's path, which a redraw has already replaced.
 const walking = new WeakMap();
 
 /**
