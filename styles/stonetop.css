@@ -48766,21 +48766,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-secondary);
 }
 
-/* THE PENCIL BESIDE THE BUTTON, not in a notch at the bar's end. The Encounters and Expeditions
-   panes float their edit pencil (or, while editing, the done check) in the pane's top-right
-   corner (`.steading-edit-section > .steading-section-edit-toggle`), which is exactly where the
-   add button ends. Reserving a pencil's width at the bar's right left the button short of the
-   cards' right edge, a dead notch there whenever the pencil was not showing, which is nearly
-   always. So the button runs to the edge, and the pencil is ANCHORED to it: placed just left of
-   the button, on its centre line, in a gap the button keeps on its left (the lead is the one
-   thing on the bar that gives way). With no button (an empty view's bare bar) the anchor is
-   missing and the fallbacks put the pencil back in the corner, which is free then.
+/* THE PENCIL AFTER THE BUTTON, at the bar's end (the user's call: the pencil reads as the last
+   thing on the bar, not wedged between the "?" and "New encounter"). The Encounters and
+   Expeditions panes float their edit pencil (or, while editing, the done check) in the pane's
+   top-right corner (`.steading-edit-section > .steading-section-edit-toggle`), so the bar keeps a
+   26px notch at its right for it and the button stops at the notch. The notch is there whether or
+   not the pencil is showing, so the button never moves under the pointer when the pencil fades in.
 
-   Each pane names its own anchor, and a positioned element only ever takes an anchor inside its
-   own containing block (the pane), so two toolkit windows open at once cannot borrow each other's.
-
-   Behind `@supports`: a browser without anchor positioning keeps the reserved notch, which is
-   what every browser drew before. */
+   Horizontally the corner is enough; vertically the pencil sits on the button's CENTRE LINE, read
+   off an anchor, because the button's height follows the sheet's text size and a fixed `top`
+   drifts off it. Each pane names its own anchor, and a positioned element only takes an anchor in
+   its own containing block (the pane), so two toolkit windows open at once cannot borrow each
+   other's. With no button (an empty view's bare bar) the anchor is missing and the fallback `top`
+   applies. Guarded by tests/actors/gmtoolkit/gm-encounters-tab.test.js ("pencil ... right"). */
 /* The button at the bar's right edge, on all three views (the lead is sized to its words, so
    nothing else pushes it there). Three classes' weight, so it outranks the button's own
    `margin: 0` further down. */
@@ -48788,37 +48786,27 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin-left: auto;
 }
 
+.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) .stonetop-gm-pane-bar {
+	padding-right: 26px;
+}
+
+.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) > .steading-section-edit-toggle {
+	top: 7px;
+	right: 4px;
+}
+
 @supports (anchor-name: --a) {
 	.stonetop-gm-prep-panes > .tab.encounters  .stonetop-gm-pane-bar > .stonetop-gm-pane-add { anchor-name: --st-gm-encounters-add; }
 	.stonetop-gm-prep-panes > .tab.expeditions .stonetop-gm-pane-bar > .stonetop-gm-pane-add { anchor-name: --st-gm-expeditions-add; }
 
-	/* The pencil's room, on the button's left: 26px of it, inside the auto margin that already
-	   pushes the button right, so on a wide bar nothing moves at all. */
-	.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) .stonetop-gm-pane-bar > .stonetop-gm-pane-help {
-		margin-right: 26px;
-	}
-
 	.stonetop-gm-prep-panes > .tab.encounters > .steading-section-edit-toggle {
 		top: anchor(--st-gm-encounters-add center, 15px);
-		right: calc(anchor(--st-gm-encounters-add left, -4px) + 6px);
 		translate: 0 -50%;
 	}
 
 	.stonetop-gm-prep-panes > .tab.expeditions > .steading-section-edit-toggle {
 		top: anchor(--st-gm-expeditions-add center, 15px);
-		right: calc(anchor(--st-gm-expeditions-add left, -4px) + 6px);
 		translate: 0 -50%;
-	}
-}
-
-@supports not (anchor-name: --a) {
-	.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) .stonetop-gm-pane-bar {
-		padding-right: 26px;
-	}
-
-	.stonetop-gm-prep-panes > :is(.tab.encounters, .tab.expeditions) > .steading-section-edit-toggle {
-		top: 7px;
-		right: 2px;
 	}
 }
 

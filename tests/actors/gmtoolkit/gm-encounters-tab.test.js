@@ -880,21 +880,20 @@ describe("the Encounters tab: the pane around the cards", () => {
 		expect(strip(read("templates/actor/partials/gm-toolkit-tab-threats.hbs"))).not.toContain("stonetop-gm-pane-add");
 	});
 
-	// The pencil floats in the pane's corner, which is where the bar's button ends. The button
-	// runs to the cards' right edge, and the pencil is anchored just LEFT of it, in a gap the bar
-	// keeps there; only a browser without anchor positioning falls back to the reserved notch.
-	it("puts the pane's pencil just left of the bar's button, not in a notch at its end", () => {
+	// The pencil comes AFTER the bar's button, in a notch the bar keeps at its right end, on the
+	// button's centre line (read off an anchor so it holds at every text size).
+	it("puts the pane's pencil to the right of the bar's button, on its centre line", () => {
+		// The notch, for every browser: not inside either @supports block.
+		expect(CSS).toMatch(/\n\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\) \.stonetop-gm-pane-bar\s*\{\s*padding-right:\s*2\dpx;/);
+		expect(CSS).toMatch(/\n\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\) > \.steading-section-edit-toggle\s*\{[^}]*right:\s*\dpx;/);
 		const supports = CSS.slice(CSS.indexOf("@supports (anchor-name: --a)"));
 		expect(supports).toMatch(/\.tab\.encounters\s+\.stonetop-gm-pane-bar > \.stonetop-gm-pane-add\s*\{\s*anchor-name:\s*--st-gm-encounters-add;/);
 		expect(supports).toMatch(/\.tab\.expeditions\s+\.stonetop-gm-pane-bar > \.stonetop-gm-pane-add\s*\{\s*anchor-name:\s*--st-gm-expeditions-add;/);
-		// Each pane's pencil reads its OWN pane's anchor, with a fallback for a bare bar.
-		expect(supports).toMatch(/\.tab\.encounters > \.steading-section-edit-toggle\s*\{[^}]*right:\s*calc\(anchor\(--st-gm-encounters-add left, -?\d+px\)/);
-		expect(supports).toMatch(/\.tab\.expeditions > \.steading-section-edit-toggle\s*\{[^}]*right:\s*calc\(anchor\(--st-gm-expeditions-add left, -?\d+px\)/);
-		// The bar reserves nothing at its right while anchors work...
-		const anchored = supports.slice(0, supports.indexOf("@supports not (anchor-name: --a)"));
-		expect(anchored).not.toMatch(/padding-right/);
-		// ...and the old notch is kept only for a browser without them.
-		expect(CSS).toMatch(/@supports not \(anchor-name: --a\)\s*\{\s*\.stonetop-gm-prep-panes > :is\(\.tab\.encounters, \.tab\.expeditions\) \.stonetop-gm-pane-bar\s*\{\s*padding-right:\s*2\dpx;/);
+		// Each pane's pencil reads its OWN pane's anchor for its height, with a fallback for a bare bar.
+		expect(supports).toMatch(/\.tab\.encounters > \.steading-section-edit-toggle\s*\{[^}]*top:\s*anchor\(--st-gm-encounters-add center, \d+px\)/);
+		expect(supports).toMatch(/\.tab\.expeditions > \.steading-section-edit-toggle\s*\{[^}]*top:\s*anchor\(--st-gm-expeditions-add center, \d+px\)/);
+		// Nothing places it left of the button any more.
+		expect(CSS).not.toMatch(/anchor\(--st-gm-(encounters|expeditions)-add left/);
 	});
 
 	// The full intro is a disclosure every reader can reach: a real button with aria-expanded and
