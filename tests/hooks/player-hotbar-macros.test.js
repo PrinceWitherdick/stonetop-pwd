@@ -10,8 +10,8 @@ const DIE_OF_FATE = { name: "Die of Fate", command: "game.stonetop?.rollDieOfFat
 
 // A macro doc as the function reads it: `canExecute` stands in for the ownership grant
 // (Foundry's Macro#canUserExecute is testUserPermission(user, "LIMITED")).
-function macro(id, { name = DIE_OF_FATE.name, command = DIE_OF_FATE.command, canExecute = true } = {}) {
-	return { id, name, command, canExecute };
+function macro(id, { name = DIE_OF_FATE.name, command = DIE_OF_FATE.command, canExecute = true, img } = {}) {
+	return { id, name, command, canExecute, img };
 }
 
 // The slice of `game` the placement touches, with a hotbar that records assignments the
@@ -67,6 +67,17 @@ describe("ensurePlayerHotbarMacros", () => {
 	// mistaken for the system one (and left un-slotted in its place).
 	it("ignores a same-named macro with a different command", async () => {
 		global.game = world({ macros: [macro("theirs", { command: "ui.notifications.info('hi')" })] });
+		await ensurePlayerHotbarMacros();
+		expect(global.game.user.hotbar).toEqual({});
+	});
+
+	// Our copy with its command edited is still found as ours (name and icon), but what it runs is
+	// the GM's now and may be GM-only, so it is left for the GM to put on a player's bar.
+	it("does not place our copy once the GM has edited its command", async () => {
+		global.game = world({ macros: [macro("edited", {
+			command: "ui.notifications.info('gm only')",
+			img: "systems/stonetop-pwd/assets/icons/macros/die-of-fate.svg",
+		})] });
 		await ensurePlayerHotbarMacros();
 		expect(global.game.user.hotbar).toEqual({});
 	});

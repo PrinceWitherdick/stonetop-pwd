@@ -85,6 +85,28 @@ describe("_ensureHotbarMacro", () => {
 	});
 });
 
+describe("an edited command", () => {
+	it("keeps a macro with our name and icon as ours, and creates no second one", async () => {
+		const edited = macroDoc("edited", { name: "Die of Fate", command: "ui.notifications.info('hi')", img: DIE_OF_FATE.img });
+		world([edited]);
+		await _ensureHotbarMacro(DIE_OF_FATE);
+
+		expect(global.Macro.create).not.toHaveBeenCalled();
+		expect(edited.command).toBe("ui.notifications.info('hi')");
+		expect(global.game.user.hotbar).toEqual({ 4: "edited" });
+	});
+
+	// What it runs is the GM's now, and may be GM-only: sharing it would hand that to every player.
+	it("does not open an edited copy to everyone", async () => {
+		const edited = macroDoc("edited", { name: "Die of Fate", command: "ui.notifications.info('gm only')", img: DIE_OF_FATE.img });
+		world([edited]);
+		await _ensureHotbarMacro(DIE_OF_FATE);
+
+		expect(edited.ownership.default).toBe(0);
+		expect(edited.update).not.toHaveBeenCalled();
+	});
+});
+
 describe("_ensureSystemMacros", () => {
 	let priorFetch;
 	beforeEach(() => { priorFetch = global.fetch; global.fetch = vi.fn(async () => ({ ok: false })); });

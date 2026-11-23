@@ -1438,7 +1438,8 @@ export async function _ensureSystemMacros() {
 // order is applied per layout version by _reorderSystemMacros. The lookup keys on the
 // command as well as the name (_findSystemMacro), the same match the re-snap and the
 // player pass use, so a GM's own macro that happens to be called "Die of Fate" is never
-// adopted and has its icon overwritten; ours is created beside it. (The commands have never
+// adopted and has its icon overwritten; ours is created beside it. One with our name and our
+// icon is ours with its command edited, and is adopted as it stands. (The commands have never
 // changed since these shipped, so no world's real system copy is missed.) Run these
 // serially — each assignHotbarMacro writes the same user.hotbar document, so concurrent
 // calls would clobber each other.
@@ -1454,7 +1455,7 @@ export async function _ensureSystemMacros() {
 // Exported for its test — onReady is the only caller.
 export async function _ensureHotbarMacro({ name, img, command, slot, shared, legacy }) {
 	const OBSERVER = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
-	let macro = _findSystemMacro({ name, command });
+	let macro = _findSystemMacro({ name, command, img });
 	if (!macro && legacy) return;
 	if (!macro) {
 		macro = await Macro.create({
@@ -1464,8 +1465,10 @@ export async function _ensureHotbarMacro({ name, img, command, slot, shared, leg
 	} else {
 		const update = {};
 		if (macro.img !== img) update.img = img;
-		// Dotted, so a per-user grant the GM added by hand survives.
-		if (shared && (macro.ownership?.default ?? 0) < OBSERVER) update["ownership.default"] = OBSERVER;
+		// Dotted, so a per-user grant the GM added by hand survives. Never for a copy whose command
+		// the GM edited: what it runs now is theirs, and may be GM-only.
+		const edited = macro.command !== command;
+		if (shared && !edited && (macro.ownership?.default ?? 0) < OBSERVER) update["ownership.default"] = OBSERVER;
 		if (Object.keys(update).length) await macro.update(update);
 	}
 
@@ -1477,9 +1480,13 @@ export async function _ensureHotbarMacro({ name, img, command, slot, shared, leg
 }
 
 // The world's copy of one of our macros: name AND command, so a macro of the user's own that
-// shares a name is never mistaken for it.
-function _findSystemMacro({ name, command }) {
-	return game.macros.find(m => m.name === name && m.command === command);
+// shares a name is never mistaken for it. Failing that, name AND our icon: a GM who edited our
+// macro's command still has our copy, and creating a second one beside it would put a duplicate on
+// every GM's bar each load (system-macros-gm.test.js, "an edited command"). Such a copy is the GM's
+// to share: it is not opened to everyone, nor put on a player's bar.
+function _findSystemMacro({ name, command, img }) {
+	return game.macros.find(m => m.name === name && m.command === command)
+		?? (img ? game.macros.find(m => m.name === name && m.img === img) : undefined);
 }
 
 // Place the shared system macros (currently just the Die of Fate) on a PLAYER's hotbar.
@@ -1497,9 +1504,9 @@ function _findSystemMacro({ name, command }) {
 //
 // Exported for its test — onReady is the only caller.
 export async function ensurePlayerHotbarMacros() {
-	for (const { name, command, playerSlot } of _SYSTEM_MACROS.filter(m => m.shared)) {
-		const macro = _findSystemMacro({ name, command });
-		if (!macro?.canExecute) continue;
+	for (const { name, command, img, playerSlot } of _SYSTEM_MACROS.filter(m => m.shared)) {
+		const macro = _findSystemMacro({ name, command, img });
+		if (!macro?.canExecute || macro.command !== command) continue;
 		if (Object.values(game.user.hotbar).includes(macro.id)) continue;
 
 		const target = _isHotbarSlotFree(playerSlot) ? playerSlot : _firstFreeHotbarSlot();
