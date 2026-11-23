@@ -16,6 +16,17 @@ describe("setTooltip", () => {
 		expect(b.hasAttribute("data-tooltip")).toBe(false);
 	});
 
+	it("clears the other form when it sets one, since core reads data-tooltip-text first", () => {
+		const el = document.createElement("button");
+		setTooltip(el, "Ask the GM", { text: true });
+		setTooltip(el, "Already applied");
+		expect(el.getAttribute("data-tooltip")).toBe("Already applied");
+		expect(el.hasAttribute("data-tooltip-text")).toBe(false);
+		setTooltip(el, "Bram", { text: true });
+		expect(el.getAttribute("data-tooltip-text")).toBe("Bram");
+		expect(el.hasAttribute("data-tooltip")).toBe(false);
+	});
+
 	it("takes both forms away on no words, since an empty attribute is still an attribute", () => {
 		const el = document.createElement("button");
 		el.setAttribute("data-tooltip", "a");
