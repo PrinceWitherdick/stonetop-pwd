@@ -37263,6 +37263,21 @@ th:has(> .stonetop-roll-table-btn) {
 	border-top-color: rgb(var(--st-ink-rgb) / 0.1);
 }
 
+/* The open rail's collapse handle hangs in the 15px gutter LEFT of the rail's border
+   (`.stonetop-sidebar-toggle`, `left: -15px`), and in this dialog that gutter is the right
+   edge of the step column, the column that scrolls. Its scrollbar sat on the handle and hid
+   it. So while the rail is open the step column stops 15px short of the rail, which puts its
+   scrollbar just left of the handle's gutter, and gives the same 15px back out of its 20px
+   right padding, so the step text does not move. Collapsed, the handle is the strip itself
+   and owns no gutter, so the column runs to the strip as before. `:has()` is live, so this
+   follows the handle's class toggle with no re-render.
+   Guarded in tests/dialogs/expedition-moves-rail.test.js ("keeps the step column's scrollbar
+   off the handle"). */
+.stonetop-guide-split > .stonetop-guide-main:has(+ .stonetop-guide-moves-sidebar:not(.is-collapsed)) {
+	margin-right: 15px;
+	padding-right: 5px;
+}
+
 /* The sheets size their own <h3>s, and nothing does that inside a dialog, so this
    heading would come out at the UA default and dwarf a 200px column. Sized to the
    step prose beside it instead.

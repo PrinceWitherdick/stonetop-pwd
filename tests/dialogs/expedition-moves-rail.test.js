@@ -221,6 +221,23 @@ describe("the rail's styling", () => {
 		expect(CSS.indexOf(".stonetop-guide-moves-sidebar.is-collapsed"))
 			.toBeGreaterThan(CSS.indexOf(".stonetop-guide-moves-sidebar {"));
 	});
+
+	// The open rail's handle hangs 15px left of the rail's border, which in this dialog is the
+	// scrolling step column's right edge: its scrollbar covered the handle. The column has to
+	// stop that far short of an open rail, by exactly the handle's offset.
+	it("keeps the step column's scrollbar off the handle", () => {
+		const sel  = ".stonetop-guide-split > .stonetop-guide-main:has(+ .stonetop-guide-moves-sidebar:not(.is-collapsed)) {";
+		const at   = CSS.indexOf(sel);
+		expect(at).toBeGreaterThan(-1);
+		const rule = CSS.slice(at, CSS.indexOf("}", at));
+		const handle = CSS.slice(CSS.indexOf(".stonetop-sidebar-toggle {"));
+		const offset = Number(/\bleft:\s*-(\d+)px/.exec(handle.slice(0, handle.indexOf("}")))[1]);
+		expect(rule).toMatch(new RegExp(`margin-right:\\s*${offset}px`));
+		// The step text stays put: the margin comes back out of the shared 20px right padding.
+		expect(rule).toMatch(new RegExp(`padding-right:\\s*${20 - offset}px`));
+		// And the rail really is the column's next sibling, which `+` needs.
+		expect(HBS).toMatch(/<\/div>\s*(\{\{!--[\s\S]*?--\}\}\s*)?<div class="stonetop-moves-sidebar stonetop-guide-moves-sidebar/);
+	});
 });
 
 // The standing rule: a prose list on these surfaces is bulleted with the spiral, never a disc,
