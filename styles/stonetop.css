@@ -14558,13 +14558,12 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 	font-size: round(1em, 1px);
 }
 
-/* Two glyphs whose ARTWORK, not their box, sits low: the box is centred like every other icon's,
-   but the drawing inside it is not. Measured as a steady offset at every UI font size rather than
-   the grid's sawtooth (skull-and-crossbones -0.90px on average, the journey exit's double chevron
-   -0.63px at its fixed 9px), so a constant lift answers it. Per glyph, deliberately: a lift on the
-   shared icon rule above would push every other icon high. */
+/* A glyph whose ARTWORK, not its box, sits low: the box is centred like every other icon's, but
+   the drawing inside it is not. Measured as a steady offset at every UI font size rather than the
+   grid's sawtooth (skull-and-crossbones -0.90px on average), so a constant lift answers it. Per
+   glyph, deliberately: a lift on the shared icon rule above would push every other icon high.
+   The map's edge-arrow chevron is NOT one of these; see .stonetop-journey-arrow. */
 .stonetop-follower-dead-badge i { transform: translateY(-0.065em); }
-.stonetop-journey-canvas .stonetop-journey-arrow i { transform: translateY(-0.07em); }
 
 /* The character sheet's copy, which DOES trail a sentence — the appearance summary — rather than
    standing under a name. It gets the left gap that detaches it from that sentence, sits on the
@@ -42209,10 +42208,16 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	transition: transform var(--st-duration-sm) ease;
 }
 .stonetop-journey-canvas .stonetop-journey-pick:hover .stonetop-journey-dot { transform: scale(1.35); }
+/* NO LIFT on the chevron. A pin lands between pixels and the disc is drawn there, but the glyph
+   snaps to a whole pixel, so the chevron wobbles +-0.5px about the disc's centre whatever the CSS;
+   only its AVERAGE can be set. A -0.07em lift made that average 0.94px high at 1x (0.5 to 1.4px by
+   where the pin landed). Unlifted it averages within 0.42px at 1x to 2x, measured against the
+   disc's exact centre over 100 sub-pixel positions (z:/tmp/foundry-verify/map-mark-sweep.mjs).
+   10px rather than 9px: as well centred, and bigger. */
 .stonetop-journey-canvas .stonetop-journey-arrow {
 	display: inline-flex; align-items: center; justify-content: center;
 	width: 18px; height: 18px; border-radius: 50%;
-	font-size: 9px; color: var(--stonetop-route-case);
+	font-size: 10px; color: var(--stonetop-route-case);
 	background: #1b1009; border: 2px solid var(--stonetop-route-case);
 	box-shadow: var(--stonetop-route-mark-shadow);
 }
