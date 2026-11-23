@@ -45,6 +45,12 @@ describe("an icon in a template", () => {
 	it("is hidden from a screen reader when it carries nothing but its class", () => {
 		expect(offenders(/<i class="(?:fas|far|fab) [^"<>]*"><\/i>/g)).toEqual([]);
 	});
+
+	// `inert` is not the spelling: it says "not interactive", not "say nothing", and the bare-form
+	// check above never saw the 27 settlement and fight-header icons written this way.
+	it("is hidden with aria-hidden, never `inert`", () => {
+		expect(offenders(/<i\s[^>]*\binert\b[^>]*><\/i>/g)).toEqual([]);
+	});
 });
 
 describe("an icon in markup built in JS", () => {

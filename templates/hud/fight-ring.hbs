@@ -15,7 +15,7 @@
 	{{#each moves}}
 	<button type="button" class="stonetop-fight-ring-button" data-action="ringRoll" data-index="{{this.index}}"
 	        aria-label="{{this.aria}}" data-tooltip="{{this.aria}}" data-tooltip-direction="LEFT">
-		<i class="{{this.icon}}" inert></i>
+		<i class="{{this.icon}}" aria-hidden="true"></i>
 		<span class="stonetop-fight-ring-label">{{this.label}}</span>
 		{{#if ammo}}<span class="stonetop-fight-ring-ammo{{#if ammoOut}} is-out{{/if}}">{{this.ammo}}</span>{{/if}}
 	</button>
@@ -25,7 +25,7 @@
 	{{#each damage}}
 	<button type="button" class="stonetop-fight-ring-button" data-action="ringRoll" data-index="{{this.index}}"
 	        aria-label="{{this.aria}}" data-tooltip="{{this.aria}}" data-tooltip-direction="RIGHT">
-		<i class="{{this.icon}}" inert></i>
+		<i class="{{this.icon}}" aria-hidden="true"></i>
 		<span class="stonetop-fight-ring-label">{{this.label}}</span>
 		<span class="stonetop-fight-ring-formula">{{this.formula}}</span>
 	</button>

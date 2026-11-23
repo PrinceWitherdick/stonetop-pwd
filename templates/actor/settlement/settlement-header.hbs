@@ -27,14 +27,14 @@
 		{{#if canGazetteer}}
 		<button type="button" class="stonetop-settlement-chip" data-action="openGazetteer" data-reader-ok
 		        data-tooltip="{{localize "stonetop.settlement.gazetteerTooltip"}}">
-			<i class="fas fa-book-open" inert></i>
+			<i class="fas fa-book-open" aria-hidden="true"></i>
 			<span>{{localize "stonetop.settlement.gazetteer"}}</span>
 		</button>
 		{{/if}}
 		{{#if isGM}}
 		<button type="button" class="stonetop-settlement-chip{{#if hidden}} stonetop-settlement-chip--off{{/if}}" data-action="toggleHidden"
 		        data-tooltip="{{localize "stonetop.settlement.visibilityTooltip"}}">
-			<i class="fas {{#if hidden}}fa-eye-slash{{else}}fa-eye{{/if}}" inert></i>
+			<i class="fas {{#if hidden}}fa-eye-slash{{else}}fa-eye{{/if}}" aria-hidden="true"></i>
 			<span>{{#if hidden}}{{localize "stonetop.settlement.hidden"}}{{else}}{{localize "stonetop.settlement.shown"}}{{/if}}</span>
 		</button>
 		{{/if}}
