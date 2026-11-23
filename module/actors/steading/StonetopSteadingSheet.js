@@ -377,6 +377,22 @@ export function createStonetopSteadingSheetClass(Base) {
 			if (active === TIMELINE_TAB) syncTimelineTab(this, this.element?.[0]);
 		}
 
+		/**
+		 * The Notes tab, scrolled to its Plans: where the Improvements tab's pointer and a character's
+		 * own Plans send a project that is not an improvement (steading-plans.js#openSteadingPlans).
+		 * Focus goes to "New plan" for whoever may write one, else to the heading, so a keyboard reader
+		 * lands where the click said.
+		 */
+		_showPlans() {
+			this._tabs?.[0]?.activate?.("notes", { triggerCallback: true });
+			const root = this.element?.[0];
+			const heading = root?.querySelector?.("#steading-plans-title");
+			heading?.scrollIntoView?.({ block: "start" });
+			const target = root?.querySelector?.(".steading-plans .steading-plan-add") ?? heading;
+			if (target === heading) heading?.setAttribute?.("tabindex", "-1");
+			target?.focus?.({ preventScroll: true });
+		}
+
 		_injectHeaderToggle() {
 			// Master edit toggle: when on, every section is editable. Each section also has its
 			// own hover pencil for editing it in isolation. Shared with the character, NPC and
@@ -661,6 +677,9 @@ export function createStonetopSteadingSheetClass(Base) {
 			// position; getData stamps the same classes so the state also survives a re-render
 			// from elsewhere.
 			this._wireImprovementCategoryFilter(html[0].querySelector(".tab.improvements"));
+			// The intro's pointer to Plans, for a project that is not an improvement (Make a Plan, p.530).
+			// Bound for readers too: it only changes tab.
+			html[0].querySelector("[data-steading-open-plans]")?.addEventListener("click", () => this._showPlans());
 
 			// Drag a Place of Interest's lettered disc onto the canvas to drop a map
 			// note (handled by the dropCanvasData hook). Read-only viewers may drag too;

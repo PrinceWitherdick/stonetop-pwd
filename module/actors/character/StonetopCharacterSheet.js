@@ -173,6 +173,9 @@ import {PIETY, BOLSTER, PREPARATION_ARCANA, holdBlessing, shareBlessing} from ".
 import {giveAdvantageCardHtml, seekInsightQuestionsFor} from "./give-advantage.js";
 import {IRON_WILL, UNFETTERED, ironWill, unfettered} from "./will-and-restraint.js";
 import {openBolster, bolsterCardData, editPreparationFor, dropPreparation, preparationChip} from "./bolster.js";
+import {openSteadingPlans, plansView, wireSteadingNotesTab} from "../steading/steading-plans.js";
+import {editSteadingPlan} from "../steading/SteadingPlanDialog.js";
+import {characterPlanStore} from "./character-plans.js";
 import {inOverYourHeadCardHtml} from "./would-be-hero-cards.js";
 import {pickPersonOnMap} from "../../dialogs/RelationshipLinkDialog.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -557,6 +560,8 @@ const EXPEDITION_MOVE_HANDLERS = {
 // with no item id at all, and a player-authored custom move can carry any name. Each handler
 // does its own gating (editable, and the move LEARNED: an un-learned move is kept on the sheet
 // switched off, so clicking it posts its text and does nothing more).
+const MAKE_A_PLAN = "Make a Plan";
+const ARCANE_ADEPT = "Arcane Adept";
 const MOVE_USE_EFFECTS = {
 	[CONSECRATED_FLAME]:  sheet => sheet._consecrateFlame(),
 	[CONDEMN]:            sheet => sheet._openCondemnedIfJudge(CONDEMN),
@@ -587,6 +592,10 @@ const MOVE_USE_EFFECTS = {
 	// Iron Will's 1d4 at themselves, asked; Unfettered's debility, picked (will-and-restraint.js).
 	[IRON_WILL]:          sheet => sheet.isEditable && ironWill(sheet.actor),
 	[UNFETTERED]:         sheet => sheet.isEditable && unfettered(sheet.actor),
+	// Make a Plan (homefront, Book I p.530): the GM's requirements are written down with tick boxes, so
+	// using it opens this character's plan editor. Arcane Adept is "Make a Plan to invent it" (the Seeker).
+	[MAKE_A_PLAN]:        sheet => sheet.isEditable && editSteadingPlan(characterPlanStore(sheet.actor)),
+	[ARCANE_ADEPT]:       sheet => sheet.isEditable && ownsLearnedMoveNamed(sheet.actor, ARCANE_ADEPT) && editSteadingPlan(characterPlanStore(sheet.actor)),
 };
 
 // The same idea for moves that ROLL: their use does not fall through to the post-it-to-chat tail,
@@ -1699,6 +1708,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			context.stonetop.enrichedNotes = context.stonetop.notes
 				? await foundry.applications.ux.TextEditor.enrichHTML(context.stonetop.notes)
 				: "";
+			// Notes tab: this character's own plans (Make a Plan, p.530; character-plans.js), and whose
+			// Notes tab the village's shared plans are on, for the pointer under them.
+			context.stonetop.plans = plansView(characterPlanStore(this.actor)._flags.plans);
+			context.stonetop.steadingName = getStonetopSteadingActor()?.name ?? "";
 			context.stonetop.movelist ??= {};
 			// Kept for the name-click, which needs a move's SOURCE text to build its card and
 			// cannot read it off an item: a playbook move you have not taken is rendered from
@@ -4069,6 +4082,14 @@ export function createStonetopCharacterSheetClass(Base) {
 					ui.notifications?.error("Those notes could not be saved.");
 				});
 			}, true);
+			// The Notes tab's Plans (steading-plans.js), for whoever can write this character. Its tick
+			// handler stops the change before the sheet's submit-on-change sees it.
+			if (this.isEditable) {
+				const store = characterPlanStore(this.actor);
+				wireSteadingNotesTab(html[0], store, { within: ".character-notes", editPlan: planId => editSteadingPlan(store, planId) });
+			}
+			// The pointer to the village's plans, for readers too: opening the steading is not a write.
+			html[0].querySelector("[data-open-steading-plans]")?.addEventListener("click", () => openSteadingPlans());
 
 			html.find(".stonetop-create-character-btn").on("click", () => this._onNewCharacter());
 			html.find("[data-onboarding-start]").on("click", ev => {

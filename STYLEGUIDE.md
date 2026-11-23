@@ -402,6 +402,9 @@ Four skins. Pick one; do not restate its colours in a new rule.
 - Core gives every button in a V1 window `width: 100%`, `line-height: 28px` and
   `transition: all 0.5s`. The shared classes undo all three; a hand-rolled button has to as well.
 - Icon first, then the label. Buttons name what they do (section 8).
+- `.stonetop-readonly` turns off every button under it. A button that only takes the reader somewhere
+  (to another tab or sheet) stays live there with `pointer-events: auto` on its own class, as the Plans
+  pointers do (`.stonetop-plans-pointer-btn`, an Inline button in a gap-spaced `.stonetop-plans-pointer` row).
 
 ### Buttons beside a field
 

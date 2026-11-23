@@ -1,5 +1,15 @@
 <div class="tab notes" data-group="primary" data-tab="notes">
 	<section class="sheet-tab character-notes">
+		{{!-- Make a Plan (Book I p.530): Stonetop's Plans section, for a plan this character keeps
+		      (character-plans.js). The village's shared plans are a click away on Stonetop's own Notes tab. --}}
+		{{> "stonetop.steading-plans" plans=stonetop.plans canEdit=stonetop.canEdit titleId=(concat "character-plans-title-" actor.id)}}
+		{{#if stonetop.steadingName}}
+		<p class="steading-notes-hint stonetop-plans-pointer">
+			Plans the whole village shares are kept on the steading's Notes tab.
+			<button type="button" class="stonetop-inline-btn stonetop-plans-pointer-btn" data-open-steading-plans><i class="fas fa-list-check" aria-hidden="true"></i> {{stonetop.steadingName}}'s plans</button>
+		</p>
+		{{/if}}
+		<h3 class="stonetop-move-group-title steading-notes-heading">{{localize "stonetop.sheet.tabs.notes"}}</h3>
 		<prose-mirror class="character-notes-editor" toggled value="{{stonetop.notes}}">
 			{{{stonetop.enrichedNotes}}}
 		</prose-mirror>

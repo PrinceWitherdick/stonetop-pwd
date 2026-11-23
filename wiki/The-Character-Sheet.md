@@ -135,7 +135,7 @@ The **Defend** row shows your Readiness circles. Click a circle to set how much 
 - **Followers**: see [Followers](Followers).
 - **Arcana**: see [Arcana and Artifacts](Arcana-and-Artifacts).
 - **Timeline** (Modern layout): your character's track on the campaign timeline. See [The Timeline](The-Timeline).
-- **Notes**: your free notes. See [Relationships, Notes and Reminders](Relationships-Notes-and-Reminders).
+- **Notes**: your plans (Make a Plan) and your free notes. **New plan** writes down what you hope to achieve and what the GM says it requires, with a box to tick off each requirement; if you drag the **Make a Plan** move onto your sheet from the compendium, using it from your Moves tab opens the same window. See [Relationships, Notes and Reminders](Relationships-Notes-and-Reminders).
 - **Preferences**: your own display and rolling settings. See [Preferences and Accessibility](Preferences-and-Accessibility).
 
 ## Other players' sheets

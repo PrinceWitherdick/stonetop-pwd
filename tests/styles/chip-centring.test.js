@@ -709,3 +709,29 @@ describe("the Seeker major-grant buttons centre on the house inline button", () 
 		expect(readRepo(file)).toMatch(pattern);
 	});
 });
+
+// The pointers to where plans are kept (a character's Notes tab to Stonetop's, the Improvements intro to its Notes
+// tab) stand on the house .stonetop-inline-btn, unnudged, in a gap-spaced row. Measured 11-22 with the text-centring
+// audit (plans-centre.mjs, its chip height limit raised past core's 28px button line) at UI roots 16 and 20,
+// 1x/1.25x/1.5x, in all three faces: each label within 1px of its button's middle (0.5 but Signika at 20); a 6px
+// padding-top read +1.5.
+describe("the Plans pointers centre on the house inline button", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+
+	it("spaces its row by gap and restyles no button", () => {
+		const body = declarations(MAIN, ".stonetop-plans-pointer");
+		expect(body, ".stonetop-plans-pointer has no rule").toBeTruthy();
+		expect(declared(body, "display")).toBe("flex");
+		expect(declared(body, "gap")).toBeTruthy();
+		expect(declarations(MAIN, ".stonetop-plans-pointer .stonetop-inline-btn")).toBeFalsy();
+		const own = declarations(MAIN, ".stonetop-plans-pointer-btn") ?? "";
+		for (const prop of NUDGES) expect(declared(own, prop), `nudges with ${prop}`).toBeNull();
+	});
+
+	it.each([
+		["templates/actor/partials/tab-notes.hbs", /class="stonetop-inline-btn stonetop-plans-pointer-btn" data-open-steading-plans><i class="fas fa-list-check" aria-hidden="true"><\/i>/],
+		["templates/actor/partials/steading-tab-improvements.hbs", /class="stonetop-inline-btn stonetop-plans-pointer-btn" data-steading-open-plans [^>]*><i class="fas fa-list-check" aria-hidden="true"><\/i>/],
+	])("%s draws the house inline button", (file, pattern) => {
+		expect(readRepo(file)).toMatch(pattern);
+	});
+});

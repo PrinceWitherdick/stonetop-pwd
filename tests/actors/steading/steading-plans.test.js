@@ -199,6 +199,27 @@ describe("the Notes tab", () => {
 		root.querySelector('[data-plan-action="remove-plan"]').click();
 		await vi.waitFor(() => expect(s._flags.plans).toEqual([]));
 		expect(asked.mock.calls[0][0].content).toContain("A palisade");
+		// A settlement and a character remove plans through this too, so it names no steading.
+		expect(asked.mock.calls[0][0].content).not.toMatch(/steading/i);
+	});
+
+	// A character's Notes tab is `.character-notes` (character-plans.js); the steading and settlement calls
+	// keep the default.
+	it("binds on the container it is given, and on .steading-notes by default", async () => {
+		const doc = new Window().document;
+		const root = doc.body.appendChild(doc.createElement("div"));
+		root.innerHTML = `<section class="character-notes"><button data-plan-action="add-plan"></button></section>
+			<section class="steading-notes"><button data-plan-action="add-plan"></button></section>`;
+		const onCharacter = vi.fn();
+		const onSteading = vi.fn();
+		wireSteadingNotesTab(root, steading(), { within: ".character-notes", editPlan: onCharacter });
+		wireSteadingNotesTab(root, steading(), { editPlan: onSteading });
+		root.querySelector('.character-notes [data-plan-action="add-plan"]').click();
+		expect(onCharacter).toHaveBeenCalledTimes(1);
+		expect(onSteading).not.toHaveBeenCalled();
+		root.querySelector('.steading-notes [data-plan-action="add-plan"]').click();
+		expect(onSteading).toHaveBeenCalledTimes(1);
+		expect(onCharacter).toHaveBeenCalledTimes(1);
 	});
 
 	// The Plans partial reads its `canEdit` param inside two `each` blocks. Foundry compiles without
@@ -226,6 +247,34 @@ describe("the Notes tab", () => {
 		const reader = render(false);
 		expect(reader.querySelectorAll("[data-plan-action]")).toHaveLength(0);
 		expect([...reader.querySelectorAll("[data-plan-tick]")].every(t => t.disabled)).toBe(true);
+	});
+});
+
+// The feedback that asked for a "Plans" improvement category (2026-11-22) was looking for the Notes tab's
+// Plans from the Improvements tab. A plan is no improvement (no grants, no effects), so the tab points at
+// Plans rather than filing them; the pointer is not a filter chip, and it works with the tab locked.
+describe("the Improvements tab's pointer to Plans", () => {
+	const IMPROVEMENTS = fs.readFileSync(path.join(ROOT, "templates/actor/partials/steading-tab-improvements.hbs"), "utf8");
+	const CSS = fs.readFileSync(path.join(ROOT, "styles/stonetop.css"), "utf8");
+
+	it("sits in the intro, outside the category filters, and the sheet shows Notes at Plans on a click", () => {
+		const at = IMPROVEMENTS.indexOf("data-steading-open-plans");
+		expect(at).toBeGreaterThan(-1);
+		const filters = IMPROVEMENTS.indexOf('<div class="steading-improvement-filters"');
+		expect(at).toBeLessThan(filters);
+		expect(IMPROVEMENTS.slice(IMPROVEMENTS.lastIndexOf("<p", at), at)).toContain("stonetop-plans-pointer");
+		expect(SHEET_JS).toContain('html[0].querySelector("[data-steading-open-plans]")?.addEventListener("click", () => this._showPlans());');
+		// Wired above the editable guard: a reader may follow it too.
+		expect(SHEET_JS.indexOf("[data-steading-open-plans]")).toBeLessThan(SHEET_JS.indexOf("if (!this.isEditable) return;\n\n\t\t\t// The Notes tab's Plans"));
+		expect(SHEET_JS).toContain('this._tabs?.[0]?.activate?.("notes", { triggerCallback: true });');
+		expect(SHEET_JS).toContain('root?.querySelector?.("#steading-plans-title")');
+		expect(TEMPLATE).toContain('titleId="steading-plans-title"');
+	});
+
+	it("stays live while the tab's edit toggle is off, which turns every other button off", () => {
+		expect(IMPROVEMENTS).toMatch(/steading-edit-section\{\{#unless stonetop\.edit\.improvements\}\} stonetop-readonly/);
+		expect(CSS).toMatch(/\.stonetop-readonly button,[\s\S]{0,80}pointer-events: none;/);
+		expect(CSS).toMatch(/\.stonetop-readonly \.stonetop-plans-pointer-btn \{ pointer-events: auto; \}/);
 	});
 });
 

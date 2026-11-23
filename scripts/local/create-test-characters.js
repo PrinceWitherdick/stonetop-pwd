@@ -47,9 +47,12 @@
 //             left Stonetop, and one who turned villain, with the threat page he became among
 //             the steading's threats and each pointing at the other. Same rules as the Graveyard.
 //             The Heavy carries two wounds on the wound ledger: one untreated, one permanent
-//             with a Make-a-Plan list half ticked.
+//             with a Make-a-Plan list half ticked. The Blessed's Notes tab holds a plan of
+//             the Blessed's own: cleansing a corrupted oak, one requirement of five met.
 //             The steading's Notes tab gets three Plans (one finished, one under way built from
-//             the book's prompts, one just named) and its four content-guideline boxes; the
+//             the book's prompts, one just named) and its four content-guideline boxes; its
+//             Improvements tab gets a custom, uncategorised "Cleanse the Old Oak" (the Blessed's
+//             plan as an improvement, one of four requirements ticked, no grants); the
 //             Hillfolk Raiders threat is crossed off; and an "Other Settlements" folder gets
 //             settlement sheets for Marshedge and Gordin's Delve (from their stat blocks, wearing
 //             the standings seeded on Stonetop) and a Hillfolk band made from Book II's typical
@@ -1593,6 +1596,30 @@
       requirements: [],
     },
   ];
+  // A custom improvement for the same project the Blessed keeps as a plan of their own (the corrupted
+  // oak; see "A plan of a character's own" below): the Improvements tab's other way of tracking it, for
+  // when the outcome changes the village. Uncategorised, so every category chip shows it, and no grants,
+  // so finishing it changes nothing on the steading. One of four requirements ticked. Its slug is fixed,
+  // which is how the cleanup finds the definition and its ticks; written beside the table's own.
+  const TEST_CUSTOM_IMPROVEMENT_SLUG = "custom-testfixture-cleanse-the-old-oak";
+  const TEST_CUSTOM_IMPROVEMENT = {
+    slug: TEST_CUSTOM_IMPROVEMENT_SLUG,
+    label: "Cleanse the Old Oak",
+    category: "",
+    flavor: "The oak at the edge of the Steepwood has rotted from the roots up since the thing below woke.",
+    sections: [{
+      heading: "Requires:",
+      items: [
+        "Learn what has its roots in the oak's roots",
+        "Water from the spring at Danu's shrine",
+        "The help of the initiates of Danu",
+        "Wait for the first new moon of spring",
+      ],
+    }],
+    effect: "<p>The oak is whole again and the thing below has lost its hold here. The GM says what that means for Stonetop.</p>",
+    grants: null,
+  };
+  const TEST_CUSTOM_IMPROVEMENT_R = [true, false, false, false];
   const TEST_CONTENT_GUIDELINES = {
     excluded: "Harm to children, on camera or off. Sexual violence.",
     veiled:   "Torture: it can happen, but the scene cuts away. Whatever the Crow-Mother does to a body.",
@@ -3750,6 +3777,12 @@
         const ownPlans = steadingFlags.plans.filter(pl => !String(pl?.id ?? "").startsWith(TEST_PLAN_ID_PREFIX));
         if (ownPlans.length !== steadingFlags.plans.length) { steadingFlags.plans = ownPlans; memberChanged = true; }
       }
+      // The seeded custom improvement, by its fixed slug (see TEST_CUSTOM_IMPROVEMENT); its ticks go
+      // with the hold tray's improvements below, through a deletion, since setFlag merges objects.
+      if (Array.isArray(steadingFlags.customImprovements)) {
+        const ownCustom = steadingFlags.customImprovements.filter(d => d?.slug !== TEST_CUSTOM_IMPROVEMENT_SLUG);
+        if (ownCustom.length !== steadingFlags.customImprovements.length) { steadingFlags.customImprovements = ownCustom; memberChanged = true; }
+      }
       if (memberChanged) await steadingDel.setFlag(FLAG_SCOPE, "steading", steadingFlags);
 
       // Take the seeded hold tray back down. Each of the four held states goes only while it
@@ -3821,6 +3854,9 @@
         if (!entry?.completed || entry.applied !== null) continue;
         if (!fixtureR(slug, entry.r)) continue;
         Object.assign(holdKill, dropKey(`${holdBase}.improvements.${slug}`));
+      }
+      if (steadingFlags.improvements?.[TEST_CUSTOM_IMPROVEMENT_SLUG]) {
+        Object.assign(holdKill, dropKey(`${holdBase}.improvements.${TEST_CUSTOM_IMPROVEMENT_SLUG}`));
       }
       // The content guidelines, only while every box still holds exactly the seed: a table that
       // has written its own lines into them has made them theirs.
@@ -6583,6 +6619,28 @@
     console.log(`[TEST] Wound ledger: two wounds on ${woundedPc.name} (one untreated, one permanent with a plan).`);
   }
 
+  // ── A plan of a character's own ────────────────────────────────────────
+  // The Notes tab's Plans on a character sheet (character-plans.js), from the case that asked for
+  // them: the Blessed Makes a Plan (Book I p.530) to cleanse a tree corrupted by a thing below. Built
+  // from the book's prompts, one box ticked, with what goes undone meanwhile. Written whole onto the
+  // character's `plans` flag, so the re-run's actor sweep takes it with the sheet.
+  const plannerPc = created.find(a => createdSlugs.get(a.id) === "blessed") ?? created[0];
+  if (plannerPc) {
+    await plannerPc.setFlag(FLAG_SCOPE, "plans", [{
+      id: foundry.utils.randomID(),
+      name: "Cleanse the old oak the thing below has corrupted",
+      undone: "the spring rites at the standing stones",
+      requirements: [
+        { text: "You must learn/know/decipher what has its roots in the oak's roots", done: true },
+        { text: "You must find/locate/obtain water from the spring at Danu's shrine", done: false },
+        { text: "You'll need the help/support/approval of the initiates of Danu", done: false },
+        { text: "You must wait until/for the first new moon of spring", done: false },
+        { text: "You'll risk the corruption taking root in you instead", done: false },
+      ],
+    }]);
+    console.log(`[TEST] Character plan: "Cleanse the old oak" on ${plannerPc.name}'s Notes tab (1 of 5 requirements met).`);
+  }
+
   // ── Seed reusable world Moves / Items / Monsters ───────────────────────
   // Independent of the level choice and of the characters — draggable world content grouped
   // into "Moves" / "Items" (Item folders) and "Monster" (Actor folder). Torn down on re-run
@@ -6639,6 +6697,12 @@
     const ownPlans = (Array.isArray(sf.plans) ? sf.plans : [])
       .filter(p => !String(p?.id ?? "").startsWith(TEST_PLAN_ID_PREFIX));
     sf.plans = [...ownPlans, ...structuredClone(TEST_PLANS)];
+    // The corrupted oak as a custom improvement (see TEST_CUSTOM_IMPROVEMENT), a prior run's copy
+    // replaced by its slug. Its ticks go in with the book improvements' below (sf.improvements).
+    sf.customImprovements = [
+      ...(Array.isArray(sf.customImprovements) ? sf.customImprovements : []).filter(d => d?.slug !== TEST_CUSTOM_IMPROVEMENT_SLUG),
+      structuredClone(TEST_CUSTOM_IMPROVEMENT),
+    ];
     const guidelinesSeeded = guidelinesEmpty(sf.contentGuidelines) || sameGuidelines(sf.contentGuidelines);
     if (guidelinesSeeded) sf.contentGuidelines = { ...TEST_CONTENT_GUIDELINES };
     // The two demonstration sites, the same way: `site` pages of the steading's Sites journal,
@@ -6780,6 +6844,8 @@
       };
       improvementsSeeded.push(slug);
     }
+    // The corrupted oak, under way: its first requirement met, not built.
+    sf.improvements[TEST_CUSTOM_IMPROVEMENT_SLUG] = { completed: false, r: [...TEST_CUSTOM_IMPROVEMENT_R] };
 
     // The inn's gathering costs 1 Surplus, and a chip for something unaffordable is not an
     // unspent opportunity. Raised only when the steading is actually broke, so a stocked

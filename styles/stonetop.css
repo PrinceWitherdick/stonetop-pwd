@@ -3743,9 +3743,11 @@ input.stonetop-name-field {
 	scrollbar-width: none;
 }
 
-/* Notes tab: the <prose-mirror> editor manages its own internal scroll, so this
-   tab is excluded from the generic auto-scroll above and instead fills the body
-   as a flex column so the editor can take the full height. */
+/* Notes tab: excluded from the generic `height: 100%` above (which cannot resolve on this
+   tab, see `.sheet-body` up top) and instead fills the body as a flex column. It carries the
+   character's Plans above the notes (character-plans.js), so the TAB scrolls as one column, as
+   the steading's Notes do, and the editor grows with its text from a floor instead of being
+   squeezed by the plans; the scroll stays on the tab so the sheet's `scrollY` keeps the place. */
 /* Paired unlayered hide — the `.active` rule below sets `display` unlayered, which beats
    Foundry's *layered* core `.tab{display:none}`, so pair it with an unlayered hide or the
    panel leaks onto other tabs when inactive (see `.tab.stonetop-invocations`). */
@@ -3761,13 +3763,16 @@ input.stonetop-name-field {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: none;
 }
 
 .pbta.sheet.actor.character .tab.notes .character-notes {
-	flex: 1;
-	min-height: 0;
+	flex: 1 0 auto;
 	display: flex;
 	flex-direction: column;
+	gap: 10px;
 	/* Match the inset the other character tabs get from the shared
 	   `.pbta.sheet .tab.moves, …` padding rule — the Notes tab isn't in that list, so
 	   without this the editor sits flush to the edges. Top matches those tabs (no inset,
@@ -3776,9 +3781,11 @@ input.stonetop-name-field {
 	padding: 0 12px 14px;
 }
 
+/* The steading's floor (`.steading-sheet .steading-notes prose-mirror.steading-notes-editor`); the
+   in-flow content rules that let it grow are shared with it further down. */
 .pbta.sheet.actor.character .character-notes prose-mirror.character-notes-editor {
-	flex: 1;
-	min-height: 0;
+	flex: 1 0 auto;
+	min-height: 14em;
 }
 
 /* -- Preferences tab -------------------------------------------------------------------
@@ -22139,15 +22146,19 @@ button.stonetop-mark-sign-btn.is-active:hover {
    fills the 14em floor while there is little in it. Core also caps every editor at its parent's height
    and scrolls the rest (`body.game .app .editor { max-height: 100%; overflow: auto }`, and
    `prose-mirror.inactive { overflow: hidden auto }`), which on Stonetop's definite-height tab is the
-   tab's height, so the host is uncapped too. The settlement sheet's Notes are the same editor. */
-:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor {
+   tab's height, so the host is uncapped too. The settlement sheet's Notes are the same editor, and so is
+   a character's, which carries Plans above it too. */
+:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor,
+.pbta.sheet.actor.character .character-notes prose-mirror.character-notes-editor {
 	max-height: none;
 	overflow: visible;
 }
-:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor .editor-container {
+:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor .editor-container,
+.pbta.sheet.actor.character .character-notes prose-mirror.character-notes-editor .editor-container {
 	overflow: visible;
 }
-:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor .editor-content {
+:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor .editor-content,
+.pbta.sheet.actor.character .character-notes prose-mirror.character-notes-editor .editor-content {
 	position: static;
 	flex: 1 0 auto;
 	overflow: visible;
@@ -22167,6 +22178,19 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--st-text-secondary);
 	font-size: var(--st-fs-xs);
 }
+/* A pointer to where plans are kept (Make a Plan, p.530): a character's Notes tab to Stonetop's, and the
+   Improvements tab's intro to its Notes tab. A sentence and the house inline button, spaced by gap and
+   nudged nowhere (tests/styles/chip-centring.test.js). Upright inside the italic intro, and live on a
+   read-only tab, since it only moves the reader. */
+.stonetop-plans-pointer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+}
+.stonetop-plans-pointer-btn { font-style: normal; }
+.stonetop-readonly .stonetop-plans-pointer-btn { pointer-events: auto; }
+.steading-improvements .steading-improvements-intro:has(+ .stonetop-plans-pointer) { margin-bottom: 4px; }
 .steading-guidelines-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
