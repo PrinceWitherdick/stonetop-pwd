@@ -49469,7 +49469,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	--st-entry-thumb: calc(28px * var(--stonetop-font-scale, 1));
 	list-style: none;
 	margin: 0;
-	padding: 0;
+	/* INDENTED UNDER ITS EYEBROW, so a group reads as the eyebrow's contents and not as more of
+	   the card: the thumbnails start where the eyebrow's title does, past its glyph (1.25em of the
+	   eyebrow's size, then its 7px gap, less the 2px the name button pads its picture by). On a
+	   subgrid this padding is added to the items in its edge columns, so the name column grows by
+	   it and every note in the card still starts on one x. */
+	padding: 0 0 0 calc(var(--st-fs-floor) * 1.25 + 5px);
 	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: subgrid;
