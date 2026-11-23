@@ -74,8 +74,9 @@
 // teardown call here to pair with the sheet's `close()`.
 import { wireDocumentDropZone } from "../../utils/card-drop-zone.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
-import { clusterPoint, placeActors } from "../../utils/token-drop.js";
-import { enrichHTML } from "../../utils/foundry-compat.js";
+import { placeActors } from "../../utils/token-drop.js";
+import { deployLayout } from "../../fight/deploy-layout.js";
+import { displaceTokens, enrichHTML } from "../../utils/foundry-compat.js";
 import { worldActorsBySource, resolveDeployableActor } from "../../utils/deployable-actor.js";
 import { isFightTabEnabled } from "../../settings.js";
 import { escHtml, joinNames, stripHtmlToText, isDefaultImg } from "../../utils/strings.js";
@@ -1185,7 +1186,7 @@ export class GmBundleTab {
 	 * with exactly the tokens this placed: `{placed: TokenDocument[], missed, imported, refused}`,
 	 * where `refused` names the warning that stopped it before anything was placed.
 	 */
-	async deploy(id) {
+	async deploy(id, { beforePlace = null } = {}) {
 		const refuse = key => { this.warn(key); return { placed: [], missed: [], imported: 0, refused: key }; };
 		const encounter = this.card(id);
 		if (!encounter) return { placed: [], missed: [], imported: 0, refused: "missing" };
@@ -1216,12 +1217,25 @@ export class GmBundleTab {
 			actors.push(found.actor);
 		}
 
-		// One at a time, off-scene squares counted as missed (utils/token-drop.js#placeActors).
+		// `beforePlace` (Deploy & fight ending the running fight) runs only once there is something to
+		// place: run before the checks above, a deploy that then placed nothing had already ended the
+		// table's fight for nothing. Before the layout, which reads whether a fight is still going on.
+		if (beforePlace && actors.length) await beforePlace();
+
+		// The party on the left, what was deployed on the right (fight/deploy-layout.js). One at a
+		// time, off-scene squares counted as missed (utils/token-drop.js#placeActors). Only a GM moves
+		// the party: a player allowed to deploy still cannot move other players' tokens.
 		const canvas = globalThis.canvas;
-		const drop = await placeActors(canvas, actors, i => clusterPoint(canvas, i, actors.length));
+		const layout = deployLayout({ canvas, actors, moveParty: !!game.user?.isGM });
+		const drop = await placeActors(canvas, actors, i => layout.points[i]);
 		missed.push(...drop.missed);
 		const placed = drop.dropped.length;
 		const placedTokens = drop.dropped.map(d => d.token).filter(token => token?.documentName === "Token");
+		// The party steps into line only once there is something to face; a deploy that placed nothing
+		// leaves the map as it was.
+		if (placed && layout.moves.length) {
+			try { await displaceTokens(canvas.scene, layout.moves); } catch (err) { console.error("Stonetop | couldn't line the party up for a deploy", err); }
+		}
 
 		if (placed) {
 			ui.notifications?.info?.(this.f("deployed", {

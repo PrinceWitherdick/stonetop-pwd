@@ -83,33 +83,3 @@ export async function placeActors(canvas, actors, pointFor) {
 	}
 	return { dropped, missed };
 }
-
-/**
- * The nth of `total` deploy positions, for putting a whole group down at once.
- *
- * HERE rather than on the sheet that first wanted it: this is canvas arithmetic that knows
- * nothing about what is being deployed, and it encodes the same core gotcha the note at the top
- * of this file does — a point outside `dimensions.rect` is dropped SILENTLY — so the two belong
- * where they can be read together.
- *
- * A block one grid square apart, centred on the middle of the VIEW rather than of the scene: a
- * deploy is something you do to the bit of map in front of you, and a scene-centred cluster on a
- * large map lands the whole group off screen with nothing to say where it went.
- *
- * A block rather than a ring: one line of arithmetic, never overlapping, and it reads as a group
- * at any count. Each point is the token's CENTRE before snapping, which is what
- * `dropActorOnCanvas` takes; core snaps and clamps from there.
- *
- * Null for a square outside the scene rect, so a caller that reports what it placed knows before
- * it asks rather than after core has quietly declined.
- */
-export function clusterPoint(canvas, i, total) {
-	const grid = canvas?.grid?.size || 100;
-	const view = canvas?.stage?.pivot ?? { x: 0, y: 0 };
-	const cols = Math.max(1, Math.ceil(Math.sqrt(total)));
-	const rows = Math.max(1, Math.ceil(total / cols));
-	const x = Math.round((view.x ?? 0) + ((i % cols) - (cols - 1) / 2) * grid);
-	const y = Math.round((view.y ?? 0) + (Math.floor(i / cols) - (rows - 1) / 2) * grid);
-	if (canvas?.dimensions?.rect?.contains?.(x, y) === false) return null;
-	return { x, y };
-}

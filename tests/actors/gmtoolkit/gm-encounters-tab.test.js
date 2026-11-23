@@ -15,7 +15,6 @@ import {
 	STONETOP_ENCOUNTER_DRAG_TYPE,
 	deployAndFight,
 } from "../../../module/actors/gmtoolkit/gm-encounters-tab.js";
-import { clusterPoint } from "../../../module/utils/token-drop.js";
 import { isPlaceholderArt, bundleEntryImage } from "../../../module/actors/gmtoolkit/gm-bundle-tab.js";
 import { fakeEl, makeListHost, fakeRoot as sheetRoot } from "../../fakes/dom.js";
 
@@ -143,6 +142,8 @@ beforeEach(() => {
 afterEach(() => {
 	delete globalThis.canvas;
 	delete globalThis.Actor;
+	// A fight one test set up must not be "already going on" in the next.
+	if (global.game) delete global.game.combats;
 });
 
 /* ══ wiring ═══════════════════════════════════════════════════════════════════ */
@@ -2025,29 +2026,100 @@ describe("the Encounters tab: deploying to the map", () => {
 		expect(warned.join(" ")).toContain("Rust-Hound");
 	});
 
-	// A block one grid square apart, centred on the view: a deploy is something you do to the bit
-	// of map in front of you.
-	it("clusters the tokens on distinct points around the view centre", async () => {
+	/**
+	 * A 40x40-square scene whose view is the whole window at 1:1 (so the view's middle is the window's),
+	 * holding whatever tokens are passed. Records drops and token moves.
+	 */
+	function sceneCanvas({ tokens = [], combats = [] } = {}) {
+		const placed = [];
+		const moved = [];
+		global.game.combats = combats;
+		globalThis.canvas = {
+			scene: {
+				id: "scene1",
+				grid: { size: 100, type: 1 },
+				tokens,
+				moveTokens: vi.fn(async plan => { for (const [id, m] of Object.entries(plan)) moved.push({ id, ...m.waypoints[0] }); }),
+			},
+			grid: { size: 100 },
+			stage: { pivot: { x: 2000, y: 2000 }, worldTransform: { applyInverse: p => ({ x: p.x, y: p.y }) } },
+			dimensions: { size: 100, rect: { x: 0, y: 0, width: 4000, height: 4000, contains: () => true } },
+			tokens: { _onDropActorData: vi.fn(async (ev, data) => { placed.push(data); return true; }) },
+		};
+		return { placed, moved };
+	}
+
+	const pc = (id, x, y) => ({ id, _source: { x, y, width: 1, height: 1 }, actor: { id: `a-${id}`, type: "character", uuid: `Actor.a-${id}` } });
+	const middle = () => (globalThis.innerWidth ?? 1920) / 2;
+
+	// The user's rule: the party on the left, what was deployed against them on the right.
+	it("puts the deployed monsters right of the view's middle, each on its own square", async () => {
 		const { host } = makeHost([{ id: "e1", name: "C", entries: [1, 2, 3, 4].map(n => (
 			{ id: `x${n}`, uuid: "Actor.a", type: "Actor", name: "A", note: "" }
 		)) }]);
-		const placed = fakeCanvas();
-		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A" }));
+		const { placed } = sceneCanvas();
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
 		await host._deployEncounter("e1");
-		const points = placed.map(p => `${p.x},${p.y}`);
-		expect(new Set(points).size).toBe(4);
-		// Centred: the mean of a symmetric block is the pivot it was built around.
-		expect(placed.reduce((s, p) => s + p.x, 0) / 4).toBe(1000);
-		expect(placed.reduce((s, p) => s + p.y, 0) / 4).toBe(1000);
+		expect(placed).toHaveLength(4);
+		expect(new Set(placed.map(p => `${p.x},${p.y}`)).size).toBe(4);
+		for (const p of placed) expect(p.x).toBeGreaterThan(middle());
 	});
 
-	// Core returns FALSE for a point outside the scene rect and places nothing, silently.
-	it("counts a point outside the scene rect as skipped rather than placed", () => {
-		globalThis.canvas = {
-			grid: { size: 100 }, stage: { pivot: { x: 0, y: 0 } },
-			dimensions: { rect: { contains: () => false } },
-		};
-		expect(clusterPoint(globalThis.canvas, 0, 1)).toBeNull();
+	it("lines the party's tokens up left of the view's middle, facing what was deployed", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		const { placed, moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500), pc("p2", 100, 100)] });
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
+		await host._deployEncounter("e1");
+		expect(moved.map(m => m.id).sort()).toEqual(["p1", "p2"]);
+		for (const m of moved) expect(m.x + 50).toBeLessThan(middle());
+		for (const m of moved) expect(m.x).toBeLessThan(placed[0].x);
+		// In the order they stood, top first.
+		expect(moved.find(m => m.id === "p2").y).toBeLessThan(moved.find(m => m.id === "p1").y);
+	});
+
+	// Moving someone out of a running fight would end whatever engagement they are in.
+	it("leaves anyone already in a fight on this map where they stand", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		const fight = { id: "c1", scene: { id: "scene1" }, flags: { "stonetop-pwd": { fight: true } }, combatants: [{ sceneId: "scene1", tokenId: "p1" }] };
+		const { moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500), pc("p2", 100, 100)], combats: [fight] });
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
+		await host._deployEncounter("e1");
+		expect(moved.map(m => m.id)).toEqual(["p2"]);
+	});
+
+	it("moves nobody when nothing was placed, or for a player", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		let { moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500)] });
+		globalThis.fromUuid = vi.fn(async () => null);
+		await host._deployEncounter("e1");
+		expect(moved).toEqual([]);
+
+		({ moved } = sceneCanvas({ tokens: [pc("p1", 3500, 3500)] }));
+		globalThis.fromUuid = vi.fn(async () => ({ documentName: "Actor", uuid: "Actor.a", name: "A", type: "monster" }));
+		global.game.user.isGM = false;
+		await host._deployEncounter("e1");
+		expect(moved).toEqual([]);
+	});
+
+	// A follower in an encounter joins the party's column rather than the foes'.
+	it("puts a deployed follower on the party's side", async () => {
+		const { host } = makeHost([{ id: "e1", name: "C", entries: [
+			{ id: "x1", uuid: "Actor.f", type: "Actor", name: "Hound", note: "" },
+			{ id: "x2", uuid: "Actor.a", type: "Actor", name: "A", note: "" },
+		] }]);
+		const { placed } = sceneCanvas();
+		globalThis.fromUuid = vi.fn(async uuid => (uuid === "Actor.f"
+			? { documentName: "Actor", uuid, name: "Hound", type: "npc", flags: { "stonetop-pwd": { followerOrigin: { ftype: "crew" } } } }
+			: { documentName: "Actor", uuid, name: "A", type: "monster" }));
+		await host._deployEncounter("e1");
+		expect(placed[0].x).toBeLessThan(middle());
+		expect(placed[1].x).toBeGreaterThan(middle());
 	});
 
 	it("says so and places nothing when there is no scene", async () => {
@@ -2613,6 +2685,92 @@ describe("the Encounters tab: deploy and fight", () => {
 		global.game = { ...global.game, stonetop: { fight: { openStart } } };
 		expect(await deployAndFight(host._encounters, "e1")).toBe("opened");
 		expect(openStart).toHaveBeenCalledWith({ preselect: ["t0", "t1"], preselectPcs: true, forceFoes: ["t0"] });
+	});
+
+	// A fight already going on this map used to send the press straight to "Add to the fight" with
+	// nothing saying why, which read as a button that did nothing. Now it asks first.
+	describe("with a fight already going on this map", () => {
+		const running = () => ({
+			id: "c1", scene: { id: "scene1" }, flags: { "stonetop-pwd": { fight: true } }, combatants: [],
+			delete: vi.fn(async () => {}),
+		});
+		const setUp = fight => {
+			const { host } = makeHost(oneMonster());
+			const tokens = tokenCanvas();
+			global.game = { ...global.game, combats: [fight], stonetop: { fight: { openStart: vi.fn(async () => "opened") } } };
+			globalThis.fromUuid = vi.fn(async uuid => ({ documentName: "Actor", uuid, name: uuid }));
+			return { host, tokens, openStart: global.game.stonetop.fight.openStart };
+		};
+
+		it("asks before placing anything, naming the encounter", async () => {
+			const fight = running();
+			const { host, tokens } = setUp(fight);
+			const ask = vi.fn(async () => { expect(tokens).toHaveLength(0); return null; });
+			await deployAndFight(host._encounters, "e1", { ask });
+			expect(ask).toHaveBeenCalledWith("Crypt");
+		});
+
+		it("ends that fight and starts a new one when asked to", async () => {
+			const fight = running();
+			const { host, openStart } = setUp(fight);
+			expect(await deployAndFight(host._encounters, "e1", { ask: async () => "end" })).toBe("opened");
+			expect(fight.delete).toHaveBeenCalled();
+			expect(openStart.mock.calls[0][0]).not.toHaveProperty("combat");
+		});
+
+		// Ending it used to come first, so a deploy that then found nothing to place had ended the
+		// table's fight for nothing.
+		it("leaves that fight alone when Deploy finds nothing to place", async () => {
+			const fight = running();
+			const { host, tokens, openStart } = setUp(fight);
+			globalThis.fromUuid = vi.fn(async () => null);
+			expect(await deployAndFight(host._encounters, "e1", { ask: async () => "end" })).toBeNull();
+			expect(fight.delete).not.toHaveBeenCalled();
+			expect(tokens).toHaveLength(0);
+			expect(openStart).not.toHaveBeenCalled();
+		});
+
+		it("ends that fight before anything is placed, so the new one is laid out on a clear map", async () => {
+			const fight = running();
+			const { host, tokens } = setUp(fight);
+			fight.delete = vi.fn(async () => { expect(tokens).toHaveLength(0); });
+			await deployAndFight(host._encounters, "e1", { ask: async () => "end" });
+			expect(fight.delete).toHaveBeenCalledTimes(1);
+			expect(tokens).toHaveLength(2);
+		});
+
+		it("adds the encounter to that fight when asked to", async () => {
+			const fight = running();
+			const { host, openStart } = setUp(fight);
+			await deployAndFight(host._encounters, "e1", { ask: async () => "add" });
+			expect(fight.delete).not.toHaveBeenCalled();
+			expect(openStart.mock.calls[0][0]).toMatchObject({ combat: fight, preselect: ["t0", "t1"] });
+		});
+
+		it("places nothing and opens nothing when the GM keeps things as they are", async () => {
+			const fight = running();
+			const { host, tokens, openStart } = setUp(fight);
+			expect(await deployAndFight(host._encounters, "e1", { ask: async () => null })).toBeNull();
+			expect(tokens).toHaveLength(0);
+			expect(fight.delete).not.toHaveBeenCalled();
+			expect(openStart).not.toHaveBeenCalled();
+		});
+
+		it("asks with buttons that say what they do, Enter on the one that changes nothing", () => {
+			expect(TAB_JS).toMatch(/defaultKey:\s*"keep"/);
+			const en = JSON.parse(read("languages/en.json")).stonetop.gmToolkit.encounters.fightRunning;
+			expect(en.end).toMatch(/End/);
+			expect(en.add).toMatch(/Add/);
+			expect(en.body).toContain("{name}");
+			// Ending moves the party (deploy-layout.js lines up anyone no longer in a fight), so the
+			// question cannot borrow the Fight tab's End body, which says tokens stay where they are.
+			expect(en.endBody).toContain("{name}");
+			expect(en.endBody).not.toMatch(/stay where they are/i);
+			expect(TAB_JS).toContain("fightRunning.endBody");
+			expect(TAB_JS).not.toContain('"stonetop.fight.end.body"');
+			// It ends the fight for every player: the destructive skin.
+			expect(TAB_JS).toMatch(/key:\s*"end"[^\n]*className:\s*"stonetop-dialog-btn--danger"/);
+		});
 	});
 
 	it("opens nothing when Deploy placed nothing", async () => {

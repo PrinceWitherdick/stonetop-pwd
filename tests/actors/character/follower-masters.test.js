@@ -38,6 +38,19 @@ describe("followerMasterIndex", () => {
 		const actors = [cadi, actor("wolf", "monster"), actor("quill", "npc")];
 		expect(followerMasterIndex({ characters: [cadi], actors }).size).toBe(0);
 	});
+
+	// A recruited group follower is placed UNLINKED, so the token's actor has a uuid no card stored;
+	// Deploy's party line-up (fight/deploy-layout.js) asked by it and left the crew behind.
+	it("finds a recruited follower walking the map unlinked, by the Actor behind its token", () => {
+		const cadi = actor("cadi", "character", { crew: { details: { sourceUuid: "Actor.crew" } } });
+		const onTheMap = {
+			...actor("crew", "npc"),
+			uuid: "Scene.hall.Token.t1.Actor.crew",
+			isToken: true,
+			token: { actorId: "crew", baseActor: { uuid: "Actor.crew" } },
+		};
+		expect(followerMasterIndex({ characters: [cadi], actors: [cadi, onTheMap] }).get("crew")).toBe(cadi);
+	});
 });
 
 describe("followerCardFor", () => {

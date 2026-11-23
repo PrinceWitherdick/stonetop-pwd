@@ -435,6 +435,14 @@
         "deploy": "Put every monster in this encounter on the current map",
         "deployShort": "Deploy",
         "deployAndFightShort": "Deploy & fight",
+        "fightRunning": {
+          "title": "A fight is already going on",
+          "body": "There is already a fight on this map. End it and start a new one with {name}, or bring {name} into the fight that is going on?",
+          "endBody": "Ending it takes everyone out of that fight, for every player, and lines the party up again facing {name}.",
+          "end": "End it, and start a new fight",
+          "add": "Add them to this fight",
+          "keep": "Don't deploy"
+        },
         "markUsed": "Mark this one complete, and file it below",
         "markUsedShort": "Mark complete",
         "markUnused": "Put this one back on the list above",
