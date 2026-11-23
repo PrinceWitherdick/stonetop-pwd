@@ -300,6 +300,10 @@ for a hover pop-over opened from inside a window (a tooltip, a preview, an autoc
   a gutter.
 - Core windows we restyle (currently only User Configuration) are tagged `.stonetop-themed` by the
   allowlist in `module/utils/window-theme.js`. Nothing untagged is touched.
+- A core *question* (a bare `DialogV2.confirm` with no class of its own) can't be tagged that way
+  without tagging every DialogV2. Wrap the core method that asks it and
+  dress it (`dressConfirm()` / `withDressedConfirm()` in `module/hooks/core-confirms.js`), which
+  keeps core's callbacks and changes only the classes and the button words.
 
 ### Cards
 

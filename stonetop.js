@@ -82,6 +82,7 @@ import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
 import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
+import { patchCoreConfirms } from "./module/hooks/core-confirms.js";
 import { onRenderPause } from "./module/hooks/RenderPause.js";
 import { registerBookBroadcast } from "./module/books/book-broadcast.js";
 import { registerEndOfSessionBroadcast } from "./module/dialogs/end-of-session-broadcast.js";
@@ -329,6 +330,11 @@ Hooks.once("init", () => {
 	// "Huffel Peaks") instead of the blank fallback core uses for art embedded in
 	// page content. See module/journal/journal-image-titles.js.
 	patchJournalImagePopoutTitles();
+
+	// Core's yes/no questions met in play (sidebar deletes, clear chat, end combat, the canvas
+	// Delete key, Clear All) ask in a bare Yes/No DialogV2; ask them in ours. See
+	// module/hooks/core-confirms.js.
+	patchCoreConfirms();
 
 	// Skin a curated allowlist of core Foundry windows (e.g. User Configuration)
 	// to match our sheets/modals; scoped to a marker class so nothing else moves.
