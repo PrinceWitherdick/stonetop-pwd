@@ -249,15 +249,25 @@ for a hover pop-over opened from inside a window (a tooltip, a preview, an autoc
 ### Motion
 
 - Transitions change **colour and opacity only**, and name their properties:
-  `transition: background-color 0.15s, border-color 0.15s, color 0.15s`. Never `transition: all`
+  `transition: background-color var(--st-duration), border-color var(--st-duration), color var(--st-duration)`.
+  Never `transition: all`
   and never a metric on a button — core's `transition: all 0.5s` on window buttons makes a resizing
   button flicker under the pointer. To take a whole window's buttons off it, scope one rule to the
   window root at a bare button's weight, `:where(.stonetop-x-dialog) button { transition: … }`
   (core's rule is layered, so it loses; a class-named transition of ours still wins), rather than
   listing the buttons one class at a time.
-- Durations, written in seconds: **0.15s** for a colour change, **0.12s** for a hover reveal, `--st-popout-fade`
-  (250ms) for a pop-out tile, `--st-edit-reveal-delay` (reader's setting, default 1s) before an
-  edit pencil fades in.
+- Durations are tokens on `:root`, on a scale named like the radii:
+
+  | Token | Value | Use |
+  |---|---|---|
+  | `--st-duration-sm` | 0.12s | The quicker step: most hover washes, rules lighting, a control fading in |
+  | `--st-duration` | 0.15s | The default colour change: a button skin's background, border and ink |
+  | `--st-popout-fade` | 250ms | A pop-out tile that waits for the pointer (zeroed under less motion) |
+  | `--st-edit-reveal-delay` | reader's setting, default 1s | Before an edit pencil fades in |
+
+  Never write 0.12s or 0.15s in a transition (`token-literals.test.js`), and no third quick
+  duration: 0.1s and 120ms were folded into `--st-duration-sm`. A duration that is deliberately
+  different (a 0.18s or 0.25s ease, an animation's own length) stays a literal in seconds.
 - Motion off is **one root class**: `:root.stonetop-less-motion`, which `applyReduceMotion`
   (settings.js) puts on when the OS asks (`prefers-reduced-motion: reduce`) or the Reduce Motion
   setting is on. Write the stopped state as `:root.stonetop-less-motion .x { animation: none; … }`,
@@ -584,6 +594,12 @@ What that means for a new component:
   `:where(:root.stonetop-dark) <the original selector, verbatim> { … }` inside the dark section.
   Zero added specificity: it wins by coming later, and anything already more specific (a love
   letter, the black paper) keeps its own look.
+- **Variants that a palette letters differently** (a band, a tier, a kind) set their colours as
+  custom properties on the variant's own element and the part reads them: the expedition load
+  row's `.lvl-light { --stonetop-exp-ava-fill: … }`, read by the disc inside it. A palette
+  re-points those properties on the same row selector, and an element that must not wear them
+  (a portrait in the disc) overrides the reads at the part's own weight. That leaves no
+  per-variant, per-palette restating of the part and no `:not()` to keep it off the exception.
 - **Fixed near-black art** (a spiral, a checkbox, a diamond) is either a `mask` painted in
   `currentColor`, or a `background-image` read from a `--stonetop-*-icon` token that has a
   `-light.svg` twin for the dark pages. Never a bare `url()` to black art.
@@ -652,8 +668,12 @@ What that means for a new component:
   `:where([class*="stonetop-"])[hidden] { display: none !important; }`, makes the attribute beat any
   `display` on an element wearing a `stonetop-` class, so don't write a `.x[hidden]` re-hide for one
   (the UA's `[hidden]` loses to any author `display`; that trap used to need a re-hide per class). An
-  element with no `stonetop-` class still needs its own. To keep a hidden element's space, out-weigh
-  it on purpose with a class-named `!important`, as `.stonetop-timeline-colours-reset[hidden]` does.
+  element with no `stonetop-` class still needs its own. Nothing out-weighs it: `hidden` means gone.
+  An element that must keep its space while out of use is **idle**, not hidden: a state class with
+  `visibility: hidden`, plus `aria-hidden="true"` and `tabindex="-1"` set with it so it stays out of
+  the accessibility tree and the tab order as `hidden` kept it (the timeline colour reset's
+  `.is-idle`, set by `setResetIdle` in `timeline-colours-menu.js`). `hidden-hides.test.js` fails on
+  a `[hidden]` rule that sets any `display` but `none`.
 - **State a fill once.** If two classes wear the same skin, put them in one selector list rather
   than two rules that will drift.
 - **Comment the why.** Lead with the reason the rule exists or the trap it avoids, name the test
@@ -676,7 +696,7 @@ What that means for a new component:
 | Test | Holds |
 |---|---|
 | `font-floor` | No text under 0.95× body; exemptions by exact selector |
-| `token-literals` | Washes on the ink and slate channels; rem sizes scaled; radii, slate edges and pop-over rungs on tokens; one disabled opacity; focus rings the dark pages can see |
+| `token-literals` | Washes on the ink and slate channels; rem sizes scaled; radii, slate edges, pop-over rungs and quick transitions on tokens; one disabled opacity; focus rings the dark pages can see |
 | `templates/icon-conventions` | `fas`, current glyph names, the pencil for edit, `aria-hidden` on a bare icon (templates and JS), an `aria-label` on an icon-only control |
 | `templates/tooltip-conventions` | No native `title` in a template |
 | `templates/js-tooltip-conventions` | No native `title` built in JS (`.title =` on anything but a listed data object, `title=` in a markup string, `setAttribute("title")`), outside four stated exceptions |
@@ -689,7 +709,7 @@ What that means for a new component:
 | `dialog-button-specificity`, `dialog-danger-button` | Footer overrides carry the shared scope; the red confirm reads `--st-red-*` |
 | `spiral-bullets` | No list draws the browser's disc; bullets seat on the first line |
 | `caslon-metrics`, `glyph-baseline` | Font metric overrides; glyph boxes sit on the baseline |
-| `hidden-hides` | One `[hidden]` rule for our classes; no per-class re-hides creep back |
+| `hidden-hides` | One `[hidden]` rule for our classes; no per-class re-hides creep back; no `[hidden]` rule shows what it hides |
 | `reduced-motion-exits` | Motion rules key on `.stonetop-less-motion`, never the media query; `applyReduceMotion` sets it for the OS and the setting |
 
 When you add a guard, follow their pattern: derive the answer from the values in the file rather
@@ -767,3 +787,32 @@ delete an entry when it is done.
 15. **Legacy prefixes** — `cm-`, `wd-`, `ct-`, `asm-`, `st-treasure-`, and BEM
     `threat-card__edge` style names in the threat, site, hazard, monster-builder and wound-builder
     blocks. Renaming them touches templates, JS and tests for no visible change.
+
+**Cascade and motion** (from the 1.8.5 cleanup, 2026-11-23; the first two depend on CSS this
+repository cannot see, so they want checking in a running Foundry before they change)
+
+16. **The themed-window body rules weigh (0,4,1)**
+    (`:is(.application, .window-app).stonetop-themed .window-content :is(label, p, h1…)` and its
+    button rules), and some twenty-five component rules restate that prefix to beat them (the
+    segmented picker, the guide rail, the timeline pop-out's toolbar, text, orient group, ages,
+    card actions and add slot). A `:where()` prefix would end the restating, but the weight is not
+    there for core (core's rules are layered and lose to any of ours): it is there to beat our
+    own unlayered rules, and a themed DialogV2 also wears `.stonetop`, so every generic
+    `.stonetop …` rule that loses to it today would start winning, as would any other module's
+    unlayered CSS inside User Configuration. To check: open User Configuration, the timeline
+    pop-out and a `themedDialogClasses` DialogV2 (Import Book Art) on paper and Lamplit, and
+    compare the computed colour of every label, heading and button with the `:where()` form.
+17. **Every button skin still names its own colour-only transition** (the camp buttons, the
+    content picker's secondary, `.stonetop-cta`, the encounter Deploy/Fight pills, the timeline
+    toolbar, card actions and add slot) instead of one `:where(.stonetop) button { transition: … }`.
+    Like the expedition window's `:where(…) button` rule, that would rely on core's
+    `transition: all 0.5s` sitting in a layer, and it would also re-time every button in a
+    `.stonetop` root that has no transition of its own and today rides core's 0.5s on all
+    properties. To check: core's selector for that rule and its layer in v13 and v14, and which
+    of our buttons animate an opacity or a box-shadow through it. Some of the copies are not
+    buttons (the encounter drop zone, the timeline's `<summary>` toggles) and stay either way.
+18. **Ten transitions still spell 0.12s or 0.15s**: the Prep pane's switcher and New button, the
+    dashed `.stonetop-prep-add-btn`, and character creation's card and option rules, left as
+    literals while those rules were being reworked in parallel. `token-literals.test.js` lists
+    them by exact selector as pending; put each on `--st-duration-sm` / `--st-duration` and drop
+    it from the list.
